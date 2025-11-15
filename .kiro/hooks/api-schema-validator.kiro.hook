@@ -1,0 +1,34 @@
+{
+  "enabled": true,
+  "name": "API Schema Validator & Type Generator",
+  "description": "Monitors API schema files (OpenAPI/Swagger/GraphQL) for changes and automatically validates syntax, generates TypeScript types, updates API client code, checks for breaking changes, validates examples, updates documentation, and runs schema-based tests",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.openapi.json",
+      "**/*.openapi.yaml",
+      "**/*.openapi.yml",
+      "**/*.swagger.json",
+      "**/*.swagger.yaml",
+      "**/*.swagger.yml",
+      "**/openapi.json",
+      "**/openapi.yaml",
+      "**/openapi.yml",
+      "**/swagger.json",
+      "**/swagger.yaml",
+      "**/swagger.yml",
+      "**/*.graphql",
+      "**/schema.graphql",
+      "**/api-schema.json",
+      "**/api-schema.yaml",
+      "**/api-schema.yml",
+      "**/api.schema.json",
+      "**/api.schema.yaml"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "An API schema file has been modified. Please:\n1. Validate the schema syntax (OpenAPI/Swagger or RestAPI or GraphQL)\n2. Generate TypeScript types from the schema\n3. Update any existing API client code to match schema changes\n4. Check for breaking changes and document them\n5. Validate that examples in the schema are correct\n6. Update API documentation if needed\n7. Run any schema-based tests to ensure compatibility\n8. Follow TypeScript best practices for generated types\n9. Ensure proper error handling for API responses\n10. Document API endpoints and data structures\n11. Include relevant documentation links in code comments"
+  }
+}

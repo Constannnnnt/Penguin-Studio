@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Lint & Format on Save",
+  "description": "Automatically runs linters and formatters when code files are saved. Uses ESLint and Prettier for JS/TS files, and ruff for Python files. Auto-fixes issues and reports remaining problems.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A code file has been saved. Please:\n1. Run the appropriate linter (ESLint for JS/TS, ruff for Python)\n2. Run the appropriate formatter (Prettier for JS/TS, ruff for Python)\n3. Fix any auto-fixable issues\n4. Report any remaining issues that need manual attention\nUse the project's existing configuration files (.eslintrc, .prettierrc, pyproject.toml, etc.) and follow the established coding standards."
+  }
+}

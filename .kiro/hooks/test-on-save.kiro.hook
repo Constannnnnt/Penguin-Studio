@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Test on Save",
+  "description": "Automatically runs appropriate tests when a code file is saved, using minimal verbosity flags to prevent timeouts",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.py",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A code file has been saved at {{filePath}}. Run the appropriate tests for this file with minimal verbosity to prevent session timeouts. \n\nIMPORTANT INSTRUCTIONS:\n- Use --silent, --quiet, or -q flags to minimize output\n- If this is a test file (contains 'test' in name or path), run it directly with filtering\n- If this is a source file, find and run related tests\n- Stop on first failure with --bail or --maxfail=1\n\nFor Python files:\n- Use: uv run pytest -q -k 'test_name' --maxfail=1\n- Or: uv run python -m pytest --tb=short -q\n\nFor TypeScript/JavaScript files:\n- Use: pnpm test -- --silent --bail\n- Or: npx jest --silent --testNamePattern='specific'\n- Or: pnpm test -- --grep \"pattern\" --silent\n\nReport only failures and summary. Do not show verbose output."
+  }
+}

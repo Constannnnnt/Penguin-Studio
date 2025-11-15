@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Dependency Cleanup on File Removal",
+  "description": "Monitors for removed code files and automatically checks for orphaned dependencies, unused imports, and outdated implementations. When a file is deleted, this hook analyzes the codebase to identify and clean up related imports, remove unused functions/classes, and suggest moving obsolete code to a backlog for removal.",
+  "version": "1",
+  "when": {
+    "type": "fileDeleted",
+    "patterns": [
+      "**/*.py",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A code file has been removed or modified. Please perform the following dependency cleanup tasks:\n\n1. **Identify Orphaned Dependencies**: Scan the codebase for any functions, classes, or files that are no longer imported or used by any existing code. Create a backlog list of these orphaned items for removal.\n\n2. **Handle New Implementations**: If new functions or algorithms have been added that replace existing implementations, identify the original implementations that could serve as fallback methods. Document these for potential backlog removal while ensuring backward compatibility.\n\n3. **Clean Up Imports**: For any removed files, search through all remaining files to:\n   - Remove import statements that reference the deleted file\n   - Remove any code that depends on the deleted file's exports\n   - Update any references or function calls to the removed code\n   - Check for transitive dependencies that may now be unused\n\n4. **Generate Cleanup Report**: Provide a summary including:\n   - List of files with cleaned imports\n   - List of orphaned code candidates for backlog\n   - List of potential fallback implementations to review\n   - Any breaking changes that require attention\n\nPlease analyze the changed files and perform these cleanup operations systematically across the entire codebase (backend and frontend directories)."
+  }
+}

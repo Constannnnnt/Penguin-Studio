@@ -1,0 +1,29 @@
+{
+  "enabled": true,
+  "name": "Test Coverage Analysis",
+  "description": "Automatically runs test suite with coverage reporting when test files or source code changes, identifies low coverage areas, suggests improvements, and checks for dead code",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/*.spec.ts",
+      "**/*.spec.tsx",
+      "**/test_*.py",
+      "**/*_test.py",
+      "**/tests/**/*.py",
+      "**/__tests__/**/*",
+      "**/src/**/*.ts",
+      "**/src/**/*.tsx",
+      "**/src/**/*.py",
+      "backend/**/*.py",
+      "frontend/**/*.ts",
+      "frontend/**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run comprehensive test coverage analysis following these steps:\n\n1. **Detect Project Type**: Identify if this is a Python (pytest) or TypeScript/JavaScript (pnpm/jest/vitest) project\n2. **Run Tests with Coverage**: \n   - For Python: `uv run pytest --cov --cov-report=term-missing --tb=short -q`\n   - For TypeScript: `pnpm test -- --coverage --silent` or `pnpm test -- --coverage --reporter=minimal`\n3. **Generate Coverage Report**: Show which lines/functions are not covered\n4. **Identify Low Coverage Files**: List all files with coverage < 80%\n5. **Analyze Coverage Gaps**: For each low-coverage file, identify:\n   - Uncovered functions/methods\n   - Uncovered branches/conditions\n   - Edge cases not tested\n6. **Suggest Specific Tests**: Provide concrete test suggestions for uncovered areas\n7. **Check for Dead Code**: Identify any code that appears unused and could be removed\n8. **Report Statistics**: Show overall coverage percentages (lines, branches, functions)\n9. **Recommend Improvements**: Suggest specific actions to increase coverage focusing on:\n   - Testing behavior, not implementation\n   - Descriptive test names\n   - Well-organized test structure\n   - Proper mocking of external dependencies\n\nPresent findings in a clear, actionable format with priorities."
+  }
+}

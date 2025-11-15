@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Dependency Update Checker",
+  "description": "Monitors dependency files and checks for outdated packages, security vulnerabilities, and suggests safe updates following best practices",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Check for outdated dependencies and suggest updates following dependency management best practices. Please:\n\n1. Run dependency check commands based on the project type:\n   - For pnpm projects: `pnpm outdated`\n   - For Python/uv projects: `uv pip list --outdated` or check pyproject.toml\n   - For npm projects: `npm outdated`\n   - For cargo projects: `cargo outdated`\n   - For go projects: `go list -u -m all`\n\n2. Identify packages that have newer versions available and categorize them by:\n   - Patch updates (bug fixes, safe to apply)\n   - Minor updates (new features, backward compatible)\n   - Major updates (breaking changes, requires careful review)\n\n3. Check for security vulnerabilities in current versions:\n   - For pnpm: `pnpm audit`\n   - For Python: `uv pip check` or `pip-audit`\n   - For npm: `npm audit`\n\n4. Use Context7 MCP server to verify compatibility and check for breaking changes before suggesting updates\n\n5. Provide a prioritized update plan:\n   - Critical security fixes (apply immediately)\n   - Patch updates (safe to apply)\n   - Minor updates (review release notes, generally safe)\n   - Major updates (warn about breaking changes, provide migration guidance)\n\n6. For each suggested update, provide:\n   - Current version → New version\n   - Update severity (patch/minor/major)\n   - Security implications if any\n   - Specific command to update: `pnpm add package@version` or `uv add package==version`\n   - Link to changelog or release notes when available\n\n7. Justify keeping dependencies up-to-date with clear technical value:\n   - Security patches\n   - Performance improvements\n   - Bug fixes\n   - New features that benefit the project\n\n8. Warn about:\n   - Breaking changes in major version updates\n   - Deprecated APIs or features\n   - Dependencies that are no longer maintained\n   - Potential compatibility issues between packages\n\n9. Follow the workspace rules for dependency management:\n   - Use latest stable versions\n   - Leverage Context7 MCP server for compatibility verification\n   - Document version constraints\n   - Remove unused dependencies\n\n10. Provide a summary with actionable next steps and commands ready to execute"
+  }
+}

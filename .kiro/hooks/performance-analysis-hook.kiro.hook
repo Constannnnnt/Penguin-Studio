@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Performance Analysis",
+  "description": "Analyzes codebase for performance issues, anti-patterns, memory leaks, slow operations, and optimization opportunities. Checks for N+1 queries, inefficient loops, caching opportunities, bundle size, unused code, and suggests performance monitoring tools while following language-specific best practices.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the modified code for performance issues and optimization opportunities. Please:\n\n1. **Performance Anti-Patterns**: Look for N+1 queries, inefficient loops, unnecessary re-renders (React), blocking operations, and synchronous operations that should be async\n2. **Memory Management**: Check for memory leaks, excessive memory usage, unclosed resources, large object allocations, and circular references\n3. **Slow/Blocking Operations**: Identify synchronous I/O, unoptimized database queries, missing indexes, large data processing in main thread\n4. **Database Optimization**: Suggest query optimizations, proper indexing, batch operations, connection pooling, and use of ORMs efficiently\n5. **Caching Opportunities**: Identify repeated computations, API calls, database queries, or expensive operations that could benefit from caching (React.memo, useMemo, useCallback, Redis, etc.)\n6. **Bundle Size**: Check for large dependencies, unused imports, opportunities for code splitting, lazy loading, and tree shaking\n7. **Unused Code**: Identify dead code, unused functions/variables/imports, redundant logic that can be removed\n8. **Performance Monitoring**: Suggest tools if not present (React DevTools Profiler, Lighthouse, Web Vitals, Python profilers, APM tools)\n9. **Language-Specific Best Practices**: \n   - TypeScript/React: Use React.memo, useMemo, useCallback appropriately; avoid inline functions in JSX; optimize re-renders\n   - Python: Use generators for large datasets, list comprehensions, appropriate data structures, async/await for I/O\n10. **Code Quality**: Ensure functions are small and focused on single responsibilities with proper error handling and logging\n\nProvide specific, actionable recommendations with code examples where applicable. Prioritize issues by impact on performance."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Git Commit Message Generator",
+  "description": "Analyzes git diff and generates conventional commit messages following best practices",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A file has been staged in git. Please help generate a conventional commit message by:\n\n1. Run `git diff --cached` to analyze the staged changes\n2. Determine the appropriate commit type (feat, fix, docs, style, refactor, test, chore)\n3. Identify the scope if applicable (e.g., backend, frontend, specific module)\n4. Generate a concise, descriptive commit message following conventional commit format: `type(scope): description`\n5. Keep the first line under 50 characters and use imperative mood (e.g., \"Add feature\" not \"Added feature\")\n6. If the changes are complex, include a body explaining what and why (not how)\n7. If there are multiple unrelated logical changes, suggest splitting into multiple commits\n8. Present the suggested commit message and ask if the user wants to use it or modify it\n\nFollow the git.md rules for commit message format and best practices."
+  }
+}
