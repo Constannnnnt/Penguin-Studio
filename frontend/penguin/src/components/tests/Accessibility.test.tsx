@@ -5,7 +5,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { PanelNav } from '../PanelNav';
 import { Header } from '../Header';
-import { Canvas } from '../Canvas';
 import { FieldGroup } from '../FieldGroup';
 import { CameraPanel } from '../CameraPanel';
 import { LightingPanel } from '../LightingPanel';
@@ -223,14 +222,7 @@ describe('Accessibility Tests', () => {
       expect(selectedButton).toHaveClass('ring-offset-2');
     });
 
-    it('should have visible focus on textarea in Canvas', () => {
-      render(<Canvas />);
-      
-      const textarea = screen.getByLabelText(/scene description/i);
-      textarea.focus();
-      
-      expect(document.activeElement).toBe(textarea);
-    });
+
 
     it('should maintain focus visibility when navigating between panels', () => {
       render(<PanelNav />);
@@ -276,23 +268,7 @@ describe('Accessibility Tests', () => {
       expect(exportButton).toBeInTheDocument();
     });
 
-    it('should have proper ARIA attributes on Canvas textarea', () => {
-      render(<Canvas />);
-      
-      const textarea = screen.getByLabelText(/scene description/i);
-      expect(textarea).toHaveAttribute('aria-describedby', 'scene-description-help');
-      expect(textarea).toHaveAttribute('aria-required', 'true');
-    });
 
-    it('should have proper ARIA labels on Canvas buttons', () => {
-      render(<Canvas />);
-      
-      const addButton = screen.getByLabelText(/add new object to scene/i);
-      expect(addButton).toBeInTheDocument();
-      
-      const generateButton = screen.getByLabelText(/generate image from configuration/i);
-      expect(generateButton).toBeInTheDocument();
-    });
 
     it('should have proper ARIA attributes on FieldGroup', () => {
       const mockOnChange = vi.fn();
@@ -333,17 +309,7 @@ describe('Accessibility Tests', () => {
       expect(unselectedButton).toHaveAttribute('aria-pressed', 'false');
     });
 
-    it('should have proper role on loading spinner', () => {
-      useConfigStore.getState().updateConfig('short_description', 'A beautiful sunset scene');
-      
-      render(<Canvas />);
-      
-      // Trigger loading state by clicking generate
-      const generateButton = screen.getByRole('button', { name: /generate image/i });
-      fireEvent.click(generateButton);
-      
-      // Note: This test may need adjustment based on actual loading implementation
-    });
+
 
     it('should have proper ARIA landmark roles', () => {
       render(<Header />);
@@ -395,18 +361,7 @@ describe('Accessibility Tests', () => {
       });
     });
 
-    it('should have logical tab order in Canvas', () => {
-      render(<Canvas />);
-      
-      const textarea = screen.getByLabelText(/scene description/i);
-      const addButton = screen.getByRole('button', { name: /add/i });
-      const generateButton = screen.getByRole('button', { name: /generate/i });
-      
-      // All should be in tab order
-      expect(textarea).not.toHaveAttribute('tabindex', '-1');
-      expect(addButton).not.toHaveAttribute('tabindex', '-1');
-      expect(generateButton).not.toHaveAttribute('tabindex', '-1');
-    });
+
 
     it('should set correct tabIndex on active and inactive panel tabs', () => {
       render(<PanelNav />);
@@ -451,7 +406,6 @@ describe('Accessibility Tests', () => {
       const { container } = render(
         <>
           <Header />
-          <Canvas />
           <PanelNav />
         </>
       );
@@ -572,32 +526,7 @@ describe('Accessibility Tests', () => {
       expect(copyButton.tagName).toBe('BUTTON');
     });
 
-    it('should support Enter key on Canvas add button', () => {
-      render(<Canvas />);
-      
-      const addButton = screen.getByRole('button', { name: /add/i });
-      addButton.focus();
-      
-      const initialCount = useConfigStore.getState().config.objects.length;
-      
-      fireEvent.keyDown(addButton, { key: 'Enter' });
-      fireEvent.click(addButton);
-      
-      expect(useConfigStore.getState().config.objects.length).toBe(initialCount + 1);
-    });
 
-    it('should support Space key on Canvas generate button', () => {
-      useConfigStore.getState().updateConfig('short_description', 'A beautiful sunset scene');
-      
-      render(<Canvas />);
-      
-      const generateButton = screen.getByRole('button', { name: /generate/i });
-      generateButton.focus();
-      
-      fireEvent.keyDown(generateButton, { key: ' ' });
-      // Button should be keyboard accessible
-      expect(generateButton.tagName).toBe('BUTTON');
-    });
 
     it('should not activate buttons with other keys', () => {
       const mockOnChange = vi.fn();
@@ -699,28 +628,9 @@ describe('Accessibility Tests', () => {
       });
     });
 
-    it('should provide status updates for loading states', () => {
-      useConfigStore.getState().updateConfig('short_description', 'A beautiful sunset scene');
-      
-      render(<Canvas />);
-      
-      const generateButton = screen.getByRole('button', { name: /generate/i });
-      fireEvent.click(generateButton);
-      
-      // Loading spinner should have role="status" for screen readers
-      // Note: This depends on the actual loading implementation
-    });
 
-    it('should announce form validation errors', () => {
-      render(<Canvas />);
-      
-      const helpText = screen.getByText(/minimum 10 characters required/i);
-      expect(helpText).toBeInTheDocument();
-      
-      // Help text should be associated with textarea via aria-describedby
-      const textarea = screen.getByLabelText(/scene description/i);
-      expect(textarea).toHaveAttribute('aria-describedby');
-    });
+
+
 
     it('should provide context for button groups', () => {
       render(<CameraPanel />);
@@ -792,12 +702,7 @@ describe('Accessibility Tests', () => {
       expect(results).toHaveNoViolations();
     });
 
-    it('should have no accessibility violations in Canvas', async () => {
-      const { container } = render(<Canvas />);
-      const results = await axe(container);
-      // @ts-expect-error - jest-axe matcher
-      expect(results).toHaveNoViolations();
-    });
+
 
     it('should have no accessibility violations in CameraPanel', async () => {
       const { container } = render(<CameraPanel />);

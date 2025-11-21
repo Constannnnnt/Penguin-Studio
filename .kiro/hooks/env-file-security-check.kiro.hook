@@ -4,14 +4,7 @@
   "description": "Automatically reviews environment file modifications to ensure security best practices, proper formatting, variable validation, and .gitignore compliance",
   "version": "1",
   "when": {
-    "type": "fileEdited",
-    "patterns": [
-      "**/.env",
-      "**/.env.*",
-      "**/env",
-      "**/env.*",
-      "**/*.env"
-    ]
+    "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",

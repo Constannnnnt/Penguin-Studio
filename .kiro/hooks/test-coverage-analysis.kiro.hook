@@ -4,23 +4,7 @@
   "description": "Automatically runs test suite with coverage reporting when test files or source code changes, identifies low coverage areas, suggests improvements, and checks for dead code",
   "version": "1",
   "when": {
-    "type": "fileEdited",
-    "patterns": [
-      "**/*.test.ts",
-      "**/*.test.tsx",
-      "**/*.spec.ts",
-      "**/*.spec.tsx",
-      "**/test_*.py",
-      "**/*_test.py",
-      "**/tests/**/*.py",
-      "**/__tests__/**/*",
-      "**/src/**/*.ts",
-      "**/src/**/*.tsx",
-      "**/src/**/*.py",
-      "backend/**/*.py",
-      "frontend/**/*.ts",
-      "frontend/**/*.tsx"
-    ]
+    "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",

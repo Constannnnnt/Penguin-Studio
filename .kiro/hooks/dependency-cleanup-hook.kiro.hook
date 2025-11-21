@@ -5,13 +5,7 @@
   "version": "1",
   "when": {
     "type": "fileDeleted",
-    "patterns": [
-      "**/*.py",
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx"
-    ]
+    "patterns": []
   },
   "then": {
     "type": "askAgent",

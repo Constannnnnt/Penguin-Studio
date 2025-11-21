@@ -31,8 +31,11 @@ inclusion: always
 - Avoid temporary or backup files in version control
 - Organize code logically by feature or domain
 - Keep configuration files at appropriate levels (project vs user)
-- Use camelCase for file names
+- Group files by by first functions (main components, tests, examples) and then by features (panels, etc)
+- Use camelCase for file names for Typescript
+- Use snakeCase (my_function) for file names for Python
 - Use lowercase for folder names
+- Put all README.md in `docs` folder in the root except a main README.md in the root.
 
 ## Documentation Approach
 - Maintain single comprehensive README covering all aspects including deployment
@@ -40,8 +43,10 @@ inclusion: always
 - Update documentation when upgrading dependencies
 - Keep documentation close to relevant code
 - Use inline comments for complex business logic
+- Never mention requirements in the comments 
 - Document API endpoints and data structures
 - Include setup and deployment instructions
+- Never use any emojis in any of the comments or print messages. Stay clean, concise, short.
 
 ## Version Control Integration
 - Commit frequently with meaningful messages

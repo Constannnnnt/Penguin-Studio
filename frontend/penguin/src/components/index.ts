@@ -1,7 +1,4 @@
 export { Header } from './Header';
-export { Canvas } from './Canvas';
-export { ObjectList } from './ObjectList';
-export { ObjectListItem } from './ObjectListItem';
 export { LoadingSpinner } from './LoadingSpinner';
 export { GeneratedImage } from './GeneratedImage';
 export { PanelNav } from './PanelNav';
@@ -12,7 +9,6 @@ export { CameraPanel } from './CameraPanel';
 export { LightingPanel } from './LightingPanel';
 export { AestheticsPanel } from './AestheticsPanel';
 export { MediumPanel } from './MediumPanel';
-export { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
 export { ThemeProvider } from './ThemeProvider';
 export { ThemeToggle } from './ThemeToggle';
 export { ErrorBoundary } from './ErrorBoundary';

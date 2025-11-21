@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Cleanup Unused Files",
+  "description": "Analyzes imports and dependencies from entry points (App.tsx, main.py, etc.) to identify and remove outdated, legacy, and unused files in the codebase. Ignores test and example files.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the codebase to identify and remove unused files:\n\n1. Identify entry points (e.g., App.tsx, main.py, index.tsx, __main__.py)\n2. Traverse all imports and dependencies from these entry points\n3. Mark all files that are actually used in the dependency graph\n4. Identify files that are NOT in the dependency graph (unused files)\n5. Exclude from removal:\n   - Test files (files in test/tests folders, files with test/spec in name)\n   - Example files (files in examples folder, files with example in name)\n   - Configuration files (.env, pyproject.toml, package.json, etc.)\n   - Documentation files (README.md, docs, etc.)\n6. Present a list of unused files found with their paths\n7. Ask for confirmation before removing any files\n8. Remove confirmed unused files and report what was deleted\n\nFocus on actual source code files (.py, .ts, .tsx, .js, .jsx) that are not imported or used anywhere in the codebase."
+  }
+}

@@ -4,17 +4,10 @@
   "description": "Monitors source code files for changes and triggers documentation updates including README files, API docs, inline comments, JSDoc/docstrings, test documentation, and usage examples",
   "version": "1",
   "when": {
-    "type": "fileEdited",
-    "patterns": [
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx",
-      "**/*.py"
-    ]
+    "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",
-    "prompt": "A source code file has been modified. Please update documentation:\n1. Check if this file has associated documentation that needs updating\n2. Look for README files, API documentation, or inline comments that reference this code\n3. Update any outdated documentation to reflect the changes\n4. Generate JSDoc/docstring comments if they're missing from new functions\n5. Update test documentation to cover new cases\n6. Update any relevant examples or usage instructions\n7. Maintain single comprehensive README covering all aspects including deployment\n8. Reference official sources through MCP servers when available\n9. Keep documentation close to relevant code\n10. Include relevant documentation links in code comments\n11. Update documentation when upgrading dependencies\n\nModified file: {{file_path}}"
+    "prompt": "A source code file has been modified. Please update documentation:\n1. Check if this file has associated documentation that needs updating\n2. Look for README files, API documentation, or inline comments that reference this code\n3. Update any outdated documentation to reflect the changes\n4. Generate JSDoc/docstring comments if they're missing from new functions\n5. Update test documentation to cover new cases\n6. Update any relevant examples or usage instructions\n7. Maintain single comprehensive README covering all aspects including deployment\n8. Reference official sources through MCP servers when available\n9. Keep documentation close to relevant code\n10. Include relevant documentation links in code comments\n11. Update documentation when upgrading dependencies\n12, Move README files into doc folder unless it is the READMe.md in the root directory\n\nModified file: {{file_path}}"
   }
 }

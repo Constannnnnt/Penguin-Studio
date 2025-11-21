@@ -4,4 +4,39 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.121.2",
+    "numpy>=2.3.5",
+    "pillow>=12.0.0",
+    "pydantic>=2.12.4",
+    "pydantic-settings>=2.12.0",
+    "python-dotenv>=1.2.1",
+    "uvicorn[standard]>=0.38.0",
+    "torch @https://download.pytorch.org/whl/cu129/torch-2.8.0%2Bcu129-cp311-cp311-win_amd64.whl; sys_platform == 'win32'",
+    "torchvision @https://download.pytorch.org/whl/cu129/torchvision-0.23.0%2Bcu129-cp311-cp311-win_amd64.whl; sys_platform == 'win32'",
+    "torch>=2.8.0; sys_platform == 'linux'",
+    "torchvision>=0.23.0; sys_platform == 'linux'",
+    "torch>=2.8.0; sys_platform == 'darwin'",
+    "torchvision>=0.23.0; sys_platform == 'darwin'",
+    "transformers>=4.57.1",
+    "matplotlib>=3.10.7",
+    "opencv-contrib-python>=4.11.0.86",
+    "pandas>=2.3.3",
+    "scikit-image>=0.25.2",
+    "scikit-learn>=1.7.2",
+    "triton-windows>=3.5.1.post21; sys_platform == 'win32'",
+    "triton>=3.5.1; sys_platform == 'linux'",
+    "spacy>=3.8.11",
+]
+
+[tool.ruff]
+line-length = 88
+[tool.black]
+line-length = 88
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+    "pytest>=9.0.1",
+    "ruff>=0.14.5",
+]

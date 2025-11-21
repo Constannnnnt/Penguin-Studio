@@ -5,13 +5,7 @@
   "version": "1",
   "when": {
     "type": "fileEdited",
-    "patterns": [
-      "**/*.js",
-      "**/*.jsx",
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.py"
-    ]
+    "patterns": []
   },
   "then": {
     "type": "askAgent",

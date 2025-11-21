@@ -4,14 +4,7 @@
   "description": "Automatically runs appropriate tests when a code file is saved, using minimal verbosity flags to prevent timeouts",
   "version": "1",
   "when": {
-    "type": "fileEdited",
-    "patterns": [
-      "**/*.py",
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx"
-    ]
+    "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",

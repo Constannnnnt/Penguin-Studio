@@ -4,28 +4,7 @@
   "description": "Monitors API schema files (OpenAPI/Swagger/GraphQL) for changes and automatically validates syntax, generates TypeScript types, updates API client code, checks for breaking changes, validates examples, updates documentation, and runs schema-based tests",
   "version": "1",
   "when": {
-    "type": "fileEdited",
-    "patterns": [
-      "**/*.openapi.json",
-      "**/*.openapi.yaml",
-      "**/*.openapi.yml",
-      "**/*.swagger.json",
-      "**/*.swagger.yaml",
-      "**/*.swagger.yml",
-      "**/openapi.json",
-      "**/openapi.yaml",
-      "**/openapi.yml",
-      "**/swagger.json",
-      "**/swagger.yaml",
-      "**/swagger.yml",
-      "**/*.graphql",
-      "**/schema.graphql",
-      "**/api-schema.json",
-      "**/api-schema.yaml",
-      "**/api-schema.yml",
-      "**/api.schema.json",
-      "**/api.schema.yaml"
-    ]
+    "type": "userTriggered"
   },
   "then": {
     "type": "askAgent",
