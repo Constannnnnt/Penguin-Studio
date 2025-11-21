@@ -20,6 +20,7 @@ export { WorkspacePanel } from './WorkspacePanel';
 export { ControlsPanel } from './ControlsPanel';
 export { FileTree } from './FileTree';
 export { ImageViewer } from './ImageViewer';
+export { MaskViewer } from './MaskViewer';
 export { PromptControls } from './PromptControls';
 export { ImageControlsTab } from './ImageControlsTab';
 export { GenerationControlsTab } from './GenerationControlsTab';

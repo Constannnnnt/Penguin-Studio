@@ -31,7 +31,7 @@ inclusion: always
 - Avoid temporary or backup files in version control
 - Organize code logically by feature or domain
 - Keep configuration files at appropriate levels (project vs user)
-- Group files by by first functions (main components, tests, examples) and then by features (panels, etc)
+- Group files and organize them into specific folders by by first functions (main components, tests, examples) and then by features (panels, etc);
 - Use camelCase for file names for Typescript
 - Use snakeCase (my_function) for file names for Python
 - Use lowercase for folder names

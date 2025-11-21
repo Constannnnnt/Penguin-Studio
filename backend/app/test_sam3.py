@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -8,11 +7,7 @@ import matplotlib.patches as patches
 import numpy as np
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
-
-from app.detection.types import DetectionResult # noqa: E402
+from app.detection.types import DetectionResult
 from app.setup_model import setup_models # noqa: E402
 from app.detection.types import PromptSpec # noqa: E402
 from app.detection.prompt_builder import PromptBuilder # noqa: E402

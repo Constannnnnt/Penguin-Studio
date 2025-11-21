@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Sequence
+from typing import List, Dict, Any, Optional
 from enum import Enum
 import torch
 
@@ -16,6 +16,14 @@ class PromptSpec:
     locations: List[str] = field(default_factory=list)
     relations: List[str] = field(default_factory=list)
     orientations: List[str] = field(default_factory=list)
+
+@dataclass
+class PromptPlan:
+    """Built prompt ready to send to the detector."""
+
+    label: str
+    tier: PromptTier
+    text: str
 
 @dataclass
 class DetectionResult:

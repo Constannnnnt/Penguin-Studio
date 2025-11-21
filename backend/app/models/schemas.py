@@ -1,0 +1,118 @@
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional, Tuple
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class BoundingBox(BaseModel):
+    """Bounding box in XYXY format."""
+
+    x1: float = Field(..., description="Left x coordinate")
+    y1: float = Field(..., description="Top y coordinate")
+    x2: float = Field(..., description="Right x coordinate")
+    y2: float = Field(..., description="Bottom y coordinate")
+
+    @field_validator("x1", "x2", "y1", "y2")
+    @classmethod
+    def validate_coordinates(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("Coordinates must be non-negative")
+        return v
+
+
+class MaskMetadata(BaseModel):
+    """Metadata for a single segmentation mask."""
+
+    mask_id: str = Field(..., description="Unique identifier for the mask")
+    label: str = Field(..., description="Object label/description")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
+    bounding_box: BoundingBox = Field(..., description="Bounding box coordinates")
+    area_pixels: int = Field(..., ge=0, description="Mask area in pixels")
+    area_percentage: float = Field(
+        ..., ge=0.0, le=100.0, description="Mask area as percentage of image"
+    )
+    centroid: Tuple[int, int] = Field(..., description="Mask centroid coordinates")
+    mask_url: str = Field(..., description="URL to mask image file")
+
+
+class SegmentationResponse(BaseModel):
+    """Response schema for segmentation results."""
+
+    result_id: str = Field(..., description="Unique identifier for the result")
+    original_image_url: str = Field(..., description="URL to original image")
+    masks: List[MaskMetadata] = Field(
+        default_factory=list, description="List of segmentation masks"
+    )
+    processing_time_ms: float = Field(
+        ..., ge=0, description="Processing time in milliseconds"
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Result timestamp"
+    )
+
+
+class WebSocketMessage(BaseModel):
+    """WebSocket message schema with type discriminators."""
+
+    type: Literal["progress", "result", "error", "connected"] = Field(
+        ..., description="Message type"
+    )
+    data: Dict[str, Any] = Field(..., description="Message payload")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Message timestamp"
+    )
+
+
+class ErrorResponse(BaseModel):
+    """Standardized error response schema."""
+
+    error: str = Field(..., description="Error type or category")
+    detail: str = Field(..., description="Detailed error message")
+    request_id: str = Field(..., description="Request identifier for tracking")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow, description="Error timestamp"
+    )
+    details: Optional[Dict[str, Any]] = Field(
+        None, description="Additional error details and context"
+    )
+
+
+class SegmentationRequest(BaseModel):
+    """Request schema for segmentation validation."""
+
+    prompts: Optional[List[str]] = Field(
+        None, description="Optional text prompts for segmentation"
+    )
+
+    @field_validator("prompts")
+    @classmethod
+    def validate_prompts(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Prompts list cannot be empty if provided")
+            for prompt in v:
+                if not prompt.strip():
+                    raise ValueError("Prompts cannot be empty strings")
+        return v
+
+
+class FileValidation:
+    """File validation constants and methods."""
+
+    ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
+    ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+    MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+    @staticmethod
+    def validate_image_type(content_type: str, filename: str) -> bool:
+        """Validate image file type by content type and extension."""
+        if content_type not in FileValidation.ALLOWED_IMAGE_TYPES:
+            return False
+
+        extension = filename.lower().split(".")[-1] if "." in filename else ""
+        return f".{extension}" in FileValidation.ALLOWED_EXTENSIONS
+
+    @staticmethod
+    def validate_file_size(size: int) -> bool:
+        """Validate file size is within limits."""
+        return 0 < size <= FileValidation.MAX_FILE_SIZE_BYTES

@@ -25,6 +25,11 @@ class SemanticRefiner:
     RELATION_FIELDS = FieldSpecBuilder.RELATION_FIELDS
     ORIENTATION_FIELDS = FieldSpecBuilder.ORIENTATION_FIELDS
 
+    # Prepositions that strongly imply locational info
+    LOC_PREPS = {
+        "on", "in", "inside", "at", "over", "under", "below",
+        "above", "around", "near", "beside", "behind", "between",
+    }
     def __init__(self, parser:  Optional[SemanticParser] = None, deduper: Optional[DescriptorDeduper] = None):
         self.parser = parser or SemanticParser()
         self.deduper = deduper or DescriptorDeduper()
