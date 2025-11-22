@@ -18,80 +18,14 @@ export interface FileSystemState {
   selectFile: (path: string) => void;
   toggleFolder: (path: string) => void;
   refreshFileTree: () => Promise<void>;
+  addSegmentedImage: (resultId: string, imageUrl: string, timestamp: string) => void;
 }
 
 const DEFAULT_ROOT_DIRECTORY: FileNode = {
-  name: 'root',
+  name: 'Home',
   path: '/',
   type: 'directory',
   children: [],
-};
-
-const MOCK_FILE_TREE: FileNode = {
-  name: 'root',
-  path: '/',
-  type: 'directory',
-  children: [
-    {
-      name: 'images',
-      path: '/images',
-      type: 'directory',
-      children: [
-        {
-          name: 'generated',
-          path: '/images/generated',
-          type: 'directory',
-          children: [
-            {
-              name: 'image1.png',
-              path: '/images/generated/image1.png',
-              type: 'file',
-              extension: 'png',
-            },
-            {
-              name: 'image2.png',
-              path: '/images/generated/image2.png',
-              type: 'file',
-              extension: 'png',
-            },
-          ],
-        },
-        {
-          name: 'uploads',
-          path: '/images/uploads',
-          type: 'directory',
-          children: [
-            {
-              name: 'photo.jpg',
-              path: '/images/uploads/photo.jpg',
-              type: 'file',
-              extension: 'jpg',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'projects',
-      path: '/projects',
-      type: 'directory',
-      children: [
-        {
-          name: 'project1',
-          path: '/projects/project1',
-          type: 'directory',
-          children: [
-            {
-              name: 'config.json',
-              path: '/projects/project1/config.json',
-              type: 'file',
-              extension: 'json',
-            },
-          ],
-        },
-      ],
-    },
-  ],
 };
 
 export const useFileSystemStore = create<FileSystemState>()(
@@ -103,7 +37,11 @@ export const useFileSystemStore = create<FileSystemState>()(
 
       loadFileTree: async () => {
         try {
-          set({ rootDirectory: MOCK_FILE_TREE });
+          set((state) => ({
+            rootDirectory: state.rootDirectory.children?.length
+              ? state.rootDirectory
+              : DEFAULT_ROOT_DIRECTORY,
+          }));
         } catch (error) {
           console.error('Failed to load file tree:', error);
         }
@@ -126,6 +64,72 @@ export const useFileSystemStore = create<FileSystemState>()(
       refreshFileTree: async () => {
         const { loadFileTree } = get();
         await loadFileTree();
+      },
+
+      addSegmentedImage: (resultId: string, _imageUrl: string, _timestamp: string) => {
+        set((state) => {
+          const newRoot = { ...state.rootDirectory };
+          if (!newRoot.children) newRoot.children = [];
+          
+          let imagesFolder = newRoot.children.find(
+            (child) => child.name === 'images' && child.type === 'directory'
+          );
+
+          if (!imagesFolder) {
+            imagesFolder = {
+              name: 'images',
+              path: '/images',
+              type: 'directory',
+              children: [],
+            };
+            newRoot.children.push(imagesFolder);
+          }
+
+          if (!imagesFolder.children) {
+            imagesFolder.children = [];
+          }
+
+          let segmentedFolder = imagesFolder.children.find(
+            (child) => child.name === 'segmented' && child.type === 'directory'
+          );
+
+          if (!segmentedFolder) {
+            segmentedFolder = {
+              name: 'segmented',
+              path: '/images/segmented',
+              type: 'directory',
+              children: [],
+            };
+            imagesFolder.children.push(segmentedFolder);
+          }
+
+          if (!segmentedFolder.children) {
+            segmentedFolder.children = [];
+          }
+
+          const fileName = `${resultId}.png`;
+          const existingFile = segmentedFolder.children.find(
+            (child) => child.name === fileName
+          );
+
+          if (!existingFile) {
+            segmentedFolder.children.unshift({
+              name: fileName,
+              path: `/images/segmented/${fileName}`,
+              type: 'file',
+              extension: 'png',
+            });
+          }
+
+          const newExpandedFolders = new Set(state.expandedFolders);
+          newExpandedFolders.add('/images');
+          newExpandedFolders.add('/images/segmented');
+
+          return {
+            rootDirectory: newRoot,
+            expandedFolders: newExpandedFolders,
+          };
+        });
       },
     }),
     {

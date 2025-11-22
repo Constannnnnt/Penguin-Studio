@@ -42,7 +42,7 @@ class SemanticRefiner:
         # Visual fields
         for key in self.VISUAL_FIELDS:
             if key in raw and raw[key]:
-                self._refine_visual_field(str(raw[key]), spec, field_name=key)
+                self._refine_visual_field(str(raw[key]), spec)
 
         # Location fields
         for key in self.LOCATION_FIELDS:

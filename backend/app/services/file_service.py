@@ -74,7 +74,10 @@ class FileService:
             elif mask_np.dtype == np.float32 or mask_np.dtype == np.float64:
                 mask_np = (mask_np * 255).astype(np.uint8)
 
-            mask_image = Image.fromarray(mask_np, mode="L")
+            # Encode mask into alpha channel so frontends can use it directly as a CSS mask.
+            rgba = np.zeros((*mask_np.shape, 4), dtype=np.uint8)
+            rgba[..., 3] = mask_np  # alpha
+            mask_image = Image.fromarray(rgba, mode="RGBA")
 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, mask_image.save, mask_path)

@@ -10,6 +10,7 @@ from loguru import logger
 from PIL import Image
 
 from app.api.dependencies import get_segmentation_service, get_ws_manager
+from app.models.schemas import FileValidation
 from app.services.segmentation_service import SegmentationService
 from app.services.websocket_manager import WebSocketManager
 
@@ -140,13 +141,32 @@ async def _process_websocket_segmentation(
         try:
             if image_data.startswith("data:image"):
                 image_data = image_data.split(",", 1)[1]
-            
+
             image_bytes = base64.b64decode(image_data)
+            if not FileValidation.validate_file_size(len(image_bytes)):
+                await ws_manager.send_error(
+                    client_id,
+                    "Image file is too large. Maximum size is 10MB.",
+                )
+                return
+
             image = Image.open(io.BytesIO(image_bytes))
-            
+            image_format = image.format.lower() if image.format else None
+            if image_format:
+                content_type = f"image/{image_format}"
+                if not FileValidation.validate_image_type(content_type, f"websocket.{image_format}"):
+                    await ws_manager.send_error(
+                        client_id,
+                        f"Unsupported image format: {image_format}",
+                    )
+                    return
+
         except Exception as e:
             logger.warning(f"Failed to decode image for client_id={client_id}: {e}")
-            await ws_manager.send_error(client_id, f"Invalid image data: {str(e)}")
+            await ws_manager.send_error(
+                client_id,
+                f"Invalid image data: {str(e)}",
+            )
             return
         
         from fastapi import UploadFile

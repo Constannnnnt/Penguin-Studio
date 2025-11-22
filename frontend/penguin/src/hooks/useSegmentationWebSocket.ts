@@ -25,9 +25,7 @@ export const useSegmentationWebSocket = (): UseSegmentationWebSocketReturn => {
   const isConnectedRef = useRef(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
-  const setProgress = useSegmentationStore((state) => state.setProgress);
-  const setResults = useSegmentationStore((state) => state.setResults);
-  const setError = useSegmentationStore((state) => state.setError);
+  const { setProgress, setResults, setError } = useSegmentationStore();
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -55,7 +53,7 @@ export const useSegmentationWebSocket = (): UseSegmentationWebSocketReturn => {
 
             case 'progress':
               if (typeof message.data.progress === 'number') {
-                setProgress(message.data.progress);
+                setProgress(message.data.progress, message.data.message);
               }
               break;
 

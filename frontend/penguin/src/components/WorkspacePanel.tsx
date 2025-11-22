@@ -2,12 +2,14 @@ import { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 're
 import { ImageViewer } from './ImageViewer';
 import { MaskViewer } from './MaskViewer';
 import { PromptControls } from './PromptControls';
+import { ErrorOverlay } from './ErrorOverlay';
 import { useConfigStore } from '@/store/configStore';
 import { useSegmentationStore } from '@/store/segmentationStore';
 import { useGeneration } from '@/hooks/useGeneration';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useMaskKeyboardShortcuts, MASK_KEYBOARD_SHORTCUTS } from '@/hooks/useMaskKeyboardShortcuts';
 import { Button } from './ui/button';
-import { Upload } from 'lucide-react';
+import { Upload, Keyboard } from 'lucide-react';
 
 export interface WorkspacePanelRef {
   handleGenerate: () => void;
@@ -24,6 +26,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const [localPrompt, setLocalPrompt] = useState(shortDescription);
   const debouncedPrompt = useDebounce(localPrompt, 300);
   const [viewMode, setViewMode] = useState<ViewMode>('original');
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const metadataInputRef = useRef<HTMLInputElement>(null);
@@ -34,8 +37,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const selectedMaskId = useSegmentationStore((state) => state.selectedMaskId);
   const isSegmenting = useSegmentationStore((state) => state.isProcessing);
   const segmentationError = useSegmentationStore((state) => state.error);
+  const segmentationErrorCode = useSegmentationStore((state) => state.errorCode);
   const uploadImage = useSegmentationStore((state) => state.uploadImage);
   const selectMask = useSegmentationStore((state) => state.selectMask);
+  const retryLastOperation = useSegmentationStore((state) => state.retryLastOperation);
+
+  useMaskKeyboardShortcuts({ enabled: viewMode === 'segmented' && !!segmentationResults });
 
   useEffect(() => {
     if (debouncedPrompt !== shortDescription) {
@@ -66,7 +73,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     if (!file) return;
 
     const metadataFile = metadataInputRef.current?.files?.[0];
-    await uploadImage(file, metadataFile);
+    await uploadImage(file, metadataFile, localPrompt || shortDescription);
     setViewMode('segmented');
   };
 
@@ -86,6 +93,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   }));
 
   const showSegmentedView = viewMode === 'segmented' && segmentationResults;
+  const showSegmentationOriginal = viewMode === 'original' && segmentationResults;
+  const originalImageToShow = showSegmentationOriginal
+    ? segmentationResults?.original_image_url || null
+    : generatedImage;
 
   return (
     <main
@@ -138,6 +149,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               >
                 Segmented
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
+                title="Keyboard shortcuts"
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
             </div>
           )}
         </div>
@@ -151,12 +170,55 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               onMaskHover={handleMaskHover}
               onMaskClick={handleMaskClick}
             />
+            
+            {showShortcutsHelp && (
+              <div className="absolute top-4 right-4 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-4 max-w-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Keyboard Shortcuts</h3>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowShortcutsHelp(false)}
+                    className="h-6 w-6 p-0"
+                  >
+                    ×
+                  </Button>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{MASK_KEYBOARD_SHORTCUTS.cycleForward.description}</span>
+                    <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">Tab</kbd>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{MASK_KEYBOARD_SHORTCUTS.cycleBackward.description}</span>
+                    <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">Shift+Tab</kbd>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{MASK_KEYBOARD_SHORTCUTS.deselect.description}</span>
+                    <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">Esc</kbd>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">{MASK_KEYBOARD_SHORTCUTS.toggleVisibility.description}</span>
+                    <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">M</kbd>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : segmentationError ? (
+          <div className="relative w-full aspect-video bg-muted/50 rounded-lg overflow-hidden border border-border">
+            <ErrorOverlay
+              error={segmentationError}
+              errorCode={segmentationErrorCode || undefined}
+              onRetry={retryLastOperation}
+              isRetrying={isSegmenting}
+            />
           </div>
         ) : (
           <ImageViewer
-            image={generatedImage}
+            image={originalImageToShow}
             isLoading={isLoading || isSegmenting}
-            error={error || segmentationError}
+            error={error}
           />
         )}
       </div>

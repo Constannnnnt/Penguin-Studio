@@ -856,3 +856,440 @@ export const UploadForSegmentationButton: React.FC = () => {
 
 #### Enhanced Controls Panel (`src/components/ControlsPanel.tsx`)
 
+
+
+```typescript
+export const ControlsPanel: React.FC = () => {
+  const { activeControlsTab, setActiveControlsTab } = useLayoutStore();
+
+  return (
+    <aside className="flex h-full flex-col" aria-label="controls panel">
+      <PanelHeader title="Edit" position="right" />
+
+      <Tabs
+        value={activeControlsTab}
+        onValueChange={(value) => setActiveControlsTab(value as 'image' | 'generation' | 'metadata')}
+        className="flex-1 flex flex-col overflow-hidden"
+      >
+        <TabsList className="w-full rounded-none border-b border-border bg-muted/50">
+          <TabsTrigger value="image" className="flex-1 text-sm">
+            Image
+          </TabsTrigger>
+          <TabsTrigger value="generation" className="flex-1 text-sm">
+            Description
+          </TabsTrigger>
+          <TabsTrigger value="metadata" className="flex-1 text-sm">
+            Objects
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="image" className="flex-1 overflow-y-auto p-4 mt-0">
+          <ImageControlsTab />
+        </TabsContent>
+
+        <TabsContent value="generation" className="flex-1 overflow-y-auto p-4 mt-0">
+          <GenerationControlsTab />
+          <div className="mt-6 pt-6 border-t">
+            <UploadForSegmentationButton />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="metadata" className="flex-1 overflow-y-auto mt-0">
+          <ObjectMetadataPanel />
+        </TabsContent>
+      </Tabs>
+    </aside>
+  );
+};
+```
+
+## Data Models
+
+### Frontend Type Definitions
+
+```typescript
+interface MaskData {
+  maskId: string;
+  label: string;
+  confidence: number;
+  boundingBox: BoundingBox;
+  areaPixels: number;
+  areaPercentage: number;
+  centroid: [number, number];
+  maskUrl: string;
+}
+
+interface BoundingBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+interface SegmentationResult {
+  resultId: string;
+  originalImageUrl: string;
+  masks: MaskData[];
+  processingTimeMs: number;
+  timestamp: string;
+  metadata?: ExampleMetadata;
+}
+
+interface ExampleMetadata {
+  short_description: string;
+  objects: ObjectDescription[];
+  background_setting: string;
+  lighting: LightingInfo;
+  aesthetics: AestheticsInfo;
+  photographic_characteristics: CameraInfo;
+  style_medium: string;
+  context: string;
+}
+
+interface ObjectDescription {
+  description: string;
+  location: string;
+  relationship: string;
+  relative_size: string;
+  shape_and_color: string;
+  texture: string;
+  appearance_details: string;
+  orientation: string;
+}
+
+interface LightingInfo {
+  conditions: string;
+  direction: string;
+  shadows: string;
+}
+
+interface CameraInfo {
+  depth_of_field: string;
+  focus: string;
+  camera_angle: string;
+  lens_focal_length: string;
+}
+
+interface AestheticsInfo {
+  composition: string;
+  color_scheme: string;
+  mood_atmosphere: string;
+  preference_score: string;
+  aesthetic_score: string;
+}
+```
+
+### Backend API Contracts
+
+The backend already provides the necessary endpoints:
+
+**POST /api/v1/segment**
+- Request: multipart/form-data with `image` and optional `metadata`
+- Response: SegmentationResponse with masks, bounding boxes, and URLs
+
+**GET /api/v1/results/{result_id}**
+- Response: Previously computed SegmentationResponse
+
+**WebSocket /ws/segment**
+- Messages: progress updates, results, errors
+
+**Static Files /outputs/{result_id}/**
+- Serves original images and mask PNGs
+
+**Static Files /examples/**
+- Serves example images and JSON metadata (needs to be added)
+
+## Error Handling
+
+### Frontend Error Handling Strategy
+
+```typescript
+class SegmentationError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'SegmentationError';
+  }
+}
+
+const handleSegmentationError = (error: unknown): string => {
+  if (error instanceof SegmentationError) {
+    switch (error.code) {
+      case 'NETWORK_ERROR':
+        return 'Unable to connect to segmentation service. Please check your connection.';
+      case 'INVALID_IMAGE':
+        return 'Invalid image format. Please use PNG or JPEG.';
+      case 'BACKEND_ERROR':
+        return 'Segmentation failed. Please try again.';
+      case 'TIMEOUT':
+        return 'Segmentation timed out. Please try a smaller image.';
+      default:
+        return error.message;
+    }
+  }
+  
+  if (error instanceof Error) {
+    return error.message;
+  }
+  
+  return 'An unexpected error occurred';
+};
+```
+
+### Error Display Components
+
+```typescript
+const ErrorOverlay: React.FC<{ error: string }> = ({ error }) => (
+  <div className="absolute inset-0 flex items-center justify-center bg-destructive/10 p-6">
+    <div className="text-center text-destructive max-w-md">
+      <AlertCircle className="h-12 w-12 mx-auto mb-3" />
+      <p className="text-base font-semibold">Segmentation Failed</p>
+      <p className="text-sm mt-2">{error}</p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-4"
+        onClick={() => useSegmentationStore.getState().clearResults()}
+      >
+        Try Again
+      </Button>
+    </div>
+  </div>
+);
+```
+
+## Testing Strategy
+
+### Unit Tests
+
+**Segmentation Store Tests** (`src/store/__tests__/segmentationStore.test.ts`)
+- Test state initialization
+- Test uploadForSegmentation action
+- Test mask selection and hover
+- Test error handling
+- Test progress updates
+
+**API Client Tests** (`src/services/__tests__/segmentationAPI.test.ts`)
+- Mock fetch responses
+- Test successful segmentation
+- Test error responses
+- Test response transformation
+
+**Component Tests**
+- MaskOverlay rendering and interactions
+- ObjectMetadataPanel tab switching
+- UploadForSegmentationButton states
+
+### Integration Tests
+
+**End-to-End Segmentation Flow** (`src/__tests__/integration/segmentation.test.tsx`)
+- Load example image
+- Trigger segmentation
+- Verify mask overlays render
+- Test hover interactions
+- Test metadata panel updates
+
+### Mock Data
+
+```typescript
+export const mockSegmentationResult: SegmentationResult = {
+  resultId: 'test-result-123',
+  originalImageUrl: 'http://localhost:8000/outputs/test-result-123/original.png',
+  masks: [
+    {
+      maskId: 'mask_0',
+      label: 'ring band',
+      confidence: 0.95,
+      boundingBox: { x1: 100, y1: 150, x2: 300, y2: 350 },
+      areaPixels: 15000,
+      areaPercentage: 5.2,
+      centroid: [200, 250],
+      maskUrl: 'http://localhost:8000/outputs/test-result-123/mask_0.png',
+    },
+    {
+      maskId: 'mask_1',
+      label: 'red gemstone',
+      confidence: 0.92,
+      boundingBox: { x1: 180, y1: 120, x2: 220, y2: 180 },
+      areaPixels: 2400,
+      areaPercentage: 0.8,
+      centroid: [200, 150],
+      maskUrl: 'http://localhost:8000/outputs/test-result-123/mask_1.png',
+    },
+  ],
+  processingTimeMs: 1250,
+  timestamp: '2025-11-21T10:30:00Z',
+};
+```
+
+## Backend Enhancements
+
+### Serve Example Files
+
+The backend needs to serve example files as static content:
+
+```python
+app.mount("/examples", StaticFiles(directory="examples"), name="examples")
+```
+
+This allows the frontend to fetch example images and JSON via:
+- `GET /examples/01.png`
+- `GET /examples/01.json`
+
+### CORS Configuration
+
+Ensure CORS allows the frontend origin:
+
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+## Performance Optimization
+
+### Image Loading Optimization
+
+```typescript
+const useOptimizedImage = (src: string) => {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setLoaded(true);
+    img.onerror = () => setError(true);
+    img.src = src;
+  }, [src]);
+  
+  return { loaded, error };
+};
+```
+
+### Mask Rendering Optimization
+
+- Use CSS transforms for positioning instead of recalculating on every render
+- Memoize mask components to prevent unnecessary re-renders
+- Use `will-change` CSS property for animated masks
+- Lazy load mask images with Intersection Observer
+
+### WebSocket Connection Management
+
+- Implement connection pooling
+- Automatic reconnection with exponential backoff
+- Heartbeat mechanism to detect stale connections
+- Clean up connections on component unmount
+
+## Keyboard Shortcuts
+
+### Implementation
+
+```typescript
+const useKeyboardShortcuts = () => {
+  const { selectMask, toggleMasksVisibility, currentResult } = useSegmentationStore();
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!currentResult) return;
+      
+      switch (e.key) {
+        case 'Tab':
+          e.preventDefault();
+          const currentIndex = currentResult.masks.findIndex(
+            m => m.maskId === selectedMaskId
+          );
+          const nextIndex = e.shiftKey
+            ? (currentIndex - 1 + currentResult.masks.length) % currentResult.masks.length
+            : (currentIndex + 1) % currentResult.masks.length;
+          selectMask(currentResult.masks[nextIndex].maskId);
+          break;
+          
+        case 'Escape':
+          selectMask(null);
+          break;
+          
+        case 'm':
+        case 'M':
+          toggleMasksVisibility();
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentResult, selectMask, toggleMasksVisibility]);
+};
+```
+
+## Accessibility
+
+### ARIA Labels and Roles
+
+```typescript
+<div
+  role="img"
+  aria-label={`Segmentation mask for ${mask.label}`}
+  aria-selected={isSelected}
+  tabIndex={0}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      onClick(e as any);
+    }
+  }}
+>
+  {/* Mask content */}
+</div>
+```
+
+### Screen Reader Support
+
+- Announce mask selection changes
+- Provide text alternatives for visual information
+- Ensure keyboard navigation works for all interactions
+- Use semantic HTML elements
+
+## Deployment Considerations
+
+### Environment Configuration
+
+```typescript
+const config = {
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  wsBaseUrl: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000',
+  enableWebSocket: import.meta.env.VITE_ENABLE_WS !== 'false',
+};
+```
+
+### Production Optimizations
+
+- Enable code splitting for segmentation components
+- Lazy load mask overlay components
+- Use CDN for static assets
+- Implement service worker for offline support
+- Add request caching for repeated segmentation results
+
+### Monitoring
+
+```typescript
+const trackSegmentation = (result: SegmentationResult) => {
+  analytics.track('segmentation_complete', {
+    result_id: result.resultId,
+    num_masks: result.masks.length,
+    processing_time_ms: result.processingTimeMs,
+  });
+};
+
+const trackError = (error: SegmentationError) => {
+  analytics.track('segmentation_error', {
+    error_code: error.code,
+    error_message: error.message,
+  });
+};
+```

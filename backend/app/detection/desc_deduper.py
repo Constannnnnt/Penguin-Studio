@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Any
 from dataclasses import dataclass, field
 import numpy as np
 
@@ -91,7 +91,6 @@ class DescriptorDeduper:
         # Pre-compute embeddings if embedder is provided
         if self.embedder is not None:
             try:
-                import numpy as np
                 embeds = self.embedder.encode(phrases)  # shape (N, D)
                 kept_embeds = []
             except Exception:

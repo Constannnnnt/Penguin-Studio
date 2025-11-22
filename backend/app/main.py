@@ -107,6 +107,12 @@ def create_app() -> FastAPI:
     app.mount("/outputs", StaticFiles(directory=str(settings.outputs_dir)), name="outputs")
     logger.info(f"Static files mounted at /outputs -> {settings.outputs_dir}")
     
+    if settings.examples_dir.exists():
+        app.mount("/examples", StaticFiles(directory=str(settings.examples_dir)), name="examples")
+        logger.info(f"Static files mounted at /examples -> {settings.examples_dir}")
+    else:
+        logger.warning(f"Examples directory not found: {settings.examples_dir}")
+    
     return app
 
 

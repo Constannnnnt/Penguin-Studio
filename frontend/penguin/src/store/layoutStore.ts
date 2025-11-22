@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
-export type ControlsTab = 'image' | 'generation';
+export type ControlsTab = 'image' | 'generation' | 'objects';
 
 export interface LayoutState {
   libraryPanelCollapsed: boolean;
@@ -29,13 +29,18 @@ const DEFAULT_LIBRARY_PANEL_WIDTH = 280;
 const DEFAULT__CONTROLS_PANEL_WIDTH = 320;
 const CURRENT_VERSION = 2;
 
-const sanitizePersistedState = (state?: Partial<PersistedLayoutState>): PersistedLayoutState => ({
-  libraryPanelCollapsed: state?.libraryPanelCollapsed ?? false,
-  ControlsPanelCollapsed: state?.ControlsPanelCollapsed ?? false,
-  libraryPanelWidth: state?.libraryPanelWidth ?? DEFAULT_LIBRARY_PANEL_WIDTH,
-  ControlsPanelWidth: state?.ControlsPanelWidth ?? DEFAULT__CONTROLS_PANEL_WIDTH,
-  activeControlsTab: state?.activeControlsTab ?? 'generation',
-});
+const sanitizePersistedState = (state?: Partial<PersistedLayoutState>): PersistedLayoutState => {
+  const activeTab = state?.activeControlsTab;
+  const validTabs: ControlsTab[] = ['image', 'generation', 'objects'];
+  
+  return {
+    libraryPanelCollapsed: state?.libraryPanelCollapsed ?? false,
+    ControlsPanelCollapsed: state?.ControlsPanelCollapsed ?? false,
+    libraryPanelWidth: state?.libraryPanelWidth ?? DEFAULT_LIBRARY_PANEL_WIDTH,
+    ControlsPanelWidth: state?.ControlsPanelWidth ?? DEFAULT__CONTROLS_PANEL_WIDTH,
+    activeControlsTab: activeTab && validTabs.includes(activeTab) ? activeTab : 'generation',
+  };
+};
 
 const migrateLayoutState = (persistedState: any, version: number): PersistedLayoutState => {
   if (!persistedState) {

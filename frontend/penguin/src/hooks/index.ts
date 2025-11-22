@@ -4,4 +4,7 @@ export { useToast } from './useToast';
 export { useGeneration } from './useGeneration';
 export { useKeyboardShortcuts, getShortcutDisplay } from './useKeyboardShortcuts';
 export { useSegmentationWebSocket } from './useSegmentationWebSocket';
+export { useMaskKeyboardShortcuts, MASK_KEYBOARD_SHORTCUTS } from './useMaskKeyboardShortcuts';
+export { useOptimizedImage, preloadImages } from './useOptimizedImage';
 export type { KeyboardShortcut, KeyboardShortcutsConfig } from './useKeyboardShortcuts';
+export type { MaskKeyboardShortcutsOptions } from './useMaskKeyboardShortcuts';
