@@ -106,7 +106,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     >
       <div className="flex-1 p-4 md:p-6 overflow-y-auto">
         <div className="mb-4 flex gap-2 items-center">
-          <Button
+          {/* <Button
             size="sm"
             variant="outline"
             onClick={handleFileUpload}
@@ -114,7 +114,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload for Segmentation
-          </Button>
+          </Button> */}
           
           <input
             ref={fileInputRef}

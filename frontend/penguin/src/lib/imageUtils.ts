@@ -2,10 +2,7 @@ import type { ImageEditState } from '../store/imageEditStore';
 
 export interface DownloadImageOptions {
   imageSrc: string;
-  imageEditState: Pick<
-    ImageEditState,
-    'brightness' | 'contrast' | 'saturation' | 'rotation' | 'flipHorizontal' | 'flipVertical'
-  >;
+  imageEditState: Partial<ImageEditState>;
   filename?: string;
 }
 
@@ -31,9 +28,9 @@ export const downloadImage = async ({
       throw new Error('Failed to get canvas context');
     }
 
-    const rotationRad = (imageEditState.rotation * Math.PI) / 180;
-    const isRotated90or270 =
-      imageEditState.rotation === 90 || imageEditState.rotation === 270;
+    const rotation = imageEditState.rotation || 0;
+    const rotationRad = (rotation * Math.PI) / 180;
+    const isRotated90or270 = rotation === 90 || rotation === 270;
 
     canvas.width = isRotated90or270 ? img.height : img.width;
     canvas.height = isRotated90or270 ? img.width : img.height;
@@ -42,7 +39,7 @@ export const downloadImage = async ({
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
 
-    if (imageEditState.rotation !== 0) {
+    if (imageEditState.rotation && imageEditState.rotation !== 0) {
       ctx.rotate(rotationRad);
     }
 
@@ -53,11 +50,42 @@ export const downloadImage = async ({
       );
     }
 
-    const brightness = 100 + imageEditState.brightness;
-    const contrast = 100 + imageEditState.contrast;
-    const saturation = 100 + imageEditState.saturation;
+    const filters: string[] = [];
+    
+    if (imageEditState.brightness) {
+      const brightness = 100 + imageEditState.brightness;
+      filters.push(`brightness(${brightness}%)`);
+    }
+    
+    if (imageEditState.contrast) {
+      const contrast = 100 + imageEditState.contrast;
+      filters.push(`contrast(${contrast}%)`);
+    }
+    
+    if (imageEditState.exposure) {
+      const exposure = 100 + imageEditState.exposure;
+      filters.push(`brightness(${exposure}%)`);
+    }
+    
+    if (imageEditState.saturation) {
+      const saturation = 100 + imageEditState.saturation;
+      filters.push(`saturate(${saturation}%)`);
+    }
+    
+    if (imageEditState.vibrance) {
+      const vibrance = 100 + imageEditState.vibrance * 0.5;
+      filters.push(`saturate(${vibrance}%)`);
+    }
+    
+    if (imageEditState.hue) {
+      filters.push(`hue-rotate(${imageEditState.hue}deg)`);
+    }
+    
+    if (imageEditState.blur) {
+      filters.push(`blur(${imageEditState.blur / 10}px)`);
+    }
 
-    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
 
     ctx.drawImage(img, -img.width / 2, -img.height / 2, img.width, img.height);
 

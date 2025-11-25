@@ -20,6 +20,14 @@ export const applySaturation = (value: number): string => {
   return `saturate(${saturation}%)`;
 };
 
+export const applyHue = (value: number): string => {
+  return `hue-rotate(${value}deg)`;
+};
+
+export const applyBlur = (value: number): string => {
+  return `blur(${value / 10}px)`;
+};
+
 export const applyRotation = (degrees: number): string => {
   return `rotate(${degrees}deg)`;
 };
@@ -34,33 +42,48 @@ export const applyFlip = (
 };
 
 export const combineTransforms = (
-  imageEditState: Pick<
-    ImageEditState,
-    'brightness' | 'contrast' | 'saturation' | 'rotation' | 'flipHorizontal' | 'flipVertical'
-  >
+  imageEditState: Partial<ImageEditState>
 ): ImageTransformStyle => {
   const filters: string[] = [];
   const transforms: string[] = [];
 
-  if (imageEditState.brightness !== 0) {
+  if (imageEditState.brightness && imageEditState.brightness !== 0) {
     filters.push(applyBrightness(imageEditState.brightness));
   }
 
-  if (imageEditState.contrast !== 0) {
+  if (imageEditState.contrast && imageEditState.contrast !== 0) {
     filters.push(applyContrast(imageEditState.contrast));
   }
 
-  if (imageEditState.saturation !== 0) {
+  if (imageEditState.exposure && imageEditState.exposure !== 0) {
+    const exposureValue = 100 + imageEditState.exposure;
+    filters.push(`brightness(${exposureValue}%)`);
+  }
+
+  if (imageEditState.saturation && imageEditState.saturation !== 0) {
     filters.push(applySaturation(imageEditState.saturation));
   }
 
-  if (imageEditState.rotation !== 0) {
+  if (imageEditState.vibrance && imageEditState.vibrance !== 0) {
+    const vibranceValue = 100 + imageEditState.vibrance * 0.5;
+    filters.push(`saturate(${vibranceValue}%)`);
+  }
+
+  if (imageEditState.hue && imageEditState.hue !== 0) {
+    filters.push(applyHue(imageEditState.hue));
+  }
+
+  if (imageEditState.blur && imageEditState.blur !== 0) {
+    filters.push(applyBlur(imageEditState.blur));
+  }
+
+  if (imageEditState.rotation && imageEditState.rotation !== 0) {
     transforms.push(applyRotation(imageEditState.rotation));
   }
 
   if (imageEditState.flipHorizontal || imageEditState.flipVertical) {
     transforms.push(
-      applyFlip(imageEditState.flipHorizontal, imageEditState.flipVertical)
+      applyFlip(!!imageEditState.flipHorizontal, !!imageEditState.flipVertical)
     );
   }
 

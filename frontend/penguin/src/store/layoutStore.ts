@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
-export type ControlsTab = 'image' | 'generation' | 'objects';
+export type ControlsTab = 'image' | 'scene' | 'objects';
 
 export interface LayoutState {
   libraryPanelCollapsed: boolean;
@@ -31,14 +31,14 @@ const CURRENT_VERSION = 2;
 
 const sanitizePersistedState = (state?: Partial<PersistedLayoutState>): PersistedLayoutState => {
   const activeTab = state?.activeControlsTab;
-  const validTabs: ControlsTab[] = ['image', 'generation', 'objects'];
+  const validTabs: ControlsTab[] = ['image', 'scene', 'objects'];
   
   return {
     libraryPanelCollapsed: state?.libraryPanelCollapsed ?? false,
     ControlsPanelCollapsed: state?.ControlsPanelCollapsed ?? false,
     libraryPanelWidth: state?.libraryPanelWidth ?? DEFAULT_LIBRARY_PANEL_WIDTH,
     ControlsPanelWidth: state?.ControlsPanelWidth ?? DEFAULT__CONTROLS_PANEL_WIDTH,
-    activeControlsTab: activeTab && validTabs.includes(activeTab) ? activeTab : 'generation',
+    activeControlsTab: activeTab && validTabs.includes(activeTab) ? activeTab : 'scene',
   };
 };
 
@@ -83,7 +83,7 @@ export const useLayoutStore = create<LayoutState>()(
         ControlsPanelCollapsed: false,
         libraryPanelWidth: DEFAULT_LIBRARY_PANEL_WIDTH,
         ControlsPanelWidth: DEFAULT__CONTROLS_PANEL_WIDTH,
-        activeControlsTab: 'generation',
+        activeControlsTab: 'scene',
 
         toggleLibraryPanel: () =>
           set((state) => ({

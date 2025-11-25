@@ -17,15 +17,15 @@ export const ControlsPanel: React.FC = () => {
 
       <Tabs
         value={activeControlsTab}
-        onValueChange={(value) => setActiveControlsTab(value as 'image' | 'generation' | 'objects')}
+        onValueChange={(value) => setActiveControlsTab(value as 'image' | 'scene' | 'objects')}
         className="flex-1 flex flex-col overflow-hidden"
       >
         <TabsList className="w-full rounded-none border-b border-border bg-muted/50">
           <TabsTrigger value="image" className="flex-1 text-sm transition-all duration-150">
             Image
           </TabsTrigger>
-          <TabsTrigger value="generation" className="flex-1 text-sm transition-all duration-150">
-            Description
+          <TabsTrigger value="scene" className="flex-1 text-sm transition-all duration-150">
+            Scene
           </TabsTrigger>
           <TabsTrigger value="objects" className="flex-1 text-sm transition-all duration-150">
             Objects
@@ -36,7 +36,7 @@ export const ControlsPanel: React.FC = () => {
           <ImageControlsTab />
         </TabsContent>
 
-        <TabsContent value="generation" className="flex-1 overflow-y-auto p-4 mt-0 animate-in fade-in duration-200">
+        <TabsContent value="scene" className="flex-1 overflow-y-auto p-4 mt-0 animate-in fade-in duration-200">
           <GenerationControlsTab />
         </TabsContent>
 

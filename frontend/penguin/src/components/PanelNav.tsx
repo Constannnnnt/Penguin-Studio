@@ -77,7 +77,7 @@ export const PanelNav: React.FC = () => {
   return (
     <div
       ref={tabListRef}
-      className="flex p-1 bg-muted rounded-lg"
+      className="flex items-center justify-center gap-1 p-1 bg-muted rounded-lg"
       role="tablist"
       aria-label="Configuration panels"
       onKeyDown={handleKeyDown}
@@ -93,10 +93,10 @@ export const PanelNav: React.FC = () => {
             variant="ghost"
             onClick={() => setActivePanel(id)}
             className={`
-              flex-1 relative min-w-0 gap-2 h-10 px-3 text-sm font-medium transition-all duration-200
+              relative gap-2 h-10 text-sm font-medium transition-all duration-300 ease-in-out
               ${isActive 
-                ? 'text-primary-foreground shadow-sm' 
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                ? 'flex-grow px-4 text-primary-foreground shadow-sm' 
+                : 'flex-shrink-0 w-10 px-0 text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }
             `}
             role="tab"
@@ -105,10 +105,20 @@ export const PanelNav: React.FC = () => {
             tabIndex={isActive ? 0 : -1}
           >
             {isActive && (
-              <div className="absolute inset-0 bg-primary rounded-lg -z-10 transition-all duration-200" />
+              <div className="absolute inset-0 bg-primary rounded-lg -z-10 transition-all duration-300" />
             )}
-            <Icon className={`h-4 w-4 ${isActive ? 'text-primary-foreground' : 'text-current'}`} aria-hidden="true" />
-            <span className="hidden sm:inline truncate">{label}</span>
+            <Icon 
+              className={`h-4 w-4 flex-shrink-0 transition-all duration-300 ${isActive ? 'text-primary-foreground' : 'text-current'}`} 
+              aria-hidden="true" 
+            />
+            <span 
+              className={`
+                truncate transition-all duration-300 overflow-hidden whitespace-nowrap
+                ${isActive ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0'}
+              `}
+            >
+              {label}
+            </span>
           </Button>
         );
       })}

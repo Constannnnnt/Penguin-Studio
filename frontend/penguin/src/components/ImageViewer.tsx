@@ -28,6 +28,10 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const rotation = useImageEditStore((state) => state.rotation);
   const flipHorizontal = useImageEditStore((state) => state.flipHorizontal);
   const flipVertical = useImageEditStore((state) => state.flipVertical);
+  const hue = useImageEditStore((state) => state.hue);
+  const blur = useImageEditStore((state) => state.blur);
+  const exposure = useImageEditStore((state) => state.exposure);
+  const vibrance = useImageEditStore((state) => state.vibrance);
 
   const imageEditState = React.useMemo(
     () => ({
@@ -37,8 +41,12 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
       rotation,
       flipHorizontal,
       flipVertical,
+      hue,
+      blur,
+      exposure,
+      vibrance,
     }),
-    [brightness, contrast, saturation, rotation, flipHorizontal, flipVertical]
+    [brightness, contrast, saturation, rotation, flipHorizontal, flipVertical, hue, blur, exposure, vibrance]
   );
 
   const transformStyle = React.useMemo(

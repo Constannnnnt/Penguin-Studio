@@ -22,11 +22,11 @@ async def lifespan(app: FastAPI):
     Application lifespan manager for startup and shutdown events.
     
     Handles:
-    - Loading SAM3 model on startup
+    - Loading model on startup
     - Starting periodic cleanup task
     - Cleanup on shutdown
     """
-    logger.info("Starting SAM3 Segmentation Service...")
+    logger.info("Starting Segmentation Service...")
     
     try:
         sam3_model = get_sam3_model()
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    logger.info("Shutting down SAM3 Segmentation Service...")
+    logger.info("Shutting down Segmentation Service...")
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -79,9 +79,8 @@ def create_app() -> FastAPI:
         Configured FastAPI application instance
     """
     app = FastAPI(
-        title="SAM3 Segmentation Service",
+        title="Penguin Studio Service",
         version="1.0.0",
-        description="Image segmentation service using SAM3 model with real-time WebSocket support",
         lifespan=lifespan,
     )
     

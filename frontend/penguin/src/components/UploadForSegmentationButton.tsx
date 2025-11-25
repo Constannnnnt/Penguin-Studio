@@ -15,9 +15,9 @@ export const UploadForSegmentationButton: React.FC = () => {
   return (
     <div className="space-y-3">
       <div>
-        <label htmlFor="example-select" className="text-sm font-medium mb-2 block">
+        {/* <label htmlFor="example-select" className="text-sm font-medium mb-2 block">
           Example Image
-        </label>
+        </label> */}
         <select
           id="example-select"
           value={selectedExample}
