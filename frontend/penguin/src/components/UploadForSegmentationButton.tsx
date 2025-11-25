@@ -26,6 +26,8 @@ export const UploadForSegmentationButton: React.FC = () => {
           disabled={isProcessing}
         >
           <option value="01">Example 01 - Ring</option>
+          <option value="02">Example 02 - Text</option>
+          <option value="03">Example 03 - Owl</option>
         </select>
       </div>
 

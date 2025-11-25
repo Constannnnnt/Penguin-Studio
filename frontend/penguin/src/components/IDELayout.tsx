@@ -4,6 +4,7 @@ import { LibraryPanel } from './LibraryPanel';
 import { WorkspacePanel, type WorkspacePanelRef } from './WorkspacePanel';
 import { ControlsPanel } from './ControlsPanel';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useObjectManipulationKeyboard } from '@/hooks/useObjectManipulationKeyboard';
 import { Header } from './Header';
 import { CollapsiblePanel } from './CollapsiblePanel';
 
@@ -39,6 +40,9 @@ export const IDELayout: React.FC = () => {
       description: 'Refine image',
     },
   });
+
+  // Enable keyboard shortcuts for object manipulation
+  useObjectManipulationKeyboard();
 
   const handleLibraryResize = (delta: number): void => {
     if (libraryPanelCollapsed) return;

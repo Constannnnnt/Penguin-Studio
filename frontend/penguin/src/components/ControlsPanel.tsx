@@ -3,7 +3,7 @@ import { PanelHeader } from './PanelHeader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ImageControlsTab } from './ImageControlsTab';
 import { GenerationControlsTab } from './GenerationControlsTab';
-import { ObjectMetadataPanel } from './ObjectMetadataPanel';
+import { ObjectsTab } from './ObjectsTab';
 
 export const ControlsPanel: React.FC = () => {
   const { activeControlsTab, setActiveControlsTab } = useLayoutStore();
@@ -41,7 +41,7 @@ export const ControlsPanel: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="objects" className="flex-1 overflow-y-auto mt-0 animate-in fade-in duration-200">
-          <ObjectMetadataPanel />
+          <ObjectsTab />
         </TabsContent>
       </Tabs>
     </aside>

@@ -1,9 +1,11 @@
 import { useImageEditStore } from '@/store/imageEditStore';
+import { useSegmentationStore } from '@/store/segmentationStore';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, ChevronDown, ChevronRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, ChevronDown, ChevronRight, Target, Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface CollapsibleSectionProps {
@@ -31,54 +33,189 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
 
 export const ImageControlsTab: React.FC = () => {
   const {
-    brightness,
-    contrast,
-    saturation,
+    brightness: globalBrightness,
+    contrast: globalContrast,
+    saturation: globalSaturation,
     rotation,
     flipHorizontal,
     flipVertical,
-    hue,
-    blur,
+    hue: globalHue,
+    blur: globalBlur,
     sharpen,
-    exposure,
+    exposure: globalExposure,
     highlights,
     shadows,
     temperature,
     tint,
-    vibrance,
+    vibrance: globalVibrance,
     vignette,
     grain,
-    setBrightness,
-    setContrast,
-    setSaturation,
+    setBrightness: setGlobalBrightness,
+    setContrast: setGlobalContrast,
+    setSaturation: setGlobalSaturation,
     setRotation,
     toggleFlipHorizontal,
     toggleFlipVertical,
-    setHue,
-    setBlur,
+    setHue: setGlobalHue,
+    setBlur: setGlobalBlur,
     setSharpen,
-    setExposure,
+    setExposure: setGlobalExposure,
     setHighlights,
     setShadows,
     setTemperature,
     setTint,
-    setVibrance,
+    setVibrance: setGlobalVibrance,
     setVignette,
     setGrain,
     resetImageEdits,
   } = useImageEditStore();
+
+  const { selectedMaskId, maskManipulation, applyImageEditToMask, results } = useSegmentationStore();
+  
+  // Get the selected mask details
+  const selectedMask = selectedMaskId && results 
+    ? results.masks.find(m => m.mask_id === selectedMaskId) 
+    : null;
+  
+  // Get per-mask edits if a mask is selected
+  const selectedMaskState = selectedMaskId ? maskManipulation.get(selectedMaskId) : null;
+  const perMaskEdits = selectedMaskState?.transform.imageEdits;
+  
+  // Use per-mask values if a mask is selected, otherwise use global values
+  const brightness = perMaskEdits?.brightness ?? globalBrightness;
+  const contrast = perMaskEdits?.contrast ?? globalContrast;
+  const saturation = perMaskEdits?.saturation ?? globalSaturation;
+  const hue = perMaskEdits?.hue ?? globalHue;
+  const blur = perMaskEdits?.blur ?? globalBlur;
+  const exposure = perMaskEdits?.exposure ?? globalExposure;
+  const vibrance = perMaskEdits?.vibrance ?? globalVibrance;
+  
+  // Wrapper functions that apply to selected mask or global
+  const setBrightness = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { brightness: value });
+    } else {
+      setGlobalBrightness(value);
+    }
+  };
+  
+  const setContrast = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { contrast: value });
+    } else {
+      setGlobalContrast(value);
+    }
+  };
+  
+  const setSaturation = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { saturation: value });
+    } else {
+      setGlobalSaturation(value);
+    }
+  };
+  
+  const setHue = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { hue: value });
+    } else {
+      setGlobalHue(value);
+    }
+  };
+  
+  const setBlur = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { blur: value });
+    } else {
+      setGlobalBlur(value);
+    }
+  };
+  
+  const setExposure = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { exposure: value });
+    } else {
+      setGlobalExposure(value);
+    }
+  };
+  
+  const setVibrance = (value: number) => {
+    if (selectedMaskId) {
+      applyImageEditToMask(selectedMaskId, { vibrance: value });
+    } else {
+      setGlobalVibrance(value);
+    }
+  };
 
   const hasEdits = brightness !== 0 || contrast !== 0 || saturation !== 0 || rotation !== 0 || 
     flipHorizontal || flipVertical || hue !== 0 || blur !== 0 || sharpen !== 0 || 
     exposure !== 0 || highlights !== 0 || shadows !== 0 || temperature !== 0 || 
     tint !== 0 || vibrance !== 0 || vignette !== 0 || grain !== 0;
 
+  const handleReset = () => {
+    if (selectedMaskId) {
+      // Reset the selected mask's transform
+      const { resetMaskTransform } = useSegmentationStore.getState();
+      resetMaskTransform(selectedMaskId);
+    } else {
+      // Reset global image edits
+      resetImageEdits();
+    }
+  };
+
   return (
-    <div className="space-y-5">
+    <TooltipProvider>
+      <div className="space-y-5">
+        {selectedMask ? (
+          <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+            <div className="flex items-start gap-2">
+              <Target className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                  Selected Object
+                </p>
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200 truncate">
+                  {selectedMask.promptText || selectedMask.label}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  All adjustments apply to this object only
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 bg-muted/50 border border-muted rounded-md">
+            <div className="flex items-start gap-2">
+              <ImageIcon className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-foreground mb-1">
+                  Global Image Edits
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Select an object to edit it individually, or adjust the entire image
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      
       <CollapsibleSection title="Basic Adjustments" defaultOpen={true}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="brightness-slider" className="text-sm">Brightness</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="brightness-slider" className="text-sm cursor-help">
+                  Brightness
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust brightness for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust brightness for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{brightness}</span>
           </div>
           <Slider
@@ -94,7 +231,20 @@ export const ImageControlsTab: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="contrast-slider" className="text-sm">Contrast</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="contrast-slider" className="text-sm cursor-help">
+                  Contrast
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust contrast for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust contrast for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{contrast}</span>
           </div>
           <Slider
@@ -110,7 +260,20 @@ export const ImageControlsTab: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="exposure-slider" className="text-sm">Exposure</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="exposure-slider" className="text-sm cursor-help">
+                  Exposure
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust exposure for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust exposure for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{exposure}</span>
           </div>
           <Slider
@@ -162,7 +325,20 @@ export const ImageControlsTab: React.FC = () => {
       <CollapsibleSection title="Color Adjustments" defaultOpen={true}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="saturation-slider" className="text-sm">Saturation</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="saturation-slider" className="text-sm cursor-help">
+                  Saturation
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust color saturation for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust color saturation for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{saturation}</span>
           </div>
           <Slider
@@ -178,7 +354,20 @@ export const ImageControlsTab: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="vibrance-slider" className="text-sm">Vibrance</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="vibrance-slider" className="text-sm cursor-help">
+                  Vibrance
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust vibrance for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust vibrance for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{vibrance}</span>
           </div>
           <Slider
@@ -194,7 +383,20 @@ export const ImageControlsTab: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="hue-slider" className="text-sm">Hue</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="hue-slider" className="text-sm cursor-help">
+                  Hue
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust hue for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust hue for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{hue}°</span>
           </div>
           <Slider
@@ -262,7 +464,20 @@ export const ImageControlsTab: React.FC = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="blur-slider" className="text-sm">Blur</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor="blur-slider" className="text-sm cursor-help">
+                  Blur
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {selectedMask 
+                    ? `Adjust blur for ${selectedMask.promptText || selectedMask.label}` 
+                    : 'Adjust blur for the entire image'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
             <span className="text-sm text-muted-foreground tabular-nums">{blur}</span>
           </div>
           <Slider
@@ -373,9 +588,9 @@ export const ImageControlsTab: React.FC = () => {
       <Button
         variant="outline"
         className="w-full h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-        onClick={resetImageEdits}
+        onClick={handleReset}
         disabled={!hasEdits}
-        aria-label="Reset all image edits"
+        aria-label={selectedMaskId ? "Reset mask edits" : "Reset all image edits"}
       >
         Reset All
       </Button>
@@ -384,6 +599,7 @@ export const ImageControlsTab: React.FC = () => {
           Changes are applied in real-time
         </p>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };

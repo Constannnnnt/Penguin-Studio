@@ -248,3 +248,132 @@ export const measureComponentRender = (componentName: string): (() => void) => {
     }
   };
 };
+
+/**
+ * Track expensive operations for optimization
+ */
+interface OperationMetrics {
+  name: string;
+  duration: number;
+  timestamp: number;
+}
+
+const operationMetrics: OperationMetrics[] = [];
+const MAX_OPERATION_METRICS = 100;
+
+/**
+ * Measure the execution time of a synchronous operation
+ */
+export const measureOperation = <T>(
+  name: string,
+  fn: () => T
+): T => {
+  const start = performance.now();
+  const result = fn();
+  const duration = performance.now() - start;
+
+  operationMetrics.push({
+    name,
+    duration,
+    timestamp: Date.now(),
+  });
+
+  if (operationMetrics.length > MAX_OPERATION_METRICS) {
+    operationMetrics.shift();
+  }
+
+  if (import.meta.env.DEV && duration > 16) {
+    console.warn(`[Performance] ${name} took ${duration.toFixed(2)}ms (>16ms frame budget)`);
+  }
+
+  return result;
+};
+
+/**
+ * Measure the execution time of an async operation
+ */
+export const measureOperationAsync = async <T>(
+  name: string,
+  fn: () => Promise<T>
+): Promise<T> => {
+  const start = performance.now();
+  const result = await fn();
+  const duration = performance.now() - start;
+
+  operationMetrics.push({
+    name,
+    duration,
+    timestamp: Date.now(),
+  });
+
+  if (operationMetrics.length > MAX_OPERATION_METRICS) {
+    operationMetrics.shift();
+  }
+
+  if (import.meta.env.DEV && duration > 100) {
+    console.warn(`[Performance] ${name} took ${duration.toFixed(2)}ms`);
+  }
+
+  return result;
+};
+
+/**
+ * Get operation metrics for analysis
+ */
+export const getOperationMetrics = (): OperationMetrics[] => {
+  return [...operationMetrics];
+};
+
+/**
+ * Clear all operation metrics
+ */
+export const clearOperationMetrics = (): void => {
+  operationMetrics.length = 0;
+};
+
+/**
+ * Get average duration for a specific operation name
+ */
+export const getAverageOperationDuration = (name: string): number => {
+  const filtered = operationMetrics.filter(m => m.name === name);
+  if (filtered.length === 0) return 0;
+  
+  const total = filtered.reduce((sum, m) => sum + m.duration, 0);
+  return total / filtered.length;
+};
+
+/**
+ * Profile a React component render with detailed timing
+ */
+export const profileComponentRenderDetailed = (componentName: string): void => {
+  if (import.meta.env.DEV) {
+    const timestamp = new Date().toISOString();
+    console.log(`[Performance] ${componentName} rendered at ${timestamp}`);
+  }
+};
+
+/**
+ * Create a performance mark for React Profiler
+ */
+export const createPerformanceMark = (markName: string): void => {
+  if (typeof performance !== 'undefined' && performance.mark) {
+    performance.mark(markName);
+  }
+};
+
+/**
+ * Measure between two performance marks
+ */
+export const measureBetweenMarks = (measureName: string, startMark: string, endMark: string): number => {
+  if (typeof performance !== 'undefined' && performance.measure) {
+    try {
+      performance.measure(measureName, startMark, endMark);
+      const measure = performance.getEntriesByName(measureName)[0];
+      return measure?.duration || 0;
+    } catch (e) {
+      console.warn(`[Performance] Failed to measure between marks: ${e}`);
+      return 0;
+    }
+  }
+  return 0;
+};

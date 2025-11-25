@@ -20,10 +20,26 @@ class BoundingBox(BaseModel):
         return v
 
 
+class ObjectMetadata(BaseModel):
+    """Object metadata from JSON input."""
+
+    description: str = Field(..., description="Object description")
+    location: str = Field(..., description="Object location in scene")
+    relationship: str = Field(default="", description="Relationship to other objects")
+    relative_size: str = Field(..., description="Relative size of object")
+    shape_and_color: str = Field(..., description="Shape and color description")
+    texture: str = Field(default="", description="Texture description")
+    appearance_details: str = Field(default="", description="Appearance details")
+    orientation: str = Field(..., description="Object orientation")
+
+
 class MaskMetadata(BaseModel):
     """Metadata for a single segmentation mask."""
 
     mask_id: str = Field(..., description="Unique identifier for the mask")
+    object_id: Optional[str] = Field(
+        None, description="Identifier for the logical object this mask belongs to"
+    )
     label: str = Field(..., description="Object label/description")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
     bounding_box: BoundingBox = Field(..., description="Bounding box coordinates")
@@ -33,6 +49,13 @@ class MaskMetadata(BaseModel):
     )
     centroid: Tuple[int, int] = Field(..., description="Mask centroid coordinates")
     mask_url: str = Field(..., description="URL to mask image file")
+    prompt_tier: Optional[Literal["CORE", "CORE_VISUAL", "CORE_VISUAL_SPATIAL"]] = Field(
+        None, description="Prompt tier used for detection"
+    )
+    prompt_text: Optional[str] = Field(None, description="Exact prompt text used")
+    object_metadata: Optional[ObjectMetadata] = Field(
+        None, description="Object metadata from JSON input"
+    )
 
 
 class SegmentationResponse(BaseModel):

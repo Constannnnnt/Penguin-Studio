@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { handleSegmentationError, type SegmentationErrorCode } from '@/lib/errors';
+import { MetadataUpdater } from '@/lib/metadataUpdater';
+import { announceManipulation, announceSelection } from '@/lib/screenReaderAnnouncements';
+import { debounceWithCancel } from '@/lib/debounce';
 
 export interface BoundingBox {
   x1: number;
@@ -11,6 +14,7 @@ export interface BoundingBox {
 
 export interface MaskMetadata {
   mask_id: string;
+  objectId?: string;
   label: string;
   confidence: number;
   bounding_box: BoundingBox;
@@ -18,6 +22,43 @@ export interface MaskMetadata {
   area_percentage: number;
   centroid: [number, number];
   mask_url: string;
+  promptTier?: 'CORE' | 'CORE_VISUAL' | 'CORE_VISUAL_SPATIAL';
+  promptText?: string;
+  objectMetadata?: {
+    description: string;
+    location: string;
+    relationship: string;
+    relative_size: string;
+    shape_and_color: string;
+    texture: string;
+    appearance_details: string;
+    orientation: string;
+  };
+}
+
+export interface MaskTransform {
+  position: { x: number; y: number };
+  scale: { width: number; height: number };
+  imageEdits: {
+    brightness: number;
+    contrast: number;
+    saturation: number;
+    hue: number;
+    blur: number;
+    exposure: number;
+    vibrance: number;
+  };
+}
+
+export interface MaskManipulationState {
+  maskId: string;
+  originalBoundingBox: BoundingBox;
+  currentBoundingBox: BoundingBox;
+  transform: MaskTransform;
+  isDragging: boolean;
+  isResizing: boolean;
+  resizeHandle: 'nw' | 'ne' | 'sw' | 'se' | null;
+  isHidden: boolean;
 }
 
 export interface ExampleMetadata {
@@ -75,6 +116,7 @@ export interface SegmentationState {
   errorCode: SegmentationErrorCode | null;
   masksVisible: boolean;
   lastOperation: (() => Promise<void>) | null;
+  maskManipulation: Map<string, MaskManipulationState>;
 
   uploadImage: (file: File, metadata?: File, promptText?: string) => Promise<void>;
   uploadForSegmentation: (exampleId: string) => Promise<void>;
@@ -86,6 +128,22 @@ export interface SegmentationState {
   setResults: (results: SegmentationResponse) => void;
   setError: (error: string | null, errorCode?: SegmentationErrorCode | null) => void;
   retryLastOperation: () => Promise<void>;
+  
+  startDragMask: (maskId: string) => void;
+  updateMaskPosition: (maskId: string, deltaX: number, deltaY: number) => void;
+  endDragMask: (maskId: string, imageSize?: { width: number; height: number }) => void;
+  
+  startResizeMask: (maskId: string, handle: 'nw' | 'ne' | 'sw' | 'se') => void;
+  updateMaskSize: (maskId: string, newBoundingBox: BoundingBox) => void;
+  endResizeMask: (maskId: string, imageSize?: { width: number; height: number }) => void;
+  
+  resetMaskTransform: (maskId: string) => void;
+  hideMask: (maskId: string) => void;
+  showMask: (maskId: string) => void;
+  
+  applyImageEditToMask: (maskId: string, edit: Partial<MaskTransform['imageEdits']>) => void;
+  
+  updateMaskMetadata: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -99,11 +157,49 @@ const toAbsoluteUrl = (url: string): string => {
 const normalizeResults = (results: SegmentationResponse, metadata?: ExampleMetadata): SegmentationResponse => ({
   ...results,
   original_image_url: toAbsoluteUrl(results.original_image_url),
-  masks: results.masks.map((mask) => ({
+  masks: results.masks.map((mask: any) => ({
     ...mask,
+    objectId: mask.object_id,
     mask_url: toAbsoluteUrl(mask.mask_url),
+    promptTier: mask.prompt_tier,
+    promptText: mask.prompt_text,
+    objectMetadata: mask.object_metadata ? {
+      description: mask.object_metadata.description,
+      location: mask.object_metadata.location,
+      relationship: mask.object_metadata.relationship,
+      relative_size: mask.object_metadata.relative_size,
+      shape_and_color: mask.object_metadata.shape_and_color,
+      texture: mask.object_metadata.texture,
+      appearance_details: mask.object_metadata.appearance_details,
+      orientation: mask.object_metadata.orientation,
+    } : undefined,
   })),
   ...(metadata ? { metadata } : {}),
+});
+
+const createDefaultTransform = (): MaskTransform => ({
+  position: { x: 0, y: 0 },
+  scale: { width: 1, height: 1 },
+  imageEdits: {
+    brightness: 0,
+    contrast: 0,
+    saturation: 0,
+    hue: 0,
+    blur: 0,
+    exposure: 0,
+    vibrance: 0,
+  },
+});
+
+const initializeMaskManipulation = (mask: MaskMetadata): MaskManipulationState => ({
+  maskId: mask.mask_id,
+  originalBoundingBox: { ...mask.bounding_box },
+  currentBoundingBox: { ...mask.bounding_box },
+  transform: createDefaultTransform(),
+  isDragging: false,
+  isResizing: false,
+  resizeHandle: null,
+  isHidden: false,
 });
 
 const deriveExampleId = (file: File): string | null => {
@@ -130,6 +226,48 @@ const tryFetchSidecarMetadata = async (file: File): Promise<{ blob: Blob; data: 
   }
 };
 
+// Create a debounced metadata updater to prevent excessive updates during drag/resize
+const createDebouncedMetadataUpdater = () => {
+  return debounceWithCancel((
+    maskId: string,
+    manipState: MaskManipulationState,
+    allMasks: MaskMetadata[],
+    manipulationStates: Map<string, MaskManipulationState>,
+    imageSize: { width: number; height: number },
+    updateFn: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => void
+  ) => {
+    const updater = new MetadataUpdater();
+    
+    // Update location metadata
+    const location = updater.updateLocationMetadata(
+      manipState.currentBoundingBox,
+      imageSize
+    );
+    
+    // Update relationship metadata
+    const relationship = updater.updateRelationshipMetadata(
+      maskId,
+      allMasks,
+      manipulationStates
+    );
+    
+    // Update orientation metadata
+    const orientation = updater.updateOrientationMetadata(
+      manipState.originalBoundingBox,
+      manipState.currentBoundingBox
+    );
+    
+    // Update the mask metadata
+    updateFn(maskId, {
+      location,
+      relationship,
+      orientation,
+    });
+  }, 300);
+};
+
+const debouncedMetadataUpdater = createDebouncedMetadataUpdater();
+
 export const useSegmentationStore = create<SegmentationState>()(
   devtools(
     (set, get) => ({
@@ -143,6 +281,7 @@ export const useSegmentationStore = create<SegmentationState>()(
       errorCode: null,
       masksVisible: true,
       lastOperation: null as (() => Promise<void>) | null,
+      maskManipulation: new Map<string, MaskManipulationState>(),
 
       uploadImage: async (file: File, metadata?: File, promptText?: string) => {
         const operation = async (): Promise<void> => {
@@ -202,8 +341,14 @@ export const useSegmentationStore = create<SegmentationState>()(
               console.warn('[Segmentation] Failed to preload some mask images:', err);
             });
             
+            const maskManipulation = new Map<string, MaskManipulationState>();
+            results.masks.forEach(mask => {
+              maskManipulation.set(mask.mask_id, initializeMaskManipulation(mask));
+            });
+            
             set({ 
-              results, 
+              results,
+              maskManipulation,
               isProcessing: false, 
               progress: 100, 
               progressMessage: 'Complete', 
@@ -279,8 +424,14 @@ export const useSegmentationStore = create<SegmentationState>()(
               console.warn('[Segmentation] Failed to preload some mask images:', err);
             });
             
+            const maskManipulation = new Map<string, MaskManipulationState>();
+            resultsWithMetadata.masks.forEach(mask => {
+              maskManipulation.set(mask.mask_id, initializeMaskManipulation(mask));
+            });
+            
             set({
               results: resultsWithMetadata,
+              maskManipulation,
               isProcessing: false,
               progress: 100,
               progressMessage: 'Complete',
@@ -315,7 +466,14 @@ export const useSegmentationStore = create<SegmentationState>()(
         await operation();
       },
 
-      selectMask: (maskId: string | null) => set({ selectedMaskId: maskId }),
+      selectMask: (maskId: string | null) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        if (mask) {
+          announceSelection(mask.label, maskId !== null);
+        }
+        set({ selectedMaskId: maskId });
+      },
 
       hoverMask: (maskId: string | null) => set({ hoveredMaskId: maskId }),
 
@@ -325,6 +483,7 @@ export const useSegmentationStore = create<SegmentationState>()(
         results: null,
         selectedMaskId: null,
         hoveredMaskId: null,
+        maskManipulation: new Map<string, MaskManipulationState>(),
         progress: 0,
         progressMessage: '',
         error: null,
@@ -338,8 +497,13 @@ export const useSegmentationStore = create<SegmentationState>()(
 
       setResults: (results: SegmentationResponse) => set(() => {
         const normalized = normalizeResults(results);
+        const maskManipulation = new Map<string, MaskManipulationState>();
+        normalized.masks.forEach(mask => {
+          maskManipulation.set(mask.mask_id, initializeMaskManipulation(mask));
+        });
         return {
           results: normalized,
+          maskManipulation,
           isProcessing: false,
           progress: 100,
           progressMessage: 'Complete',
@@ -365,6 +529,413 @@ export const useSegmentationStore = create<SegmentationState>()(
           console.warn('[Segmentation] No operation to retry');
         }
       },
+
+      startDragMask: (maskId: string) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            isDragging: true,
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      updateMaskPosition: (maskId: string, deltaX: number, deltaY: number) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          const currentBbox = manipState.currentBoundingBox;
+          const newBbox: BoundingBox = {
+            x1: currentBbox.x1 + deltaX,
+            y1: currentBbox.y1 + deltaY,
+            x2: currentBbox.x2 + deltaX,
+            y2: currentBbox.y2 + deltaY,
+          };
+          newManipulation.set(maskId, {
+            ...manipState,
+            currentBoundingBox: newBbox,
+            transform: {
+              ...manipState.transform,
+              position: {
+                x: manipState.transform.position.x + deltaX,
+                y: manipState.transform.position.y + deltaY,
+              },
+            },
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      endDragMask: (maskId: string, imageSize?: { width: number; height: number }) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            newManipulation.set(maskId, {
+              ...manipState,
+              isDragging: false,
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Announce to screen reader
+        if (mask) {
+          announceManipulation('moved to new position', mask.label);
+        }
+        
+        // Update metadata after drag completes (debounced)
+        const manipState = state.maskManipulation.get(maskId);
+        if (state.results && manipState && imageSize && mask) {
+          debouncedMetadataUpdater(
+            maskId,
+            manipState,
+            state.results.masks,
+            state.maskManipulation,
+            imageSize,
+            get().updateMaskMetadata
+          );
+        }
+      },
+
+      startResizeMask: (maskId: string, handle: 'nw' | 'ne' | 'sw' | 'se') => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            isResizing: true,
+            resizeHandle: handle,
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      updateMaskSize: (maskId: string, newBoundingBox: BoundingBox) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          const originalWidth = manipState.originalBoundingBox.x2 - manipState.originalBoundingBox.x1;
+          const originalHeight = manipState.originalBoundingBox.y2 - manipState.originalBoundingBox.y1;
+          const newWidth = newBoundingBox.x2 - newBoundingBox.x1;
+          const newHeight = newBoundingBox.y2 - newBoundingBox.y1;
+          
+          newManipulation.set(maskId, {
+            ...manipState,
+            currentBoundingBox: newBoundingBox,
+            transform: {
+              ...manipState.transform,
+              scale: {
+                width: newWidth / originalWidth,
+                height: newHeight / originalHeight,
+              },
+            },
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      endResizeMask: (maskId: string, imageSize?: { width: number; height: number }) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            newManipulation.set(maskId, {
+              ...manipState,
+              isResizing: false,
+              resizeHandle: null,
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Announce to screen reader
+        if (mask) {
+          announceManipulation('resized', mask.label);
+        }
+        
+        // Update metadata after resize completes
+        const manipState = state.maskManipulation.get(maskId);
+        if (state.results && manipState && imageSize) {
+          if (mask) {
+            // Import and use MetadataUpdater
+            import('@/lib/metadataUpdater').then(({ MetadataUpdater }) => {
+              const updater = new MetadataUpdater();
+              
+              // Update relative_size metadata
+              const relative_size = updater.updateRelativeSizeMetadata(
+                manipState.currentBoundingBox,
+                imageSize
+              );
+              
+              // Recalculate area_pixels and area_percentage
+              const width = manipState.currentBoundingBox.x2 - manipState.currentBoundingBox.x1;
+              const height = manipState.currentBoundingBox.y2 - manipState.currentBoundingBox.y1;
+              const area_pixels = Math.round(width * height);
+              const area_percentage = (area_pixels / (imageSize.width * imageSize.height)) * 100;
+              
+              // Update the mask metadata with new size information
+              get().updateMaskMetadata(maskId, {
+                relative_size,
+              });
+              
+              // Update the mask's bounding_box, area_pixels, and area_percentage in results
+              const currentState = get();
+              if (currentState.results) {
+                const maskIndex = currentState.results.masks.findIndex(m => m.mask_id === maskId);
+                if (maskIndex !== -1) {
+                  const updatedMasks = [...currentState.results.masks];
+                  updatedMasks[maskIndex] = {
+                    ...updatedMasks[maskIndex],
+                    bounding_box: { ...manipState.currentBoundingBox },
+                    area_pixels,
+                    area_percentage,
+                    centroid: [
+                      (manipState.currentBoundingBox.x1 + manipState.currentBoundingBox.x2) / 2,
+                      (manipState.currentBoundingBox.y1 + manipState.currentBoundingBox.y2) / 2,
+                    ],
+                  };
+                  
+                  set({
+                    results: {
+                      ...currentState.results,
+                      masks: updatedMasks,
+                    },
+                  });
+                }
+              }
+            });
+          }
+        }
+      },
+
+      resetMaskTransform: (maskId: string) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            newManipulation.set(maskId, {
+              ...manipState,
+              currentBoundingBox: { ...manipState.originalBoundingBox },
+              transform: createDefaultTransform(),
+              isDragging: false,
+              isResizing: false,
+              resizeHandle: null,
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Announce to screen reader
+        if (mask) {
+          announceManipulation('reset to original position', mask.label);
+        }
+        
+        // Restore original metadata values
+        if (state.results) {
+          const manipState = state.maskManipulation.get(maskId);
+          
+          if (mask && manipState) {
+            // Restore original metadata values
+            // For reset, we restore to "centered" orientation since it's back at original
+            const metadataUpdates: Partial<NonNullable<MaskMetadata['objectMetadata']>> = {
+              orientation: 'centered',
+            };
+            
+            // Update the mask metadata
+            get().updateMaskMetadata(maskId, metadataUpdates);
+            
+            // Also restore the bounding_box and centroid in the mask itself
+            const maskIndex = state.results.masks.findIndex(m => m.mask_id === maskId);
+            if (maskIndex !== -1) {
+              const updatedMasks = [...state.results.masks];
+              const originalBbox = manipState.originalBoundingBox;
+              
+              updatedMasks[maskIndex] = {
+                ...updatedMasks[maskIndex],
+                bounding_box: { ...originalBbox },
+                centroid: [
+                  (originalBbox.x1 + originalBbox.x2) / 2,
+                  (originalBbox.y1 + originalBbox.y2) / 2,
+                ],
+              };
+              
+              set({
+                results: {
+                  ...state.results,
+                  masks: updatedMasks,
+                },
+              });
+            }
+          }
+        }
+      },
+
+      hideMask: (maskId: string) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            newManipulation.set(maskId, {
+              ...manipState,
+              isHidden: true,
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Announce to screen reader
+        if (mask) {
+          announceManipulation('hidden', mask.label);
+        }
+      },
+
+      showMask: (maskId: string) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            isHidden: false,
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      applyImageEditToMask: (maskId: string, edit: Partial<MaskTransform['imageEdits']>) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (!manipState) {
+          return state;
+        }
+        
+        const updatedImageEdits = {
+          ...manipState.transform.imageEdits,
+          ...edit,
+        };
+        
+        newManipulation.set(maskId, {
+          ...manipState,
+          transform: {
+            ...manipState.transform,
+            imageEdits: updatedImageEdits,
+          },
+        });
+        
+        // Update metadata based on image edits
+        let updatedResults = state.results;
+        if (state.results) {
+          const maskIndex = state.results.masks.findIndex(m => m.mask_id === maskId);
+          if (maskIndex !== -1) {
+            const mask = state.results.masks[maskIndex];
+            if (mask.objectMetadata) {
+              const updater = new MetadataUpdater();
+              const metadataUpdates: Partial<NonNullable<MaskMetadata['objectMetadata']>> = {};
+              
+              // Update appearance_details for brightness, contrast, exposure, blur
+              if (edit.brightness !== undefined || edit.contrast !== undefined || 
+                  edit.exposure !== undefined || edit.blur !== undefined) {
+                metadataUpdates.appearance_details = updater.updateAppearanceDetailsFromEdits(
+                  mask.objectMetadata.appearance_details || '',
+                  updatedImageEdits
+                );
+              }
+              
+              // Update shape_and_color for saturation, hue, vibrance
+              if (edit.saturation !== undefined || edit.hue !== undefined || edit.vibrance !== undefined) {
+                metadataUpdates.shape_and_color = updater.updateShapeAndColorFromEdits(
+                  mask.objectMetadata.shape_and_color || '',
+                  updatedImageEdits
+                );
+              }
+              
+              // Update texture field for texture-related adjustments (blur affects texture perception)
+              if (edit.blur !== undefined) {
+                const currentTexture = mask.objectMetadata.texture || '';
+                // Remove any existing blur notation
+                const baseTexture = currentTexture.replace(/\s*\(blurred \d+px\)/, '').trim();
+                
+                if (updatedImageEdits.blur > 0) {
+                  metadataUpdates.texture = baseTexture 
+                    ? `${baseTexture} (blurred ${updatedImageEdits.blur}px)`
+                    : `blurred ${updatedImageEdits.blur}px`;
+                } else {
+                  metadataUpdates.texture = baseTexture;
+                }
+              }
+              
+              // Apply metadata updates if any
+              if (Object.keys(metadataUpdates).length > 0) {
+                const updatedMasks = [...state.results.masks];
+                updatedMasks[maskIndex] = {
+                  ...mask,
+                  objectMetadata: {
+                    ...mask.objectMetadata,
+                    ...metadataUpdates,
+                  },
+                };
+                updatedResults = {
+                  ...state.results,
+                  masks: updatedMasks,
+                };
+              }
+            }
+          }
+        }
+        
+        return { 
+          maskManipulation: newManipulation,
+          results: updatedResults,
+        };
+      }),
+
+      updateMaskMetadata: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => set((state) => {
+        if (!state.results) return state;
+        
+        const maskIndex = state.results.masks.findIndex(m => m.mask_id === maskId);
+        if (maskIndex === -1) return state;
+        
+        const updatedMasks = [...state.results.masks];
+        const mask = updatedMasks[maskIndex];
+        
+        updatedMasks[maskIndex] = {
+          ...mask,
+          objectMetadata: mask.objectMetadata ? {
+            ...mask.objectMetadata,
+            ...metadata,
+          } : {
+            description: metadata.description ?? '',
+            location: metadata.location ?? '',
+            relationship: metadata.relationship ?? '',
+            relative_size: metadata.relative_size ?? '',
+            shape_and_color: metadata.shape_and_color ?? '',
+            texture: metadata.texture ?? '',
+            appearance_details: metadata.appearance_details ?? '',
+            orientation: metadata.orientation ?? '',
+          },
+        };
+        
+        return {
+          results: {
+            ...state.results,
+            masks: updatedMasks,
+          },
+        };
+      }),
     }),
     {
       name: 'Segmentation Store',

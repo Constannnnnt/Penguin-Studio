@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -8,12 +9,12 @@ from fastapi import UploadFile
 from loguru import logger
 from PIL import Image
 
-from app.config import settings
 from app.detection.types import DetectionResult
 from app.models.sam3_model import SAM3Model
 from app.models.schemas import (
     BoundingBox,
     MaskMetadata,
+    ObjectMetadata,
     SegmentationResponse,
 )
 from app.services.file_service import FileService
@@ -68,7 +69,11 @@ class SegmentationService:
 
             if progress_callback:
                 progress_callback(20, "Extracting prompts...")
-            prompt_sets = await self._build_prompt_sets(metadata_file, prompts)
+            parsed_metadata = None
+            if metadata_file:
+                parsed_metadata = await self._parse_metadata(metadata_file)
+            
+            prompt_sets = await self._build_prompt_sets(parsed_metadata, prompts)
             if not prompt_sets:
                 prompt_sets = self.prompt_pipeline.build_from_prompts(["object"])
 
@@ -80,7 +85,7 @@ class SegmentationService:
 
             if progress_callback:
                 progress_callback(30, "Running SAM3 detection...")
-            detection_result = await loop.run_in_executor(
+            detection_result, prompt_info = await loop.run_in_executor(
                 None, self._run_tiered_detection, image, prompt_sets
             )
             img_width, img_height = self._get_image_dims(image)
@@ -102,7 +107,7 @@ class SegmentationService:
             await loop.run_in_executor(None, image.save, original_image_path)
 
             masks_metadata = self._calculate_mask_metadata(
-                detection_result, mask_urls, img_width, img_height
+                detection_result, mask_urls, img_width, img_height, prompt_info, parsed_metadata
             )
 
             processing_time_ms = (time.time() - start_time) * 1000
@@ -124,12 +129,15 @@ class SegmentationService:
 
             return response
 
+        except ValueError as e:
+            logger.warning(f"Segmentation validation failed for result_id={result_id}: {e}")
+            raise
         except Exception as e:
             logger.exception(f"Segmentation failed for result_id={result_id}: {e}")
             raise RuntimeError(f"Segmentation processing failed: {e}") from e
 
     async def _build_prompt_sets(
-        self, metadata_file: Optional[UploadFile], prompts: Optional[List[str]]
+        self, parsed_metadata: Optional[Dict[str, Any]], prompts: Optional[List[str]]
     ) -> List[PromptPlanSet]:
         """Prepare tiered prompt plan sets from free-form prompts and metadata."""
         prompt_sets: List[PromptPlanSet] = []
@@ -137,9 +145,8 @@ class SegmentationService:
         if prompts:
             prompt_sets.extend(self.prompt_pipeline.build_from_prompts(prompts))
 
-        if metadata_file:
-            metadata = await self._parse_metadata(metadata_file)
-            objects = metadata.get("objects") if isinstance(metadata, dict) else None
+        if parsed_metadata:
+            objects = parsed_metadata.get("objects") if isinstance(parsed_metadata, dict) else None
             if isinstance(objects, list):
                 prompt_sets.extend(self.prompt_pipeline.build_from_objects(objects))
 
@@ -149,11 +156,24 @@ class SegmentationService:
         """Parse JSON metadata file."""
         try:
             content = await metadata_file.read()
+            if content is None:
+                raise ValueError("Invalid JSON metadata: empty content")
+
+            if isinstance(content, (bytes, bytearray)):
+                if not content.strip():
+                    raise ValueError("Invalid JSON metadata: empty content")
+            elif isinstance(content, str):
+                if not content.strip():
+                    raise ValueError("Invalid JSON metadata: empty content")
+
             metadata = json.loads(content)
             return metadata
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse metadata JSON: {e}")
             raise ValueError(f"Invalid JSON metadata: {e}") from e
+        except ValueError as e:
+            logger.error(f"Invalid metadata content: {e}")
+            raise
         except Exception as e:
             logger.exception(f"Failed to read metadata file: {e}")
             raise RuntimeError(f"Failed to read metadata: {e}") from e
@@ -187,12 +207,20 @@ class SegmentationService:
         mask_urls: List[str],
         image_width: int,
         image_height: int,
+        prompt_info: List[Dict[str, Any]],
+        parsed_metadata: Optional[Dict[str, Any]] = None,
     ) -> List[MaskMetadata]:
         """Calculate centroids, areas, and other mask metadata."""
         masks_metadata = []
 
         try:
             total_pixels = max(int(image_width) * int(image_height), 1)
+            
+            objects_metadata = []
+            if parsed_metadata and isinstance(parsed_metadata, dict):
+                objects_list = parsed_metadata.get("objects", [])
+                if isinstance(objects_list, list):
+                    objects_metadata = objects_list
 
             for i in range(len(mask_urls)):
                 box = detection_result.boxes_xyxy[i]
@@ -217,24 +245,48 @@ class SegmentationService:
                     centroid_y = int((box[1].item() + box[3].item()) / 2)
 
                 area_percentage = (area_pixels / total_pixels) * 100
-
-                mask_metadata = MaskMetadata(
-                    mask_id=f"mask_{i}",
-                    label=label,
-                    confidence=float(score.item()),
-                    bounding_box=BoundingBox(
-                        x1=float(box[0].item()),
-                        y1=float(box[1].item()),
-                        x2=float(box[2].item()),
-                        y2=float(box[3].item()),
-                    ),
-                    area_pixels=area_pixels,
-                    area_percentage=float(area_percentage),
-                    centroid=(centroid_x, centroid_y),
-                    mask_url=mask_urls[i],
+                
+                prompt_tier = None
+                prompt_text = None
+                object_id = None
+                if i < len(prompt_info):
+                    info = prompt_info[i]
+                    tier_value = info.get("tier")
+                    if tier_value:
+                        prompt_tier = tier_value.upper()
+                    prompt_text = info.get("text")
+                    object_id = info.get("object_id")
+                
+                object_metadata = self._match_object_metadata(
+                    label, prompt_text, objects_metadata, i
                 )
 
-                masks_metadata.append(mask_metadata)
+                # Clamp coordinates to non-negative to satisfy schema validation
+                bbox = self._clamp_box(box, image_width, image_height)
+
+                try:
+                    mask_metadata = MaskMetadata(
+                        mask_id=f"mask_{i}",
+                        object_id=object_id,
+                        label=label,
+                        confidence=float(score.item()),
+                        bounding_box=bbox,
+                        area_pixels=area_pixels,
+                        area_percentage=float(area_percentage),
+                        centroid=(centroid_x, centroid_y),
+                        mask_url=mask_urls[i],
+                        prompt_tier=prompt_tier,
+                        prompt_text=prompt_text,
+                        object_metadata=object_metadata,
+                    )
+                    masks_metadata.append(mask_metadata)
+                except Exception as meta_err:
+                    logger.warning(
+                        "Skipping mask %s due to metadata validation error: %s",
+                        f"mask_{i}",
+                        meta_err,
+                    )
+                    continue
 
             logger.debug(f"Calculated metadata for {len(masks_metadata)} masks")
             return masks_metadata
@@ -242,29 +294,100 @@ class SegmentationService:
         except Exception as e:
             logger.exception(f"Failed to calculate mask metadata: {e}")
             raise RuntimeError(f"Failed to calculate mask metadata: {e}") from e
+    
+    def _match_object_metadata(
+        self,
+        label: str,
+        prompt_text: Optional[str],
+        objects_metadata: List[Dict[str, Any]],
+        fallback_index: int,
+    ) -> Optional[ObjectMetadata]:
+        """
+        Match detected mask with object metadata from JSON.
+        
+        Matching strategy:
+        1. Try to match by description similarity with label/prompt
+        2. Fall back to index-based matching
+        3. Return None if no match found
+        """
+        if not objects_metadata:
+            return None
+        
+        matched_obj = None
+        
+        for obj in objects_metadata:
+            if not isinstance(obj, dict):
+                continue
+            
+            obj_desc = obj.get("description", "").lower()
+            
+            if label and label.lower() in obj_desc:
+                matched_obj = obj
+                break
+            
+            if prompt_text and any(
+                word in obj_desc for word in prompt_text.lower().split() if len(word) > 3
+            ):
+                matched_obj = obj
+                break
+        
+        if not matched_obj and fallback_index < len(objects_metadata):
+            matched_obj = objects_metadata[fallback_index]
+        
+        if matched_obj and isinstance(matched_obj, dict):
+            try:
+                return ObjectMetadata(
+                    description=matched_obj.get("description", ""),
+                    location=matched_obj.get("location", ""),
+                    relationship=matched_obj.get("relationship", ""),
+                    relative_size=matched_obj.get("relative_size", ""),
+                    shape_and_color=matched_obj.get("shape_and_color", ""),
+                    texture=matched_obj.get("texture", ""),
+                    appearance_details=matched_obj.get("appearance_details", ""),
+                    orientation=matched_obj.get("orientation", ""),
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to parse object metadata for label={label}: {e}"
+                )
+                return None
+        
+        return None
 
     def _run_tiered_detection(
         self, image: Image.Image, prompt_sets: List[PromptPlanSet]
-    ) -> DetectionResult:
+    ) -> tuple[DetectionResult, List[Dict[str, Any]]]:
         """
         Attempt detection per object across tiers until we get hits, then merge.
+        Returns detection result and prompt information for each mask.
         """
         per_object_results: List[DetectionResult] = []
+        prompt_info: List[Dict[str, Any]] = []
         fallback_size = self._get_image_dims(image)
 
-        for prompt_set in prompt_sets:
+        for obj_idx, prompt_set in enumerate(prompt_sets):
             for plan in prompt_set.plans:
                 result = self.sam3_model.detect(image, [plan.text])
                 if result.boxes_xyxy.shape[0] > 0:
                     relabeled = self._relabel_detection(result, plan.label)
                     per_object_results.append(relabeled)
+                    
+                    for _ in range(relabeled.boxes_xyxy.shape[0]):
+                        prompt_info.append({
+                            "tier": plan.tier.value,
+                            "text": plan.text,
+                            "label": plan.label,
+                            "object_id": f"object_{obj_idx}",
+                        })
+                    
                     logger.debug(
                         f"Detected {relabeled.boxes_xyxy.shape[0]} boxes "
                         f"for label={plan.label} using tier={plan.tier.value}"
                     )
                     break
 
-        return self._combine_detection_results(per_object_results, fallback_size)
+        combined_result = self._combine_detection_results(per_object_results, fallback_size)
+        return combined_result, prompt_info
 
     @staticmethod
     def _relabel_detection(result: DetectionResult, label: str) -> DetectionResult:
@@ -308,6 +431,40 @@ class SegmentationService:
             labels=labels,
             masks=masks,
         )
+
+    @staticmethod
+    def _clamp_box(
+        box: Any, image_width: int, image_height: int
+    ) -> BoundingBox:
+        """Clamp bounding box coordinates to valid, non-negative image bounds."""
+        def _to_number(val: Any) -> float:
+            try:
+                if hasattr(val, "item"):
+                    val = val.item()
+                return float(val)
+            except Exception:
+                return 0.0
+
+        w = float(image_width) if image_width and image_width > 0 else float("inf")
+        h = float(image_height) if image_height and image_height > 0 else float("inf")
+
+        raw_x1 = _to_number(box[0])
+        raw_y1 = _to_number(box[1])
+        raw_x2 = _to_number(box[2])
+        raw_y2 = _to_number(box[3])
+
+        def _sanitize(value: float, minimum: float = 0.0, maximum: float = float("inf")) -> float:
+            if not math.isfinite(value):
+                value = 0.0
+            value = max(minimum, value)
+            return min(value, maximum)
+
+        x1 = _sanitize(raw_x1, 0.0)
+        y1 = _sanitize(raw_y1, 0.0)
+        x2 = _sanitize(raw_x2, x1, w)
+        y2 = _sanitize(raw_y2, y1, h)
+
+        return BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
 
     @staticmethod
     def _get_image_dims(image: Image.Image) -> tuple[int, int]:

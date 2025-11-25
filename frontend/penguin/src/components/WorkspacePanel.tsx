@@ -40,6 +40,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const segmentationErrorCode = useSegmentationStore((state) => state.errorCode);
   const uploadImage = useSegmentationStore((state) => state.uploadImage);
   const selectMask = useSegmentationStore((state) => state.selectMask);
+  const hoverMask = useSegmentationStore((state) => state.hoverMask);
   const retryLastOperation = useSegmentationStore((state) => state.retryLastOperation);
 
   useMaskKeyboardShortcuts({ enabled: viewMode === 'segmented' && !!segmentationResults });
@@ -78,13 +79,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   };
 
   const handleMaskHover = (maskId: string | null): void => {
-    if (maskId) {
-      selectMask(maskId);
-    }
+    hoverMask(maskId);
   };
 
   const handleMaskClick = (maskId: string): void => {
     selectMask(selectedMaskId === maskId ? null : maskId);
+  };
+
+  const handleBackgroundDeselect = (): void => {
+    selectMask(null);
   };
 
   useImperativeHandle(ref, () => ({
@@ -138,7 +141,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               <Button
                 size="sm"
                 variant={viewMode === 'original' ? 'default' : 'outline'}
-                onClick={() => setViewMode('original')}
+                onClick={() => {
+                  setViewMode('original');
+                  selectMask(null);
+                }}
               >
                 Original
               </Button>
@@ -169,6 +175,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               selectedMaskId={selectedMaskId}
               onMaskHover={handleMaskHover}
               onMaskClick={handleMaskClick}
+              onBackgroundDeselect={handleBackgroundDeselect}
             />
             
             {showShortcutsHelp && (

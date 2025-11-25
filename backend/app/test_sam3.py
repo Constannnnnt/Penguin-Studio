@@ -6,8 +6,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 from PIL import Image
+import sys
+# Ensure backend directory is in path
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from app.detection.types import DetectionResult
+from app.detection.types import DetectionResult # noqa: E402
 from app.setup_model import setup_models # noqa: E402
 from app.detection.types import PromptSpec # noqa: E402
 from app.detection.prompt_builder import PromptBuilder # noqa: E402
@@ -79,8 +84,8 @@ def _save_json(result: DetectionResult, output_path: Path) -> None:
 
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
-    image_path = project_root / "examples" / "01.png"
-    prompt_json = project_root / "examples" / "01.json"
+    image_path = project_root / "examples" / "03.png"
+    prompt_json = project_root / "examples" / "03.json"
     outputs_dir = project_root / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
