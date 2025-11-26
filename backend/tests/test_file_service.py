@@ -103,7 +103,7 @@ class TestFileService:
         assert mask_path.exists()
 
         saved_image = Image.open(mask_path)
-        assert saved_image.mode == "L"
+        assert saved_image.mode == "RGBA"
         assert saved_image.size == (100, 100)
 
     @pytest.mark.asyncio
@@ -146,8 +146,9 @@ class TestFileService:
         mask_array = np.array(saved_image)
 
         assert mask_array.dtype == np.uint8
-        assert mask_array[0, 0] == 255
-        assert mask_array[0, 1] == 0
+        # Check alpha channel (index 3) for mask values
+        assert mask_array[0, 0, 3] == 255
+        assert mask_array[0, 1, 3] == 0
 
     @pytest.mark.asyncio
     async def test_save_mask_converts_float_to_uint8(self, file_service, temp_dirs):

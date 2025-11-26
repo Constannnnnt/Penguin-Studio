@@ -1,3 +1,3 @@
-from app.api.routes import segmentation, websocket
+from app.api.routes import segmentation, websocket, scene_parsing
 
-__all__ = ["segmentation", "websocket"]
+__all__ = ["segmentation", "websocket", "scene_parsing"]

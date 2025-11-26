@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.dependencies import cleanup_dependencies, get_file_service, get_sam3_model
-from app.api.routes import segmentation, websocket
+from app.api.routes import segmentation, websocket, scene_parsing
 from app.config import settings
 from app.utils.error_handlers import register_error_handlers
 from app.utils.logging import setup_logging
@@ -100,6 +100,7 @@ def create_app() -> FastAPI:
     
     app.include_router(segmentation.router)
     app.include_router(websocket.router)
+    app.include_router(scene_parsing.router)
     logger.info("API routers registered")
     
     settings.outputs_dir.mkdir(parents=True, exist_ok=True)

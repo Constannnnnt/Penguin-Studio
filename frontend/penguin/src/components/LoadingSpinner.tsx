@@ -1,17 +1,29 @@
 import * as React from 'react';
+import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-/**
- * Loading spinner component with accessibility support
- */
-export const LoadingSpinner: React.FC = () => {
+interface LoadingSpinnerProps {
+  className?: string;
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
+  className, 
+  size = 'md' 
+}) => {
+  const sizeClasses = {
+    sm: 'h-4 w-4',
+    md: 'h-6 w-6',
+    lg: 'h-8 w-8',
+  };
+
   return (
-    <div 
-      className="flex items-center justify-center w-full h-full min-h-[100px]" 
-      role="status" 
-      aria-live="polite"
-    >
-      <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 border-b-2 border-primary" />
-      <span className="sr-only">Loading...</span>
-    </div>
+    <Loader2 
+      className={cn(
+        'animate-spin text-muted-foreground',
+        sizeClasses[size],
+        className
+      )} 
+    />
   );
 };

@@ -109,6 +109,7 @@ export interface SegmentationState {
   results: SegmentationResponse | null;
   selectedMaskId: string | null;
   hoveredMaskId: string | null;
+  isAnyMaskDragging: boolean;
   isProcessing: boolean;
   progress: number;
   progressMessage: string;
@@ -154,28 +155,31 @@ const toAbsoluteUrl = (url: string): string => {
   return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 };
 
-const normalizeResults = (results: SegmentationResponse, metadata?: ExampleMetadata): SegmentationResponse => ({
-  ...results,
-  original_image_url: toAbsoluteUrl(results.original_image_url),
-  masks: results.masks.map((mask: any) => ({
-    ...mask,
-    objectId: mask.object_id,
-    mask_url: toAbsoluteUrl(mask.mask_url),
-    promptTier: mask.prompt_tier,
-    promptText: mask.prompt_text,
-    objectMetadata: mask.object_metadata ? {
-      description: mask.object_metadata.description,
-      location: mask.object_metadata.location,
-      relationship: mask.object_metadata.relationship,
-      relative_size: mask.object_metadata.relative_size,
-      shape_and_color: mask.object_metadata.shape_and_color,
-      texture: mask.object_metadata.texture,
-      appearance_details: mask.object_metadata.appearance_details,
-      orientation: mask.object_metadata.orientation,
-    } : undefined,
-  })),
-  ...(metadata ? { metadata } : {}),
-});
+const normalizeResults = (results: SegmentationResponse, metadata?: ExampleMetadata): SegmentationResponse => {
+  const meta = metadata ?? (results as any).metadata;
+  return {
+    ...results,
+    original_image_url: toAbsoluteUrl(results.original_image_url),
+    masks: results.masks.map((mask: any) => ({
+      ...mask,
+      objectId: mask.object_id,
+      mask_url: toAbsoluteUrl(mask.mask_url),
+      promptTier: mask.prompt_tier,
+      promptText: mask.prompt_text,
+      objectMetadata: mask.object_metadata ? {
+        description: mask.object_metadata.description,
+        location: mask.object_metadata.location,
+        relationship: mask.object_metadata.relationship,
+        relative_size: mask.object_metadata.relative_size,
+        shape_and_color: mask.object_metadata.shape_and_color,
+        texture: mask.object_metadata.texture,
+        appearance_details: mask.object_metadata.appearance_details,
+        orientation: mask.object_metadata.orientation,
+      } : undefined,
+    })),
+    ...(meta ? { metadata: meta } : {}),
+  };
+};
 
 const createDefaultTransform = (): MaskTransform => ({
   position: { x: 0, y: 0 },
@@ -274,6 +278,7 @@ export const useSegmentationStore = create<SegmentationState>()(
       results: null,
       selectedMaskId: null,
       hoveredMaskId: null,
+      isAnyMaskDragging: false,
       isProcessing: false,
       progress: 0,
       progressMessage: '',
@@ -539,7 +544,7 @@ export const useSegmentationStore = create<SegmentationState>()(
             isDragging: true,
           });
         }
-        return { maskManipulation: newManipulation };
+        return { maskManipulation: newManipulation, isAnyMaskDragging: true };
       }),
 
       updateMaskPosition: (maskId: string, deltaX: number, deltaY: number) => set((state) => {
@@ -581,7 +586,7 @@ export const useSegmentationStore = create<SegmentationState>()(
               isDragging: false,
             });
           }
-          return { maskManipulation: newManipulation };
+          return { maskManipulation: newManipulation, isAnyMaskDragging: false };
         });
         
         // Announce to screen reader
@@ -620,10 +625,10 @@ export const useSegmentationStore = create<SegmentationState>()(
         const newManipulation = new Map(state.maskManipulation);
         const manipState = newManipulation.get(maskId);
         if (manipState) {
-          const originalWidth = manipState.originalBoundingBox.x2 - manipState.originalBoundingBox.x1;
-          const originalHeight = manipState.originalBoundingBox.y2 - manipState.originalBoundingBox.y1;
-          const newWidth = newBoundingBox.x2 - newBoundingBox.x1;
-          const newHeight = newBoundingBox.y2 - newBoundingBox.y1;
+          const originalWidth = manipState.originalBoundingBox.x2 - manipState.originalBoundingBox.x1 || 1;
+          const originalHeight = manipState.originalBoundingBox.y2 - manipState.originalBoundingBox.y1 || 1;
+          const newWidth = Math.max(1, newBoundingBox.x2 - newBoundingBox.x1);
+          const newHeight = Math.max(1, newBoundingBox.y2 - newBoundingBox.y1);
           
           newManipulation.set(maskId, {
             ...manipState,

@@ -1,17 +1,25 @@
 import { useLayoutStore } from '@/store/layoutStore';
+import { useConfigStore } from '@/store/configStore';
 import { PanelHeader } from './PanelHeader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ImageControlsTab } from './ImageControlsTab';
-import { GenerationControlsTab } from './GenerationControlsTab';
+// import { GenerationControlsTab } from './GenerationControlsTab';
 import { ObjectsTab } from './ObjectsTab';
+import { SceneTab } from './SceneTab';
+import { cn } from '@/lib/utils';
 
 export const ControlsPanel: React.FC = () => {
   const { activeControlsTab, setActiveControlsTab } = useLayoutStore();
+  const activePanel = useConfigStore((state) => state.activePanel);
 
+
+  // Determine the scene tab content based on mode
+  const SceneTabContent = SceneTab;
+  
   return (
-    <aside className="flex h-full flex-col" aria-label=" controls panel">
+    <aside className="flex h-full flex-col" aria-label="Controls panel">
       <PanelHeader
-        title=" Edit"
+        title="Edit"
         position="right"
       />
 
@@ -36,8 +44,11 @@ export const ControlsPanel: React.FC = () => {
           <ImageControlsTab />
         </TabsContent>
 
-        <TabsContent value="scene" className="flex-1 overflow-y-auto p-4 mt-0 animate-in fade-in duration-200">
-          <GenerationControlsTab />
+        <TabsContent value="scene" className={cn(
+          "flex-1 mt-0 animate-in fade-in duration-200 overflow-hidden",
+          // isEnhancedMode ? "overflow-hidden" : "overflow-y-auto p-4"
+        )}>
+          <SceneTabContent />
         </TabsContent>
 
         <TabsContent value="objects" className="flex-1 overflow-y-auto mt-0 animate-in fade-in duration-200">

@@ -23,12 +23,16 @@ export const MaskTooltip: React.FC<MaskTooltipProps> = ({
 }) => {
   const tooltipRef = React.useRef<HTMLDivElement>(null);
   const [adjustedPosition, setAdjustedPosition] = React.useState(position);
+  const lastPositionRef = React.useRef(position);
 
   const tooltipText = mask.promptText || mask.label;
 
   React.useEffect(() => {
     if (!visible || !tooltipRef.current || !imageContainerRef?.current) {
-      setAdjustedPosition(position);
+      if (lastPositionRef.current.x !== position.x || lastPositionRef.current.y !== position.y) {
+        lastPositionRef.current = position;
+        setAdjustedPosition(position);
+      }
       return;
     }
 
@@ -90,8 +94,11 @@ export const MaskTooltip: React.FC<MaskTooltipProps> = ({
       }
     }
 
-    setAdjustedPosition({ x: newX, y: newY });
-  }, [visible, position, boundingBox, mask.bounding_box, imageContainerRef]);
+    if (lastPositionRef.current.x !== newX || lastPositionRef.current.y !== newY) {
+      lastPositionRef.current = { x: newX, y: newY };
+      setAdjustedPosition({ x: newX, y: newY });
+    }
+  }, [visible, position.x, position.y, boundingBox, mask.bounding_box.x1, mask.bounding_box.y1, mask.bounding_box.x2, mask.bounding_box.y2, imageContainerRef]);
 
   if (!visible) {
     return null;

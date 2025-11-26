@@ -31,11 +31,21 @@ export const PanelNav: React.FC = () => {
   const setActivePanel = useConfigStore((state) => state.setActivePanel);
   const tabListRef = useRef<HTMLDivElement>(null);
 
+  const currentActivePanel = activePanel;
+
+  /**
+   * Handles panel selection with appropriate store
+   */
+  const handlePanelSelect = (panelId: PanelType): void => {
+      setActivePanel(panelId);
+    
+  };
+
   /**
    * Handles keyboard navigation for panel tabs
    */
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const currentIndex = PANELS.findIndex((panel) => panel.id === activePanel);
+    const currentIndex = PANELS.findIndex((panel) => panel.id === currentActivePanel);
     let newIndex = currentIndex;
 
     switch (event.key) {
@@ -59,7 +69,7 @@ export const PanelNav: React.FC = () => {
         return;
     }
 
-    setActivePanel(PANELS[newIndex].id);
+    handlePanelSelect(PANELS[newIndex].id);
   };
 
   /**
@@ -68,11 +78,11 @@ export const PanelNav: React.FC = () => {
   useEffect(() => {
     if (tabListRef.current) {
       const activeButton = tabListRef.current.querySelector(
-        `[data-panel-id="${activePanel}"]`
+        `[data-panel-id="${currentActivePanel}"]`
       ) as HTMLButtonElement;
       activeButton?.focus();
     }
-  }, [activePanel]);
+  }, [currentActivePanel]);
 
   return (
     <div
@@ -83,7 +93,7 @@ export const PanelNav: React.FC = () => {
       onKeyDown={handleKeyDown}
     >
       {PANELS.map(({ id, label, icon: Icon }) => {
-        const isActive = activePanel === id;
+        const isActive = currentActivePanel === id;
 
         return (
           <Button
@@ -91,7 +101,7 @@ export const PanelNav: React.FC = () => {
             id={`tab-${id}`}
             data-panel-id={id}
             variant="ghost"
-            onClick={() => setActivePanel(id)}
+            onClick={() => handlePanelSelect(id)}
             className={`
               relative gap-2 h-10 text-sm font-medium transition-all duration-300 ease-in-out
               ${isActive 

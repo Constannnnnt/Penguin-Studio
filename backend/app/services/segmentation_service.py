@@ -120,6 +120,7 @@ class SegmentationService:
                 original_image_url=f"/outputs/{result_id}/original.png",
                 masks=masks_metadata,
                 processing_time_ms=processing_time_ms,
+                metadata=parsed_metadata if isinstance(parsed_metadata, dict) else None,
             )
 
             logger.info(

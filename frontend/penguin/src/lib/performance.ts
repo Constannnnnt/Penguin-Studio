@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 /**
  * Performance monitoring utilities
  * 
@@ -376,4 +378,269 @@ export const measureBetweenMarks = (measureName: string, startMark: string, endM
     }
   }
   return 0;
+};
+
+// ============================================================================
+// Memoization Utilities
+// ============================================================================
+
+/**
+ * Simple memoization cache with LRU eviction
+ */
+class MemoCache<K, V> {
+  private cache = new Map<string, { value: V; timestamp: number; accessCount: number }>();
+  private maxSize: number;
+  private maxAge: number;
+
+  constructor(maxSize: number = 100, maxAge: number = 5 * 60 * 1000) { // 5 minutes default
+    this.maxSize = maxSize;
+    this.maxAge = maxAge;
+  }
+
+  private serializeKey(key: K): string {
+    return JSON.stringify(key);
+  }
+
+  private evictExpired(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now - entry.timestamp > this.maxAge) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  private evictLRU(): void {
+    if (this.cache.size <= this.maxSize) return;
+
+    let lruKey: string | null = null;
+    let lruAccessCount = Infinity;
+    let lruTimestamp = Infinity;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.accessCount < lruAccessCount || 
+          (entry.accessCount === lruAccessCount && entry.timestamp < lruTimestamp)) {
+        lruKey = key;
+        lruAccessCount = entry.accessCount;
+        lruTimestamp = entry.timestamp;
+      }
+    }
+
+    if (lruKey) {
+      this.cache.delete(lruKey);
+    }
+  }
+
+  get(key: K): V | undefined {
+    this.evictExpired();
+    
+    const serializedKey = this.serializeKey(key);
+    const entry = this.cache.get(serializedKey);
+    
+    if (entry) {
+      entry.accessCount++;
+      entry.timestamp = Date.now();
+      return entry.value;
+    }
+    
+    return undefined;
+  }
+
+  set(key: K, value: V): void {
+    this.evictExpired();
+    this.evictLRU();
+    
+    const serializedKey = this.serializeKey(key);
+    this.cache.set(serializedKey, {
+      value,
+      timestamp: Date.now(),
+      accessCount: 1,
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    this.evictExpired();
+    return this.cache.size;
+  }
+}
+
+/**
+ * Memoization decorator for expensive operations
+ */
+export const memoize = <Args extends unknown[], Return>(
+  fn: (...args: Args) => Return,
+  options: { maxSize?: number; maxAge?: number } = {}
+): ((...args: Args) => Return) => {
+  const cache = new MemoCache<Args, Return>(options.maxSize, options.maxAge);
+  
+  return (...args: Args): Return => {
+    const cached = cache.get(args);
+    if (cached !== undefined) {
+      return cached;
+    }
+    
+    const result = fn(...args);
+    cache.set(args, result);
+    return result;
+  };
+};
+
+/**
+ * Async memoization for promises
+ */
+export const memoizeAsync = <Args extends unknown[], Return>(
+  fn: (...args: Args) => Promise<Return>,
+  options: { maxSize?: number; maxAge?: number } = {}
+): ((...args: Args) => Promise<Return>) => {
+  const cache = new MemoCache<Args, Promise<Return>>(options.maxSize, options.maxAge);
+  
+  return (...args: Args): Promise<Return> => {
+    const cached = cache.get(args);
+    if (cached !== undefined) {
+      return cached;
+    }
+    
+    const promise = fn(...args).catch((error) => {
+      // Remove failed promises from cache
+      cache.set(args, Promise.reject(error));
+      throw error;
+    });
+    
+    cache.set(args, promise);
+    return promise;
+  };
+};
+
+// ============================================================================
+// Debouncing Utilities
+// ============================================================================
+
+/**
+ * Enhanced debounce with immediate execution option
+ */
+export const debounce = <Args extends unknown[]>(
+  fn: (...args: Args) => void,
+  delay: number,
+  options: { immediate?: boolean; maxWait?: number } = {}
+): ((...args: Args) => void) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  let maxTimeoutId: NodeJS.Timeout | null = null;
+  let lastCallTime = 0;
+
+  return (...args: Args): void => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastCallTime;
+
+    const callNow = options.immediate && !timeoutId;
+
+    // Clear existing timeouts
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    // Set up new timeout
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      if (maxTimeoutId) {
+        clearTimeout(maxTimeoutId);
+        maxTimeoutId = null;
+      }
+      if (!options.immediate) {
+        fn(...args);
+      }
+    }, delay);
+
+    // Handle maxWait option
+    if (options.maxWait && !maxTimeoutId && timeSinceLastCall >= options.maxWait) {
+      maxTimeoutId = setTimeout(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        maxTimeoutId = null;
+        fn(...args);
+      }, options.maxWait - timeSinceLastCall);
+    }
+
+    lastCallTime = now;
+
+    // Call immediately if requested
+    if (callNow) {
+      fn(...args);
+    }
+  };
+};
+
+/**
+ * Throttle function to limit execution frequency
+ */
+export const throttle = <Args extends unknown[]>(
+  fn: (...args: Args) => void,
+  limit: number
+): ((...args: Args) => void) => {
+  let inThrottle = false;
+  let lastArgs: Args | null = null;
+
+  return (...args: Args): void => {
+    lastArgs = args;
+
+    if (!inThrottle) {
+      fn(...args);
+      inThrottle = true;
+      
+      setTimeout(() => {
+        inThrottle = false;
+        if (lastArgs) {
+          fn(...lastArgs);
+          lastArgs = null;
+        }
+      }, limit);
+    }
+  };
+};
+
+// ============================================================================
+// Performance Optimization Hooks
+// ============================================================================
+
+/**
+ * Creates a memoized callback that only changes when dependencies change
+ */
+export const useMemoizedCallback = <Args extends unknown[], Return>(
+  callback: (...args: Args) => Return,
+  deps: React.DependencyList
+): ((...args: Args) => Return) => {
+  return React.useCallback(memoize(callback), deps);
+};
+
+/**
+ * Creates a debounced callback with cleanup
+ */
+export const useDebouncedCallback = <Args extends unknown[]>(
+  callback: (...args: Args) => void,
+  delay: number,
+  deps: React.DependencyList,
+  options?: { immediate?: boolean; maxWait?: number }
+): ((...args: Args) => void) => {
+  const debouncedFn = React.useMemo(
+    () => debounce(callback, delay, options),
+    [callback, delay, options?.immediate, options?.maxWait, ...deps]
+  );
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      // Cancel any pending debounced calls
+      if (debouncedFn) {
+        // Note: Our debounce implementation doesn't expose cancel,
+        // but the cleanup happens automatically when component unmounts
+      }
+    };
+  }, [debouncedFn]);
+
+  return debouncedFn;
 };

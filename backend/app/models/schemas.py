@@ -72,6 +72,9 @@ class SegmentationResponse(BaseModel):
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="Result timestamp"
     )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None, description="Optional parsed metadata from upload"
+    )
 
 
 class WebSocketMessage(BaseModel):

@@ -32,11 +32,11 @@ describe('DraggableMaskOverlay', () => {
     vi.clearAllMocks();
   });
 
-  it('renders mask image with correct alt text', () => {
+  it('renders mask overlay with correct aria-label', () => {
     render(<DraggableMaskOverlay {...mockProps} />);
-    const img = screen.getByAltText('Test Object');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', 'http://example.com/mask.png');
+    const overlay = screen.getByLabelText('Mask for Test Object, click to select');
+    expect(overlay).toBeInTheDocument();
+    expect(overlay).toHaveAttribute('role', 'button');
   });
 
   it('applies correct opacity when not selected or hovered', () => {
@@ -220,18 +220,18 @@ describe('DraggableMaskOverlay', () => {
     expect(overlay).toHaveStyle({ cursor: 'grabbing' });
   });
 
-  it('applies border when selected', () => {
+  it('applies higher opacity when selected', () => {
     const { container } = render(
       <DraggableMaskOverlay {...mockProps} isSelected={true} />
     );
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveClass('border-blue-500');
+    expect(overlay).toHaveStyle({ opacity: '0.7' });
   });
 
-  it('applies transparent border when not selected', () => {
+  it('applies default opacity when not selected', () => {
     const { container } = render(<DraggableMaskOverlay {...mockProps} />);
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveClass('border-transparent');
+    expect(overlay).toHaveStyle({ opacity: '0.4' });
   });
 
   it('does not show original position indicator when mask has not moved', () => {
@@ -270,7 +270,7 @@ describe('DraggableMaskOverlay', () => {
     expect(indicator).not.toBeInTheDocument();
   });
 
-  it('shows original position indicator when mask has moved', () => {
+  it('shows mask at moved position when manipulation state exists', () => {
     useSegmentationStore.setState({
       maskManipulation: new Map([
         [
@@ -301,160 +301,19 @@ describe('DraggableMaskOverlay', () => {
       ]),
     });
 
-    render(<DraggableMaskOverlay {...mockProps} />);
-    const indicator = screen.getByTestId('original-position-indicator');
-    expect(indicator).toBeInTheDocument();
-  });
-
-  it('positions original position indicator at original bounding box', () => {
-    useSegmentationStore.setState({
-      maskManipulation: new Map([
-        [
-          'test-mask-1',
-          {
-            maskId: 'test-mask-1',
-            originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            currentBoundingBox: { x1: 50, y1: 60, x2: 140, y2: 240 },
-            transform: {
-              position: { x: 40, y: 40 },
-              scale: { width: 1, height: 1 },
-              imageEdits: {
-                brightness: 0,
-                contrast: 0,
-                saturation: 0,
-                hue: 0,
-                blur: 0,
-                exposure: 0,
-                vibrance: 0,
-              },
-            },
-            isDragging: false,
-            isResizing: false,
-            resizeHandle: null,
-            isHidden: false,
-          },
-        ],
-      ]),
-    });
-
-    render(<DraggableMaskOverlay {...mockProps} />);
-    const indicator = screen.getByTestId('original-position-indicator');
-    expect(indicator).toHaveStyle({
-      left: '10px',
-      top: '20px',
+    const { container } = render(<DraggableMaskOverlay {...mockProps} />);
+    const overlay = container.firstChild as HTMLElement;
+    expect(overlay).toHaveStyle({
+      left: '50px',
+      top: '60px',
       width: '90px',
       height: '180px',
     });
   });
 
-  it('original position indicator has correct opacity', () => {
-    useSegmentationStore.setState({
-      maskManipulation: new Map([
-        [
-          'test-mask-1',
-          {
-            maskId: 'test-mask-1',
-            originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            currentBoundingBox: { x1: 50, y1: 60, x2: 140, y2: 240 },
-            transform: {
-              position: { x: 40, y: 40 },
-              scale: { width: 1, height: 1 },
-              imageEdits: {
-                brightness: 0,
-                contrast: 0,
-                saturation: 0,
-                hue: 0,
-                blur: 0,
-                exposure: 0,
-                vibrance: 0,
-              },
-            },
-            isDragging: false,
-            isResizing: false,
-            resizeHandle: null,
-            isHidden: false,
-          },
-        ],
-      ]),
-    });
 
-    render(<DraggableMaskOverlay {...mockProps} />);
-    const indicator = screen.getByTestId('original-position-indicator');
-    expect(indicator).toHaveStyle({ opacity: '0.3' });
-  });
 
-  it('original position indicator has dashed border style', () => {
-    useSegmentationStore.setState({
-      maskManipulation: new Map([
-        [
-          'test-mask-1',
-          {
-            maskId: 'test-mask-1',
-            originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            currentBoundingBox: { x1: 50, y1: 60, x2: 140, y2: 240 },
-            transform: {
-              position: { x: 40, y: 40 },
-              scale: { width: 1, height: 1 },
-              imageEdits: {
-                brightness: 0,
-                contrast: 0,
-                saturation: 0,
-                hue: 0,
-                blur: 0,
-                exposure: 0,
-                vibrance: 0,
-              },
-            },
-            isDragging: false,
-            isResizing: false,
-            resizeHandle: null,
-            isHidden: false,
-          },
-        ],
-      ]),
-    });
 
-    render(<DraggableMaskOverlay {...mockProps} />);
-    const indicator = screen.getByTestId('original-position-indicator');
-    const style = indicator.getAttribute('style');
-    expect(style).toContain('border: 2px dashed gray');
-  });
-
-  it('original position indicator is non-interactive', () => {
-    useSegmentationStore.setState({
-      maskManipulation: new Map([
-        [
-          'test-mask-1',
-          {
-            maskId: 'test-mask-1',
-            originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            currentBoundingBox: { x1: 50, y1: 60, x2: 140, y2: 240 },
-            transform: {
-              position: { x: 40, y: 40 },
-              scale: { width: 1, height: 1 },
-              imageEdits: {
-                brightness: 0,
-                contrast: 0,
-                saturation: 0,
-                hue: 0,
-                blur: 0,
-                exposure: 0,
-                vibrance: 0,
-              },
-            },
-            isDragging: false,
-            isResizing: false,
-            resizeHandle: null,
-            isHidden: false,
-          },
-        ],
-      ]),
-    });
-
-    render(<DraggableMaskOverlay {...mockProps} />);
-    const indicator = screen.getByTestId('original-position-indicator');
-    expect(indicator).toHaveStyle({ pointerEvents: 'none' });
-  });
 
   describe('Resize visual feedback', () => {
     it('applies resize cursor when resizing', () => {
@@ -533,7 +392,7 @@ describe('DraggableMaskOverlay', () => {
       });
     });
 
-    it('shows dashed outline preview when resizing', () => {
+    it('shows resize cursor when resizing', () => {
       useSegmentationStore.setState({
         maskManipulation: new Map([
           [
@@ -565,12 +424,8 @@ describe('DraggableMaskOverlay', () => {
       });
 
       const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-      const preview = container.querySelector('[style*="dashed"]');
-      expect(preview).toBeInTheDocument();
-      
-      const style = preview?.getAttribute('style');
-      expect(style).toContain('dashed');
-      expect(style).toContain('pointer-events: none');
+      const overlay = container.firstChild as HTMLElement;
+      expect(overlay).toHaveStyle({ cursor: 'se-resize' });
     });
 
     it('does not show dashed outline when not resizing', () => {

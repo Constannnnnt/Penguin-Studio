@@ -9,7 +9,7 @@ import { useGeneration } from '@/hooks/useGeneration';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMaskKeyboardShortcuts, MASK_KEYBOARD_SHORTCUTS } from '@/hooks/useMaskKeyboardShortcuts';
 import { Button } from './ui/button';
-import { Upload, Keyboard } from 'lucide-react';
+import { Keyboard } from 'lucide-react';
 
 export interface WorkspacePanelRef {
   handleGenerate: () => void;
@@ -22,6 +22,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const shortDescription = useConfigStore((state) => state.config.short_description);
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
+  
+  // Enhanced config store for enhanced scene tab
+  const activePanel = useConfigStore((state) => state.activePanel);
+  // const getGenerationConfig = useConfigStore((state) => state.getGenerationConfig);
+  
+  // Determine if we're using enhanced scene configuration
+  // const isUsingEnhancedScene = activePanel === 'enhanced-scene' || enhancedActivePanel === 'enhanced-scene';
 
   const [localPrompt, setLocalPrompt] = useState(shortDescription);
   const debouncedPrompt = useDebounce(localPrompt, 300);
@@ -56,12 +63,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   }, [shortDescription]);
 
   const handleGenerate = (): void => {
-    generateImage(config);
+    // Use enhanced configuration if enhanced scene tab is active
+    const configToUse = config;
+    generateImage(configToUse);
   };
 
   const handleRefine = (): void => {
     if (generatedImage) {
-      refineImage(config, generatedImage);
+      // Use enhanced configuration if enhanced scene tab is active
+      const configToUse = config;
+      refineImage(configToUse, generatedImage);
     }
   };
 

@@ -11,6 +11,7 @@ import { LightingPanel } from '../LightingPanel';
 import { AestheticsPanel } from '../AestheticsPanel';
 import { MediumPanel } from '../MediumPanel';
 import { ScenePanel } from '../ScenePanel';
+import { ImageViewer } from '../ImageViewer';
 import { useConfigStore } from '@/store/configStore';
 
 // Extend Jest matchers with jest-axe
@@ -759,7 +760,7 @@ describe('Accessibility Tests', () => {
         <>
           <Header />
           <main>
-            <Canvas />
+            <ImageViewer />
             <aside>
               <PanelNav />
               <div id="panel-scene" role="tabpanel" aria-labelledby="tab-scene">Scene Panel</div>
@@ -924,7 +925,7 @@ describe('Accessibility Tests', () => {
     });
 
     it('should provide accessible error messages', () => {
-      render(<Canvas />);
+      render(<ImageViewer />);
       
       // Help text for validation
       const helpText = screen.getByText(/minimum 10 characters required/i);
@@ -941,7 +942,7 @@ describe('Accessibility Tests', () => {
         <>
           <Header />
           <main>
-            <Canvas />
+            <ImageViewer />
           </main>
         </>
       );
