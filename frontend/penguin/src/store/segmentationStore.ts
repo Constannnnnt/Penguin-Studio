@@ -629,6 +629,14 @@ export const useSegmentationStore = create<SegmentationState>()(
           const originalHeight = manipState.originalBoundingBox.y2 - manipState.originalBoundingBox.y1 || 1;
           const newWidth = Math.max(1, newBoundingBox.x2 - newBoundingBox.x1);
           const newHeight = Math.max(1, newBoundingBox.y2 - newBoundingBox.y1);
+          const originalCenterX = (manipState.originalBoundingBox.x1 + manipState.originalBoundingBox.x2) / 2;
+          const originalCenterY = (manipState.originalBoundingBox.y1 + manipState.originalBoundingBox.y2) / 2;
+          const newCenterX = (newBoundingBox.x1 + newBoundingBox.x2) / 2;
+          const newCenterY = (newBoundingBox.y1 + newBoundingBox.y2) / 2;
+          const scaleX = newWidth / originalWidth;
+          const scaleY = newHeight / originalHeight;
+          const posX = newCenterX - scaleX * originalCenterX;
+          const posY = newCenterY - scaleY * originalCenterY;
           
           newManipulation.set(maskId, {
             ...manipState,
@@ -636,8 +644,12 @@ export const useSegmentationStore = create<SegmentationState>()(
             transform: {
               ...manipState.transform,
               scale: {
-                width: newWidth / originalWidth,
-                height: newHeight / originalHeight,
+                width: scaleX,
+                height: scaleY,
+              },
+              position: {
+                x: posX,
+                y: posY,
               },
             },
           });

@@ -92,12 +92,13 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent): void => {
+  const handlePointerDown = (e: React.PointerEvent): void => {
     e.stopPropagation();
     if (!isSelected) {
       onClick(e);
       return;
     }
+    e.currentTarget.setPointerCapture(e.pointerId);
     draggingRef.current = true;
     dragSessionRef.current = {
       startX: e.clientX,
@@ -110,10 +111,11 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     setTooltipVisible(false);
   };
 
-  const handleResizeStart = (e: React.MouseEvent, handle: ResizeHandle): void => {
+  const handleResizeStart = (e: React.PointerEvent, handle: ResizeHandle): void => {
     e.stopPropagation();
     e.preventDefault();
     if (!isSelected) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
     resizingRef.current = true;
     resizeSessionRef.current = {
       startX: e.clientX,
@@ -174,31 +176,51 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
       if (resizingRef.current && resizeSessionRef.current) {
         const session = resizeSessionRef.current;
         const minSize = 8 / scale;
-        const aspect = (session.startBBox.x2 - session.startBBox.x1) / Math.max(1, (session.startBBox.y2 - session.startBBox.y1));
+        const startWidth = session.startBBox.x2 - session.startBBox.x1;
+        const startHeight = session.startBBox.y2 - session.startBBox.y1;
+        const aspect = startWidth / Math.max(1, startHeight);
+
+        // Deltas
         const dx = (e.clientX - session.startX) / scale;
         const dy = (e.clientY - session.startY) / scale;
-        let newBbox = { ...session.startBBox };
 
+        // Scale from handle by anchoring the opposite corner and then recenter to keep mask aligned
+        let newBbox = { ...session.startBBox };
         switch (session.handle) {
           case 'nw':
             newBbox.x1 = session.startBBox.x1 + dx;
-            newBbox.y1 = session.startBBox.y2 - (newBbox.x2 - newBbox.x1) / aspect;
+            newBbox.y1 = session.startBBox.y1 + dy;
             break;
           case 'ne':
             newBbox.x2 = session.startBBox.x2 + dx;
-            newBbox.y1 = session.startBBox.y2 - (newBbox.x2 - newBbox.x1) / aspect;
+            newBbox.y1 = session.startBBox.y1 + dy;
             break;
           case 'sw':
             newBbox.x1 = session.startBBox.x1 + dx;
-            newBbox.y2 = session.startBBox.y1 + (newBbox.x2 - newBbox.x1) / aspect;
+            newBbox.y2 = session.startBBox.y2 + dy;
             break;
           case 'se':
             newBbox.x2 = session.startBBox.x2 + dx;
-            newBbox.y2 = session.startBBox.y1 + (newBbox.x2 - newBbox.x1) / aspect;
+            newBbox.y2 = session.startBBox.y2 + dy;
             break;
         }
 
-        // Enforce min size
+        // Enforce aspect ratio and min size
+        const width = newBbox.x2 - newBbox.x1;
+        const height = newBbox.y2 - newBbox.y1;
+        const targetHeight = width / aspect;
+        const targetWidth = height * aspect;
+
+        if (Math.abs(targetHeight - height) > Math.abs(targetWidth - width)) {
+          const deltaH = targetHeight - height;
+          if (session.handle === 'nw' || session.handle === 'ne') newBbox.y1 -= deltaH;
+          else newBbox.y2 += deltaH;
+        } else {
+          const deltaW = targetWidth - width;
+          if (session.handle === 'nw' || session.handle === 'sw') newBbox.x1 -= deltaW;
+          else newBbox.x2 += deltaW;
+        }
+
         if (newBbox.x2 - newBbox.x1 < minSize) {
           if (session.handle === 'nw' || session.handle === 'sw') newBbox.x1 = newBbox.x2 - minSize;
           else newBbox.x2 = newBbox.x1 + minSize;
@@ -208,8 +230,26 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
           else newBbox.y2 = newBbox.y1 + minSize;
         }
 
+        // Recenter to preserve the middle of the box (pivot at center)
+        const cx = (session.startBBox.x1 + session.startBBox.x2) / 2;
+        const cy = (session.startBBox.y1 + session.startBBox.y2) / 2;
+        const halfW = (newBbox.x2 - newBbox.x1) / 2;
+        const halfH = (newBbox.y2 - newBbox.y1) / 2;
+        newBbox = {
+          x1: cx - halfW,
+          x2: cx + halfW,
+          y1: cy - halfH,
+          y2: cy + halfH,
+        };
+
         const constrained = constrainBoundingBox(newBbox, imageSize);
         updateMaskSize(mask.mask_id, constrained);
+        resizeSessionRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startBBox: constrained,
+          handle: session.handle,
+        };
       }
     };
 
@@ -252,8 +292,8 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
 
   const isManipulating = draggingRef.current || resizingRef.current || manipState?.isDragging || manipState?.isResizing || isAnyMaskDragging;
 
-  const handleMouseEnterWithTooltip = (e: React.MouseEvent): void => {
-    if (isManipulating) return;
+  const handleMouseEnterWithTooltip = (e: React.PointerEvent): void => {
+    if (draggingRef.current || resizingRef.current || isManipulating) return;
     onMouseEnter();
     if (tooltipTimeoutRef.current) {
       clearTimeout(tooltipTimeoutRef.current);
@@ -262,14 +302,14 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     setTooltipSafe(true, { x: e.clientX, y: e.clientY });
   };
 
-  const handleMouseMoveTooltip = (e: React.MouseEvent): void => {
-    if (!isManipulating && tooltipVisible) {
+  const handleMouseMoveTooltip = (e: React.PointerEvent): void => {
+    if (!draggingRef.current && !resizingRef.current && !isManipulating && tooltipVisible) {
       setTooltipPosition({ x: e.clientX, y: e.clientY });
     }
   };
 
   const handleMouseLeaveWithTooltip = (): void => {
-    if (isManipulating) return;
+    if (draggingRef.current || resizingRef.current || isManipulating) return;
     onMouseLeave();
     tooltipTimeoutRef.current = window.setTimeout(() => {
       setTooltipVisible(false);
@@ -288,7 +328,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     transition: (manipState?.isDragging || manipState?.isResizing)
       ? 'none'
       : 'opacity 120ms ease, left 160ms ease, top 160ms ease, width 160ms ease, height 160ms ease',
-    cursor: isSelected ? 'grab' : 'pointer',
+    cursor: isSelected ? (draggingRef.current ? 'grabbing' : 'grab') : 'pointer',
     filter: transform ? combineImageEditFilters(transform.imageEdits) : undefined,
   };
 
@@ -303,10 +343,10 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     <>
       <div
         style={style}
-        onMouseDown={handleMouseDown}
-        onMouseEnter={handleMouseEnterWithTooltip}
-        onMouseLeave={handleMouseLeaveWithTooltip}
-        onMouseMove={handleMouseMoveTooltip}
+        onPointerDown={handlePointerDown}
+        onPointerEnter={handleMouseEnterWithTooltip}
+        onPointerLeave={handleMouseLeaveWithTooltip}
+        onPointerMove={handleMouseMoveTooltip}
         role="button"
         aria-label={`Mask for ${mask.label}, ${isSelected ? 'selected, draggable' : 'click to select'}`}
         aria-grabbed={manipState?.isDragging}
@@ -317,7 +357,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
             key={handle}
             className="absolute w-3 h-3 bg-blue-500 border-2 border-white rounded-full hover:scale-125 transition-transform"
             style={{ ...hStyle, cursor }}
-            onMouseDown={(e) => handleResizeStart(e, handle)}
+            onPointerDown={(e) => handleResizeStart(e, handle)}
             role="button"
             aria-label={`Resize handle ${handle}`}
             tabIndex={-1}
