@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { env } from '@/lib/env';
+import { useSegmentationStore } from './segmentationStore';
 
 export interface FileNode {
   name: string;
@@ -7,18 +9,22 @@ export interface FileNode {
   type: 'file' | 'directory';
   children?: FileNode[];
   extension?: string;
+  url?: string;
+  modified_at?: string;
+  size?: number;
 }
 
 export interface FileSystemState {
   rootDirectory: FileNode;
   selectedFile: string | null;
+  selectedFileUrl: string | null;
   expandedFolders: Set<string>;
   
   loadFileTree: () => Promise<void>;
-  selectFile: (path: string) => void;
+  selectFile: (node: FileNode) => void;
   toggleFolder: (path: string) => void;
   refreshFileTree: () => Promise<void>;
-  addSegmentedImage: (resultId: string, imageUrl: string, timestamp: string) => void;
+  addSegmentedImage: (resultId: string, imageUrl: string, timestamp: string) => Promise<void>;
 }
 
 const DEFAULT_ROOT_DIRECTORY: FileNode = {
@@ -33,22 +39,51 @@ export const useFileSystemStore = create<FileSystemState>()(
     (set, get) => ({
       rootDirectory: DEFAULT_ROOT_DIRECTORY,
       selectedFile: null,
-      expandedFolders: new Set<string>(),
+      selectedFileUrl: null,
+      expandedFolders: new Set<string>(['/']),
 
       loadFileTree: async () => {
         try {
-          set((state) => ({
-            rootDirectory: state.rootDirectory.children?.length
-              ? state.rootDirectory
-              : DEFAULT_ROOT_DIRECTORY,
-          }));
+          const response = await fetch(`${env.apiBaseUrl}/api/v1/library`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch library: ${response.statusText}`);
+          }
+
+          const data: FileNode = await response.json();
+
+          const expanded = new Set<string>(get().expandedFolders.size ? Array.from(get().expandedFolders) : ['/']);
+          expanded.add('/');
+          data.children?.forEach((child) => {
+            if (child.type === 'directory' && (child.name === 'examples' || child.name === 'results')) {
+              expanded.add(child.path);
+            }
+          });
+
+          set({
+            rootDirectory: data.children ? data : DEFAULT_ROOT_DIRECTORY,
+            expandedFolders: expanded,
+          });
         } catch (error) {
           console.error('Failed to load file tree:', error);
+          set({ rootDirectory: DEFAULT_ROOT_DIRECTORY });
         }
       },
 
-      selectFile: (path: string) =>
-        set({ selectedFile: path }),
+      selectFile: (node: FileNode) => {
+        if (node.type !== 'file') return;
+
+        const absoluteUrl = node.url
+          ? (node.url.startsWith('http') ? node.url : `${env.apiBaseUrl}${node.url}`)
+          : null;
+
+        const segmentationStore = useSegmentationStore.getState();
+        segmentationStore.clearResults();
+
+        set({
+          selectedFile: node.path,
+          selectedFileUrl: absoluteUrl,
+        });
+      },
 
       toggleFolder: (path: string) =>
         set((state) => {
@@ -66,69 +101,13 @@ export const useFileSystemStore = create<FileSystemState>()(
         await loadFileTree();
       },
 
-      addSegmentedImage: (resultId: string, _imageUrl: string, _timestamp: string) => {
+      addSegmentedImage: async (resultId: string, _imageUrl: string, _timestamp: string) => {
+        await get().loadFileTree();
         set((state) => {
-          const newRoot = { ...state.rootDirectory };
-          if (!newRoot.children) newRoot.children = [];
-          
-          let imagesFolder = newRoot.children.find(
-            (child) => child.name === 'images' && child.type === 'directory'
-          );
-
-          if (!imagesFolder) {
-            imagesFolder = {
-              name: 'images',
-              path: '/images',
-              type: 'directory',
-              children: [],
-            };
-            newRoot.children.push(imagesFolder);
-          }
-
-          if (!imagesFolder.children) {
-            imagesFolder.children = [];
-          }
-
-          let segmentedFolder = imagesFolder.children.find(
-            (child) => child.name === 'segmented' && child.type === 'directory'
-          );
-
-          if (!segmentedFolder) {
-            segmentedFolder = {
-              name: 'segmented',
-              path: '/images/segmented',
-              type: 'directory',
-              children: [],
-            };
-            imagesFolder.children.push(segmentedFolder);
-          }
-
-          if (!segmentedFolder.children) {
-            segmentedFolder.children = [];
-          }
-
-          const fileName = `${resultId}.png`;
-          const existingFile = segmentedFolder.children.find(
-            (child) => child.name === fileName
-          );
-
-          if (!existingFile) {
-            segmentedFolder.children.unshift({
-              name: fileName,
-              path: `/images/segmented/${fileName}`,
-              type: 'file',
-              extension: 'png',
-            });
-          }
-
           const newExpandedFolders = new Set(state.expandedFolders);
-          newExpandedFolders.add('/images');
-          newExpandedFolders.add('/images/segmented');
-
-          return {
-            rootDirectory: newRoot,
-            expandedFolders: newExpandedFolders,
-          };
+          newExpandedFolders.add('/results');
+          newExpandedFolders.add(`/results/${resultId}`);
+          return { expandedFolders: newExpandedFolders };
         });
       },
     }),

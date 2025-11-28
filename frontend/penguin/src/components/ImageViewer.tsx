@@ -9,15 +9,17 @@ import { downloadImage } from '../lib/imageUtils';
 import { useToast } from '../hooks/useToast';
 
 interface ImageViewerProps {
-  image: string | null;
-  isLoading: boolean;
-  error: string | null;
+  image?: string | null;
+  isLoading?: boolean;
+  error?: string | null;
+  style?: React.CSSProperties;
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({
-  image,
-  isLoading,
-  error,
+  image = null,
+  isLoading = false,
+  error = null,
+  style,
 }) => {
   const { toast } = useToast();
   const [isDownloading, setIsDownloading] = React.useState(false);
@@ -80,12 +82,20 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
       setIsDownloading(false);
     }
   };
+  const containerStyle = style ?? {
+    width: '100%',
+    maxHeight: 'calc(100vh - 200px)',
+    minHeight: '280px',
+    height: 'auto',
+  };
+
   return (
     <div
       role="img"
       aria-label={image ? 'Generated image preview' : 'Image preview area'}
       aria-busy={isLoading}
-      className="relative w-full aspect-video bg-muted/50 rounded-lg overflow-hidden border border-border"
+      className="relative w-full h-full bg-muted/50 rounded-lg overflow-hidden border border-border flex items-center justify-center"
+      style={containerStyle}
     >
       {isLoading && (
         <div 

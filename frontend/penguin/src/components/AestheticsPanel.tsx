@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import { useConfigStore } from '@/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldGroup } from '@/components/FieldGroup';

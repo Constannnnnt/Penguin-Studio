@@ -54,7 +54,7 @@ const DEFAULT_CONFIG: PenguinConfig = {
 };
 
 // ============================================================================
-// Enhanced Default Configuration
+// Default Configuration
 // ============================================================================
 
 const DEFAULT_SCENE_CONFIG: SceneConfiguration = {

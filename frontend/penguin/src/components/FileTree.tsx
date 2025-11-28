@@ -6,7 +6,7 @@ interface FileTreeProps {
   node: FileNode;
   selectedFile: string | null;
   expandedFolders: Set<string>;
-  onSelectFile: (path: string) => void;
+  onSelectFile: (node: FileNode) => void;
   onToggleFolder: (path: string) => void;
   depth?: number;
 }
@@ -26,7 +26,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     if (node.type === 'directory') {
       onToggleFolder(node.path);
     } else {
-      onSelectFile(node.path);
+      onSelectFile(node);
     }
   };
 

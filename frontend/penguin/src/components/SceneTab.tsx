@@ -25,6 +25,10 @@ import {
 } from '@/lib/performance';
 import type { SceneConfiguration, PenguinConfig, LightingDirection } from '@/types';
 
+// Persist parsed state across tab mounts to avoid re-parsing on every tab switch
+let LAST_PARSED_METADATA_HASH: string | null = null;
+let LAST_PARSED_SCENE_CACHE: SceneConfiguration | null = null;
+
 interface SceneTabProps {
   className?: string;
 }
@@ -41,8 +45,8 @@ const SCENE_SUB_TABS = [
 export const SceneTab: React.FC<SceneTabProps> = ({ 
   className 
 }) => {
-  const lastParsedMetadataRef = React.useRef<string | null>(null);
-  const lastParsedSceneRef = React.useRef<SceneConfiguration | null>(null);
+  const lastParsedMetadataRef = React.useRef<string | null>(LAST_PARSED_METADATA_HASH);
+  const lastParsedSceneRef = React.useRef<SceneConfiguration | null>(LAST_PARSED_SCENE_CACHE);
   const [activeSubTab, setActiveSubTab] = React.useState<SceneSubTab>('background');
   // Enhanced store subscriptions
   const sceneConfig = useConfigStore((state) => state.sceneConfig);
@@ -182,6 +186,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({
       const nextSceneConfig = buildSceneConfigFromParsed(parsedData, sceneConfig);
       setSceneConfig(nextSceneConfig);
       lastParsedSceneRef.current = nextSceneConfig;
+      LAST_PARSED_SCENE_CACHE = nextSceneConfig;
 
       setLoadingState({
         isLoading: true,
@@ -195,8 +200,10 @@ export const SceneTab: React.FC<SceneTabProps> = ({
       }, 500);
       try {
         lastParsedMetadataRef.current = JSON.stringify(jsonMetadata) || null;
+        LAST_PARSED_METADATA_HASH = lastParsedMetadataRef.current;
       } catch {
         lastParsedMetadataRef.current = null;
+        LAST_PARSED_METADATA_HASH = null;
       }
 
     } catch (error) {
@@ -237,6 +244,10 @@ export const SceneTab: React.FC<SceneTabProps> = ({
   const handleReset = React.useCallback(() => {
     resetConfig();
     setLoadingState({ isLoading: false });
+    lastParsedMetadataRef.current = null;
+    lastParsedSceneRef.current = null;
+    LAST_PARSED_METADATA_HASH = null;
+    LAST_PARSED_SCENE_CACHE = null;
   }, [resetConfig]);
 
 
@@ -263,9 +274,10 @@ export const SceneTab: React.FC<SceneTabProps> = ({
           return null;
         }
       })();
-      if (!hash || hash !== lastParsedMetadataRef.current) {
-        debouncedSemanticParsing(currentMetadata);
+      if (hash && hash === lastParsedMetadataRef.current) {
+        return;
       }
+      debouncedSemanticParsing(currentMetadata);
     }
   }, [currentMetadata, debouncedSemanticParsing, loadingState.isLoading]);
 
@@ -346,7 +358,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      <div className="flex items-center justify-between px-4 pt-4 gap-3">
+      {/* <div className="flex items-center justify-between px-4 pt-4 gap-3">
         <div className="text-sm text-muted-foreground">
           {lastParsedSceneRef.current
             ? (isDirty ? 'You have unsaved scene edits' : 'Parsed scene from metadata')
@@ -373,9 +385,9 @@ export const SceneTab: React.FC<SceneTabProps> = ({
             Save Scene
           </Button>
         </div>
-      </div>
+      </div> */}
 
-      {/* Enhanced Error Alert */}
+      {/* Error Alert */}
       {loadingState.error && (
         <Alert variant="destructive" className="mb-4 mx-4 mt-4">
           <AlertCircle className="h-4 w-4" />

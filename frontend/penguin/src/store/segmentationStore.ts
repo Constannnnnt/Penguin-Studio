@@ -364,7 +364,7 @@ export const useSegmentationStore = create<SegmentationState>()(
             console.log('[Segmentation] Upload successful:', results.result_id);
 
             const { useFileSystemStore } = await import('./fileSystemStore');
-            useFileSystemStore.getState().addSegmentedImage(
+            await useFileSystemStore.getState().addSegmentedImage(
               results.result_id,
               results.original_image_url,
               results.timestamp
@@ -447,7 +447,7 @@ export const useSegmentationStore = create<SegmentationState>()(
             console.log('[Segmentation] Example segmentation successful:', resultsWithMetadata.result_id);
 
             const { useFileSystemStore } = await import('./fileSystemStore');
-            useFileSystemStore.getState().addSegmentedImage(
+            await useFileSystemStore.getState().addSegmentedImage(
               resultsWithMetadata.result_id,
               resultsWithMetadata.original_image_url,
               resultsWithMetadata.timestamp

@@ -63,7 +63,7 @@ export const GeneratedImage: React.FC<GeneratedImageProps> = ({
         onLoad={handleLoad}
         onError={handleError}
         className={cn(
-          'w-full h-full object-contain transition-opacity duration-300',
+          'w-full h-full max-w-full max-h-full object-contain transition-opacity duration-300',
           isLoaded ? 'opacity-100' : 'opacity-0',
           className
         )}

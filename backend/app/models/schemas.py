@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -77,6 +79,25 @@ class SegmentationResponse(BaseModel):
     )
 
 
+class FileNode(BaseModel):
+    """Represents a simple file tree node for the UI library panel."""
+
+    name: str = Field(..., description="Display name")
+    path: str = Field(..., description="Path from root, prefixed with /")
+    type: Literal["file", "directory"] = Field(..., description="Node type")
+    children: List["FileNode"] = Field(
+        default_factory=list, description="Child nodes for directories"
+    )
+    extension: Optional[str] = Field(
+        default=None, description="File extension without dot"
+    )
+    modified_at: Optional[datetime] = Field(
+        default=None, description="Last modified timestamp"
+    )
+    size: Optional[int] = Field(default=None, description="File size in bytes")
+    url: Optional[str] = Field(default=None, description="HTTP URL for the file")
+
+
 class WebSocketMessage(BaseModel):
     """WebSocket message schema with type discriminators."""
 
@@ -120,6 +141,54 @@ class SegmentationRequest(BaseModel):
                 if not prompt.strip():
                     raise ValueError("Prompts cannot be empty strings")
         return v
+
+
+class LightingMetadata(BaseModel):
+    conditions: str = Field(..., description="Lighting conditions")
+    direction: str = Field(..., description="Lighting direction")
+    shadows: str = Field(..., description="Shadow description")
+
+
+class AestheticsMetadata(BaseModel):
+    composition: str = Field(..., description="Composition description")
+    color_scheme: str = Field(..., description="Color scheme")
+    mood_atmosphere: str = Field(..., description="Mood and atmosphere")
+    preference_score: str = Field(..., description="Preference score")
+    aesthetic_score: str = Field(..., description="Aesthetic score")
+
+
+class PhotographicMetadata(BaseModel):
+    depth_of_field: str = Field(..., description="Depth of field description")
+    focus: str = Field(..., description="Focus description")
+    camera_angle: str = Field(..., description="Camera angle")
+    lens_focal_length: str = Field(..., description="Lens focal length")
+
+
+class SceneMetadata(BaseModel):
+    """Metadata document persisted alongside segmentation results."""
+
+    short_description: str = Field(..., description="Brief scene description")
+    objects: List[ObjectMetadata] = Field(
+        default_factory=list, description="List of objects in the scene"
+    )
+    background_setting: str = Field(..., description="Background setting")
+    lighting: LightingMetadata = Field(..., description="Lighting details")
+    aesthetics: AestheticsMetadata = Field(..., description="Aesthetic details")
+    photographic_characteristics: PhotographicMetadata = Field(
+        ..., description="Photographic characteristics"
+    )
+    style_medium: str = Field(..., description="Style medium")
+    artistic_style: Optional[str] = Field(
+        default=None, description="Optional artistic style"
+    )
+    context: Optional[str] = Field(
+        default=None, description="Optional scene context or notes"
+    )
+
+
+# Resolve forward references for recursive models
+FileNode.model_rebuild()
+SceneMetadata.model_rebuild()
 
 
 class FileValidation:

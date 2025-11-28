@@ -1,32 +1,25 @@
-import { Tooltip, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import { getShortcutDisplay } from '@/hooks/useKeyboardShortcuts';
+import type { ReactNode } from 'react';
 
 interface PanelHeaderProps {
   title: string;
   position?: 'left' | 'right';
+  actions?: ReactNode;
 }
 
 export const PanelHeader: React.FC<PanelHeaderProps> = ({
   title,
-  position = 'left',
+  position: _position = 'left',
+  actions,
 }) => {
-  const shortcut = position === 'left'
-    ? getShortcutDisplay({ key: 'b', ctrl: true, handler: () => {} })
-    : getShortcutDisplay({ key: 'b', ctrl: true, shift: true, handler: () => {} });
 
-  const titleSpace = position === "right"? "ml-8" : "";
+  const padding = _position == "right"? "pl-10":"";
+
   return (
-    <TooltipProvider>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50">
-        <>
-        <h2 className={`text-sm ${titleSpace} font-semibold text-foreground`}>{title}</h2>
-        </>
-        <Tooltip>
-          <TooltipContent>
-            <p className="text-xs">Collapse ({shortcut})</p>
-          </TooltipContent>
-        </Tooltip>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/50">
+      <h2 className={`text-sm ${padding} font-semibold text-foreground`}>{title}</h2>
+      <div className="flex items-center gap-2 min-h-[32px]">
+        {actions}
       </div>
-    </TooltipProvider>
+    </div>
   );
 };

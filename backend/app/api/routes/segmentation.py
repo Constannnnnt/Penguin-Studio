@@ -1,18 +1,23 @@
 import json
 import uuid
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse
 from loguru import logger
 
-from app.api.dependencies import get_sam3_model, get_segmentation_service
+from app.api.dependencies import get_file_service, get_sam3_model, get_segmentation_service
+from app.config import settings
 from app.models.sam3_model import SAM3Model
 from app.models.schemas import (
     ErrorResponse,
+    FileNode,
     FileValidation,
+    SceneMetadata,
     SegmentationResponse,
 )
+from app.services.file_service import FileService
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
 from app.utils.exceptions import (
@@ -23,6 +28,108 @@ from app.utils.exceptions import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["segmentation"])
+
+
+def _format_path(*parts: str) -> str:
+    path = "/".join(part.strip("/") for part in parts if part)
+    return f"/{path}" if not path.startswith("/") else path
+
+
+def _build_file_node(
+    path: Path, base_url: str, parent_path: str, name: Optional[str] = None
+) -> FileNode:
+    stat = path.stat()
+    node_path = _format_path(parent_path, name or path.name)
+
+    if path.is_dir():
+        children = []
+        for child in path.iterdir():
+            if child.is_dir():
+                children.append(
+                    _build_file_node(child, f"{base_url}/{child.name}", node_path)
+                )
+            elif child.suffix.lower() in {".png", ".jpg", ".jpeg", ".json"}:
+                children.append(
+                    _build_file_node(child, base_url, node_path, child.name)
+                )
+
+        # Sort directories first, then files by modified date descending
+        children.sort(
+            key=lambda c: (
+                0 if c.type == "directory" else 1,
+                -(
+                    c.modified_at.timestamp()
+                    if c.modified_at is not None
+                    else 0
+                ),
+            )
+        )
+
+        return FileNode(
+            name=name or path.name,
+            path=node_path,
+            type="directory",
+            children=children,
+            modified_at=datetime.fromtimestamp(stat.st_mtime),
+        )
+
+    return FileNode(
+        name=name or path.name,
+        path=node_path,
+        type="file",
+        extension=path.suffix.lstrip(".").lower() or None,
+        modified_at=datetime.fromtimestamp(stat.st_mtime),
+        size=stat.st_size if stat else None,
+        url=f"{base_url}/{path.name}",
+    )
+
+
+def _build_library_tree(file_service: FileService) -> FileNode:
+    """Construct a file tree rooted at Home with examples and results."""
+    root = FileNode(name="Home", path="/", type="directory", children=[])
+
+    try:
+        examples_dir = settings.examples_dir
+        if examples_dir.exists():
+            examples_node = _build_file_node(
+                examples_dir, "/examples", "/", name="examples"
+            )
+            if examples_node.children:
+                root.children.append(examples_node)
+    except Exception as e:
+        logger.warning(f"Failed to build examples tree: {e}")
+
+    try:
+        results_dir = file_service.outputs_dir
+        if results_dir.exists():
+            children = []
+            for result_dir in results_dir.iterdir():
+                if not result_dir.is_dir():
+                    continue
+                result_node = _build_file_node(
+                    result_dir,
+                    f"/outputs/{result_dir.name}",
+                    "/results",
+                    name=result_dir.name,
+                )
+                children.append(result_node)
+
+            children.sort(
+                key=lambda n: n.modified_at or datetime.min,
+                reverse=True,
+            )
+
+            results_node = FileNode(
+                name="results",
+                path="/results",
+                type="directory",
+                children=children,
+            )
+            root.children.append(results_node)
+    except Exception as e:
+        logger.warning(f"Failed to build results tree: {e}")
+
+    return root
 
 
 @router.post("/segment", response_model=SegmentationResponse)
@@ -188,6 +295,69 @@ async def get_result(
         logger.exception(f"Failed to retrieve result {result_id}: {e}")
         raise ProcessingException(
             "Failed to retrieve result",
+            details={"result_id": result_id, "error_type": e.__class__.__name__},
+        )
+
+
+@router.get("/library", response_model=FileNode)
+async def get_library(
+    file_service: FileService = Depends(get_file_service),
+) -> FileNode:
+    """
+    Return a simple file tree with examples and saved results.
+
+    This powers the Library panel in the UI so users can browse available
+    example files and generated outputs.
+    """
+    try:
+        tree = _build_library_tree(file_service)
+        return tree
+    except Exception as e:
+        logger.exception(f"Failed to build library tree: {e}")
+        raise ProcessingException(
+            "Failed to load library",
+            details={"error_type": e.__class__.__name__},
+        )
+
+
+@router.post("/results/{result_id}/metadata")
+async def save_result_metadata(
+    result_id: str,
+    metadata: SceneMetadata,
+    file_service: FileService = Depends(get_file_service),
+) -> Dict[str, str]:
+    """
+    Persist updated scene/object metadata alongside a segmentation result.
+
+    The payload mirrors the example JSON format (see backend/examples/*.json).
+    """
+    try:
+        result_dir = file_service.outputs_dir / result_id
+        if not result_dir.exists():
+            raise NotFoundException(
+                "Result not found", details={"result_id": result_id}
+            )
+
+        result_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path = result_dir / "metadata.json"
+        metadata_path.write_text(
+            json.dumps(metadata.model_dump(), indent=2, ensure_ascii=False)
+        )
+
+        logger.info(
+            f"Saved metadata for result_id={result_id} to {metadata_path.as_posix()}"
+        )
+
+        return {
+            "status": "ok",
+            "path": f"/outputs/{result_id}/metadata.json",
+        }
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to save metadata for result_id={result_id}: {e}")
+        raise ProcessingException(
+            "Failed to save metadata",
             details={"result_id": result_id, "error_type": e.__class__.__name__},
         )
 

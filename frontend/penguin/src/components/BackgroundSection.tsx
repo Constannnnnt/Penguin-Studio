@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React, {useEffect} from 'react';
 import { useConfigStore } from '@/store/configStore';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,11 +22,11 @@ export const BackgroundSection: React.FC = () => {
     [updateSceneConfig]
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     setLocalValue(backgroundSetting);
   }, [backgroundSetting]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (localValue !== backgroundSetting) {
       debouncedUpdate(localValue);
     }

@@ -35,14 +35,14 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   const containerRef = React.useRef<HTMLDivElement>(null);
   const flashlightRef = React.useRef<HTMLDivElement>(null);
   const containerRectRef = React.useRef<{ left: number; top: number; width: number; height: number } | null>(null);
-  
+
   const [isDragging, setIsDragging] = React.useState(false);
   const [isRotating, setIsRotating] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const [dragStart, setDragStart] = React.useState<{ x: number; y: number } | null>(null);
-  const [rotationStart, setRotationStart] = React.useState<{ 
-    angle: number; 
-    rotation: number; 
+  const [rotationStart, setRotationStart] = React.useState<{
+    angle: number;
+    rotation: number;
     tilt: number;
   } | null>(null);
   const rafRef = React.useRef<number | null>(null);
@@ -89,7 +89,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
     const percentX = Math.max(0, Math.min(100, (localX / width) * 100));
     const percentY = Math.max(0, Math.min(100, (localY / height) * 100));
-    
+
     return { x: percentX, y: percentY };
   }, []);
 
@@ -98,14 +98,14 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
    */
   const getAngleFromCenter = React.useCallback((clientX: number, clientY: number): number => {
     if (!flashlightRef.current) return 0;
-    
+
     const flashlightRect = flashlightRef.current.getBoundingClientRect();
     const centerX = flashlightRect.left + flashlightRect.width / 2;
     const centerY = flashlightRect.top + flashlightRect.height / 2;
-    
+
     const deltaX = clientX - centerX;
     const deltaY = clientY - centerY;
-    
+
     return Math.atan2(deltaY, deltaX) * (180 / Math.PI);
   }, []);
 
@@ -114,22 +114,22 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
    */
   const handlePointerDown = React.useCallback((event: React.PointerEvent): void => {
     if (disabled) return;
-    
+
     event.preventDefault();
     event.stopPropagation();
-    
+
     if (!containerRef.current) return;
-    
+
     event.currentTarget.setPointerCapture(event.pointerId);
 
     const rect = containerRef.current.getBoundingClientRect();
     containerRectRef.current = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     const startX = event.clientX - rect.left;
     const startY = event.clientY - rect.top;
-    
+
     setIsDragging(true);
     setDragStart({ x: startX, y: startY });
-    
+
     // Focus for keyboard navigation
     flashlightRef.current?.focus();
   }, [disabled]);
@@ -139,14 +139,14 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
    */
   const handleRotationPointerDown = React.useCallback((event: React.PointerEvent): void => {
     if (disabled) return;
-    
+
     event.preventDefault();
     event.stopPropagation();
-    
+
     event.currentTarget.setPointerCapture(event.pointerId);
 
     const angle = getAngleFromCenter(event.clientX, event.clientY);
-    
+
     setIsRotating(true);
     setRotationStart({
       angle,
@@ -160,14 +160,14 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
    */
   const handlePointerMove = React.useCallback((event: PointerEvent): void => {
     if (!containerRef.current) return;
-    
+
     if (isDragging && dragStart) {
       const rect = containerRectRef.current ?? containerRef.current.getBoundingClientRect();
       const currentX = event.clientX;
       const currentY = event.clientY;
-      
+
       const { x: percentX, y: percentY } = getPercentPosition(currentX, currentY);
-      
+
       scheduleUpdate(clampValue({
         ...pendingValueRef.current,
         x: percentX,
@@ -176,26 +176,26 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     } else if (isRotating && rotationStart) {
       const currentAngle = getAngleFromCenter(event.clientX, event.clientY);
       const angleDelta = currentAngle - rotationStart.angle;
-      
+
       // Update rotation
       const newRotation = ((rotationStart.rotation + angleDelta) % 360 + 360) % 360;
-      
+
       // Calculate tilt based on distance from center (simple approximation)
       if (flashlightRef.current) {
         const flashlightRect = flashlightRef.current.getBoundingClientRect();
         const centerX = flashlightRect.left + flashlightRect.width / 2;
         const centerY = flashlightRect.top + flashlightRect.height / 2;
-        
+
         const distance = Math.sqrt(
-          Math.pow(event.clientX - centerX, 2) + 
+          Math.pow(event.clientX - centerX, 2) +
           Math.pow(event.clientY - centerY, 2)
         );
-        
+
         // Map distance to tilt (-90 to 90 degrees)
         const maxDistance = 100; // pixels
         const normalizedDistance = Math.min(distance / maxDistance, 1);
         const newTilt = (normalizedDistance - 0.5) * 180; // -90 to 90
-        
+
         scheduleUpdate(clampValue({
           ...pendingValueRef.current,
           rotation: newRotation,
@@ -285,7 +285,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
       const onUp = () => handlePointerUp();
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
-      
+
       return () => {
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
@@ -323,8 +323,8 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   return (
     <div className={cn('space-y-4', className)}>
       {/* Label */}
-      <Label 
-        id={labelId} 
+      <Label
+        id={labelId}
         className="block text-sm sm:text-base font-medium"
       >
         {label}
@@ -338,7 +338,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
           'focus-within:border-primary/50',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
-        style={{ 
+        style={{
           aspectRatio: '16 / 9',
           minHeight: '200px',
         }}
@@ -379,7 +379,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
           role="button"
           aria-label={`Lighting direction control. Position: ${Math.round(clampedValue.x)}%, ${Math.round(clampedValue.y)}%. Rotation: ${Math.round(clampedValue.rotation)}°. Tilt: ${Math.round(clampedValue.tilt)}°`}
         >
-          <Flashlight 
+          <Flashlight
             className={cn(
               'w-full h-full text-primary drop-shadow-sm',
               isDragging && 'text-primary/80'
@@ -388,7 +388,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
               filter: `brightness(${1 + (clampedValue.tilt / 180)})`, // Visual tilt indication
             }}
           />
-          
+
           {/* Rotation Handle */}
           <div
             className={cn(
@@ -416,12 +416,14 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
       </div>
 
       {/* Instructions */}
-      <div 
+      {isFocused && 
+      <div
         id={`${controlId}-instructions`}
         className="text-xs text-muted-foreground"
       >
-        Drag to move • Drag handle to rotate • Scroll to push/pull light • Arrow keys to nudge • R/T to rotate/tilt • Home to reset
-      </div>
+        Drag to move • Drag handle to rotate • Scroll to push/pull light
+      </div>}
+
     </div>
   );
 });

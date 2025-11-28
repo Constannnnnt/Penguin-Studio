@@ -9,12 +9,17 @@ export interface LayoutState {
   libraryPanelWidth: number;
   ControlsPanelWidth: number;
   activeControlsTab: ControlsTab;
+  workspaceHandlers?: {
+    handleGenerate?: () => void;
+    handleRefine?: () => void;
+  };
 
   toggleLibraryPanel: () => void;
   toggleControlsPanel: () => void;
   setLibraryPanelWidth: (width: number) => void;
   setControlsPanelWidth: (width: number) => void;
   setActiveControlsTab: (tab: ControlsTab) => void;
+  setWorkspaceHandlers: (handlers?: { handleGenerate?: () => void; handleRefine?: () => void }) => void;
 }
 
 interface PersistedLayoutState {
@@ -84,6 +89,7 @@ export const useLayoutStore = create<LayoutState>()(
         libraryPanelWidth: DEFAULT_LIBRARY_PANEL_WIDTH,
         ControlsPanelWidth: DEFAULT__CONTROLS_PANEL_WIDTH,
         activeControlsTab: 'scene',
+        workspaceHandlers: undefined,
 
         toggleLibraryPanel: () =>
           set((state) => ({
@@ -103,6 +109,9 @@ export const useLayoutStore = create<LayoutState>()(
 
         setActiveControlsTab: (tab: ControlsTab) =>
           set({ activeControlsTab: tab }),
+
+        setWorkspaceHandlers: (handlers) =>
+          set({ workspaceHandlers: handlers }),
       }),
       {
         name: 'penguin-layout-storage',

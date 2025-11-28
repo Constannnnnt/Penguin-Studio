@@ -10,6 +10,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useMaskKeyboardShortcuts, MASK_KEYBOARD_SHORTCUTS } from '@/hooks/useMaskKeyboardShortcuts';
 import { Button } from './ui/button';
 import { Keyboard } from 'lucide-react';
+import { useFileSystemStore } from '@/store/fileSystemStore';
+import { useLayoutStore } from '@/store/layoutStore';
 
 export interface WorkspacePanelRef {
   handleGenerate: () => void;
@@ -22,6 +24,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const shortDescription = useConfigStore((state) => state.config.short_description);
   const config = useConfigStore((state) => state.config);
   const updateConfig = useConfigStore((state) => state.updateConfig);
+  const setWorkspaceHandlers = useLayoutStore((state) => state.setWorkspaceHandlers);
+  const selectedFileUrl = useFileSystemStore((state) => state.selectedFileUrl);
   
   // Enhanced config store for enhanced scene tab
   const activePanel = useConfigStore((state) => state.activePanel);
@@ -39,6 +43,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const metadataInputRef = useRef<HTMLInputElement>(null);
 
   const { generateImage, refineImage, isLoading, generatedImage, error } = useGeneration();
+  const [libraryImage, setLibraryImage] = useState<string | null>(null);
+  const viewerStyle: React.CSSProperties = {
+    width: '100%',
+    height: 'calc(100vh - 300px)',
+    maxHeight: 'calc(100vh - 150px)',
+    minHeight: '360px',
+  };
   
   const segmentationResults = useSegmentationStore((state) => state.results);
   const selectedMaskId = useSegmentationStore((state) => state.selectedMaskId);
@@ -62,17 +73,40 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     setLocalPrompt(shortDescription);
   }, [shortDescription]);
 
+  const configRef = useRef(config);
+  const generatedImageRef = useRef<string | null>(generatedImage);
+  const generateImageRef = useRef(generateImage);
+  const refineImageRef = useRef(refineImage);
+  const libraryImageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    generatedImageRef.current = generatedImage;
+  }, [generatedImage]);
+
+  useEffect(() => {
+    libraryImageRef.current = libraryImage;
+  }, [libraryImage]);
+
+  useEffect(() => {
+    generateImageRef.current = generateImage;
+  }, [generateImage]);
+
+  useEffect(() => {
+    refineImageRef.current = refineImage;
+  }, [refineImage]);
+
   const handleGenerate = (): void => {
-    // Use enhanced configuration if enhanced scene tab is active
-    const configToUse = config;
-    generateImage(configToUse);
+    generateImageRef.current?.(configRef.current);
   };
 
   const handleRefine = (): void => {
-    if (generatedImage) {
-      // Use enhanced configuration if enhanced scene tab is active
-      const configToUse = config;
-      refineImage(configToUse, generatedImage);
+    const currentImage = generatedImageRef.current || libraryImageRef.current;
+    if (currentImage) {
+      refineImageRef.current?.(configRef.current, currentImage);
     }
   };
 
@@ -104,13 +138,37 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   useImperativeHandle(ref, () => ({
     handleGenerate,
     handleRefine,
-  }));
+  }), []);
+
+  useEffect(() => {
+    const handlers = {
+      handleGenerate,
+      handleRefine,
+    };
+    setWorkspaceHandlers(handlers);
+    return () => {
+      setWorkspaceHandlers(undefined);
+    };
+    // setWorkspaceHandlers is stable from the store; handlers are stable closures using refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedFileUrl && /\.(png|jpe?g)$/i.test(selectedFileUrl)) {
+      setLibraryImage(selectedFileUrl);
+      setViewMode('original');
+    } else {
+      setLibraryImage(null);
+    }
+  }, [selectedFileUrl]);
 
   const showSegmentedView = viewMode === 'segmented' && segmentationResults;
   const showSegmentationOriginal = viewMode === 'original' && segmentationResults;
-  const originalImageToShow = showSegmentationOriginal
-    ? segmentationResults?.original_image_url || null
-    : generatedImage;
+  const originalImageToShow = libraryImage
+    ? libraryImage
+    : showSegmentationOriginal
+      ? segmentationResults?.original_image_url || null
+      : generatedImage;
 
   return (
     <main
@@ -166,20 +224,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               >
                 Segmented
               </Button>
-              <Button
+              {/* <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
                 title="Keyboard shortcuts"
               >
                 <Keyboard className="h-4 w-4" />
-              </Button>
+              </Button> */}
             </div>
           )}
         </div>
 
         {showSegmentedView ? (
-          <div className="relative w-full aspect-video bg-muted/50 rounded-lg overflow-hidden border border-border">
+          <div
+            className="relative w-full bg-muted/50 rounded-lg overflow-hidden border border-border"
+            style={viewerStyle}
+          >
             <MaskViewer
               originalImageUrl={segmentationResults.original_image_url}
               masks={segmentationResults.masks}
@@ -189,7 +250,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
               onBackgroundDeselect={handleBackgroundDeselect}
             />
             
-            {showShortcutsHelp && (
+            {/* {showShortcutsHelp && (
               <div className="absolute top-4 right-4 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-4 max-w-xs">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold">Keyboard Shortcuts</h3>
@@ -221,10 +282,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         ) : segmentationError ? (
-          <div className="relative w-full aspect-video bg-muted/50 rounded-lg overflow-hidden border border-border">
+          <div
+            className="relative w-full bg-muted/50 rounded-lg overflow-hidden border border-border"
+            style={viewerStyle}
+          >
             <ErrorOverlay
               error={segmentationError}
               errorCode={segmentationErrorCode || undefined}
@@ -237,6 +301,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
             image={originalImageToShow}
             isLoading={isLoading || isSegmenting}
             error={error}
+            style={viewerStyle}
           />
         )}
       </div>
@@ -246,7 +311,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
           prompt={localPrompt}
           onPromptChange={setLocalPrompt}
           onGenerate={handleGenerate}
-          onRefine={handleRefine}
           isLoading={isLoading}
         />
       </div>

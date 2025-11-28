@@ -1,19 +1,148 @@
+import { useState, useMemo, useCallback } from 'react';
+import { Sparkles } from 'lucide-react';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useConfigStore } from '@/store/configStore';
+import { useSegmentationStore } from '@/store/segmentationStore';
+import { useFileSystemStore } from '@/store/fileSystemStore';
 import { PanelHeader } from './PanelHeader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { ImageControlsTab } from './ImageControlsTab';
 // import { GenerationControlsTab } from './GenerationControlsTab';
 import { ObjectsTab } from './ObjectsTab';
 import { SceneTab } from './SceneTab';
 import { cn } from '@/lib/utils';
+import { env } from '@/lib/env';
+import { useToast } from '@/hooks/useToast';
 
 export const ControlsPanel: React.FC = () => {
-  const { activeControlsTab, setActiveControlsTab } = useLayoutStore();
-  const activePanel = useConfigStore((state) => state.activePanel);
+  const { activeControlsTab, setActiveControlsTab, workspaceHandlers } = useLayoutStore();
+  const config = useConfigStore((state) => state.config);
+  const segmentationResults = useSegmentationStore((state) => state.results);
+  const refreshFileTree = useFileSystemStore((state) => state.refreshFileTree);
+  const { toast } = useToast();
+  const [isSavingMetadata, setIsSavingMetadata] = useState(false);
 
+  const metadataPayload = useMemo(() => {
+    const baseMetadata = segmentationResults?.metadata;
+    const objectsFromMasks =
+      segmentationResults?.masks.map((mask) => ({
+        description: mask.objectMetadata?.description || mask.label || '',
+        location: mask.objectMetadata?.location || '',
+        relationship: mask.objectMetadata?.relationship || '',
+        relative_size: mask.objectMetadata?.relative_size || '',
+        shape_and_color: mask.objectMetadata?.shape_and_color || '',
+        texture: mask.objectMetadata?.texture || '',
+        appearance_details: mask.objectMetadata?.appearance_details || '',
+        orientation: mask.objectMetadata?.orientation || '',
+      })) || [];
 
-  // Determine the scene tab content based on mode
+    const lightingDirection =
+      typeof (config.lighting as any)?.direction === 'string'
+        ? (config.lighting as any).direction
+        : baseMetadata?.lighting?.direction ||
+          JSON.stringify((config.lighting as any).direction ?? {});
+
+    const toText = (value: unknown, fallback: string = ''): string => {
+      if (value === undefined || value === null) return fallback;
+      if (typeof value === 'number') return value.toString();
+      return String(value);
+    };
+
+    return {
+      short_description: config.short_description || baseMetadata?.short_description || '',
+      objects: objectsFromMasks.length > 0 ? objectsFromMasks : baseMetadata?.objects || [],
+      background_setting: config.background_setting || baseMetadata?.background_setting || '',
+      lighting: {
+        conditions: (config.lighting as any)?.conditions || baseMetadata?.lighting?.conditions || '',
+        direction: lightingDirection || '',
+        shadows: toText((config.lighting as any)?.shadows, baseMetadata?.lighting?.shadows || ''),
+      },
+      aesthetics: {
+        composition: config.aesthetics.composition || baseMetadata?.aesthetics?.composition || '',
+        color_scheme: config.aesthetics.color_scheme || baseMetadata?.aesthetics?.color_scheme || '',
+        mood_atmosphere: config.aesthetics.mood_atmosphere || baseMetadata?.aesthetics?.mood_atmosphere || '',
+        preference_score: toText(
+          config.aesthetics.preference_score,
+          baseMetadata?.aesthetics?.preference_score || ''
+        ),
+        aesthetic_score: toText(
+          config.aesthetics.aesthetic_score,
+          baseMetadata?.aesthetics?.aesthetic_score || ''
+        ),
+      },
+      photographic_characteristics: {
+        depth_of_field: toText(
+          (config.photographic_characteristics as any)?.depth_of_field,
+          baseMetadata?.photographic_characteristics?.depth_of_field || ''
+        ),
+        focus: toText(
+          (config.photographic_characteristics as any)?.focus,
+          baseMetadata?.photographic_characteristics?.focus || ''
+        ),
+        camera_angle:
+          (config.photographic_characteristics as any)?.camera_angle ||
+          baseMetadata?.photographic_characteristics?.camera_angle ||
+          '',
+        lens_focal_length:
+          (config.photographic_characteristics as any)?.lens_focal_length ||
+          baseMetadata?.photographic_characteristics?.lens_focal_length ||
+          '',
+      },
+      style_medium: (config as any).style_medium || baseMetadata?.style_medium || '',
+      artistic_style: (config as any).artistic_style || baseMetadata?.artistic_style || '',
+      context: (config as any).context || baseMetadata?.context || '',
+    };
+  }, [config, segmentationResults]);
+
+  const handleSaveMetadata = useCallback(async () => {
+    if (!segmentationResults?.result_id) {
+      toast({
+        title: 'No segmented image',
+        description: 'Upload and segment an image before saving metadata.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingMetadata(true);
+    try {
+      const response = await fetch(
+        `${env.apiBaseUrl}/api/v1/results/${segmentationResults.result_id}/metadata`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(metadataPayload),
+        }
+      );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Failed to save metadata');
+      }
+
+      toast({
+        title: 'Metadata saved',
+        description: 'Updated JSON stored alongside the result.',
+      });
+      await refreshFileTree();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save metadata';
+      toast({
+        title: 'Save failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingMetadata(false);
+    }
+  }, [metadataPayload, refreshFileTree, segmentationResults?.result_id, toast]);
+
+  const handleRefineAndSave = useCallback(async () => {
+    await handleSaveMetadata();
+    workspaceHandlers?.handleRefine?.();
+  }, [handleSaveMetadata, workspaceHandlers]);
+
   const SceneTabContent = SceneTab;
   
   return (
@@ -21,6 +150,17 @@ export const ControlsPanel: React.FC = () => {
       <PanelHeader
         title="Edit"
         position="right"
+        actions={
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleRefineAndSave}
+            disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            {isSavingMetadata ? 'Saving...' : 'Refine'}
+          </Button>
+        }
       />
 
       <Tabs
