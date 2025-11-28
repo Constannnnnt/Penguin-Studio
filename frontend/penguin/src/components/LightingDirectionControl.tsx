@@ -12,17 +12,6 @@ export interface LightingDirectionControlProps {
   disabled?: boolean;
 }
 
-/**
- * LightingDirectionControl Component
- * 
- * An interactive component for controlling 6DOF lighting direction with:
- * - Rectangular representation of image area (16:9 aspect ratio)
- * - Draggable flashlight icon with position tracking
- * - Rotation handles for 6DOF orientation control (rotation and tilt)
- * - Boundary constraints and real-time position/orientation display
- * - Touch support for mobile devices
- * - Full accessibility support
- */
 export const LightingDirectionControl = React.memo<LightingDirectionControlProps>(({
   label = 'Lighting Direction',
   value,
@@ -323,12 +312,12 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   return (
     <div className={cn('space-y-4', className)}>
       {/* Label */}
-      <Label
+      {/* <Label
         id={labelId}
         className="block text-sm sm:text-base font-medium"
       >
         {label}
-      </Label>
+      </Label> */}
 
       {/* Interactive Area */}
       <div

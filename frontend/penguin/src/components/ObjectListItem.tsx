@@ -105,6 +105,13 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
   const borderColor = useMemo(() => getMaskColor(mask.mask_id), [mask.mask_id]);
   
   const handleKeyDown = (e: React.KeyboardEvent): void => {
+    const target = e.target as HTMLElement;
+    const isInputElement = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    
+    if (isInputElement) {
+      return;
+    }
+    
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClick();

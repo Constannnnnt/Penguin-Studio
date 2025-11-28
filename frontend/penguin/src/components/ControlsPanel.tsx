@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Download } from 'lucide-react';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useConfigStore } from '@/store/configStore';
 import { useSegmentationStore } from '@/store/segmentationStore';
@@ -13,6 +13,9 @@ import { SceneTab } from './SceneTab';
 import { cn } from '@/lib/utils';
 import { env } from '@/lib/env';
 import { useToast } from '@/hooks/useToast';
+import { semanticGenerationService } from '@/services/semanticGeneration';
+import { generateSemanticJSONFilename } from '@/services/semanticGeneration/fileSaver';
+import { notifySaveSuccess, notifySaveError, notifyGenerationStarted } from '@/services/semanticGeneration/notifier';
 
 export const ControlsPanel: React.FC = () => {
   const { activeControlsTab, setActiveControlsTab, workspaceHandlers } = useLayoutStore();
@@ -21,6 +24,7 @@ export const ControlsPanel: React.FC = () => {
   const refreshFileTree = useFileSystemStore((state) => state.refreshFileTree);
   const { toast } = useToast();
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const metadataPayload = useMemo(() => {
     const baseMetadata = segmentationResults?.metadata;
@@ -131,6 +135,40 @@ export const ControlsPanel: React.FC = () => {
     workspaceHandlers?.handleRefine?.();
   }, [handleSaveMetadata, workspaceHandlers]);
 
+  const handleExportScene = useCallback(async () => {
+    setIsExporting(true);
+    notifyGenerationStarted();
+
+    try {
+      // Generate semantic JSON from current state
+      const semanticJSON = semanticGenerationService.generateSemanticJSON();
+
+      // Validate the generated JSON
+      const validationResult = semanticGenerationService.validate(semanticJSON);
+      if (!validationResult.valid) {
+        notifySaveError(`Validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
+        return;
+      }
+
+      // Generate filename based on timestamp
+      const filename = generateSemanticJSONFilename('scene');
+
+      // Save to file (triggers browser download)
+      const saveResult = await semanticGenerationService.saveToFile(semanticJSON, filename);
+
+      if (saveResult.success) {
+        notifySaveSuccess(saveResult);
+      } else {
+        notifySaveError(saveResult);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export scene';
+      notifySaveError(errorMessage);
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
+
   const SceneTabContent = SceneTab;
   
   return (
@@ -139,15 +177,27 @@ export const ControlsPanel: React.FC = () => {
         title="Edit"
         position="right"
         actions={
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handleRefineAndSave}
-            disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
-          >
-            <Sparkles className="h-4 w-4 mr-2" />
-            {isSavingMetadata ? 'Saving...' : 'Refine'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportScene}
+              disabled={isExporting || !segmentationResults}
+              title="Export scene as semantic JSON"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleRefineAndSave}
+              disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {isSavingMetadata ? 'Saving...' : 'Refine'}
+            </Button>
+          </div>
         }
       />
 

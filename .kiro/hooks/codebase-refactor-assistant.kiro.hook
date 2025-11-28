@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Codebase Structure Refactor",
+  "description": "Analyzes your flat codebase structure and provides a clean folder organization plan with visual tree, explanation, and automated migration script. Supports both file-type and feature-based grouping strategies.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "The user wants to refactor their codebase from a flat structure to a clean, organized folder structure.\n\n**Your Task:**\n1. Ask the user for their tech stack (e.g., React, Python/Flask, Next.js, etc.)\n2. Ask them to choose a grouping strategy:\n   - **File Type/Category** (Classic): Group by what files are (components, hooks, utils, assets)\n   - **Functionality/Feature** (Modern): Group by what files do (auth, dashboard, shared)\n3. Ask them to provide their current file list (they can use `ls -1 | pbcopy` on Mac/Linux or `ls | Select-Object -ExpandProperty Name | clip` on Windows)\n\n**Once you have this information, provide:**\n\n1. **Visual ASCII Tree** showing the new folder structure\n2. **Brief Explanation** of why you grouped files this way\n3. **Migration Script** (Bash or PowerShell) to automatically move files into the new structure\n\n**Constraints to follow:**\n- Keep folder depth to maximum 2 levels when possible\n- Avoid folders with only 1 file unless necessary\n- Group logically based on chosen strategy\n- Keep structure shallow and intuitive\n- Use lowercase for folder names\n- Use camelCase for TypeScript files, snake_case for Python files\n\n**For File Type/Category grouping, typical folders include:**\n- /components (UI pieces)\n- /hooks (logic helpers)\n- /pages or /routes\n- /utils or /lib (helpers)\n- /assets (images, SVGs)\n- /services (API calls)\n- /types (TypeScript types)\n- /store (state management)\n\n**For Functionality/Feature grouping, typical folders include:**\n- /auth (login, register, auth hooks)\n- /dashboard (dashboard components and logic)\n- /profile (user profile features)\n- /shared (generic reusable components)\n- /common (shared utilities)\n\nProvide clear, actionable output that the user can immediately execute."
+  }
+}
