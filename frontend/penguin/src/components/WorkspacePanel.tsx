@@ -7,9 +7,8 @@ import { useConfigStore } from '@/store/configStore';
 import { useSegmentationStore } from '@/store/segmentationStore';
 import { useGeneration } from '@/hooks/useGeneration';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useMaskKeyboardShortcuts, MASK_KEYBOARD_SHORTCUTS } from '@/hooks/useMaskKeyboardShortcuts';
+import { useMaskKeyboardShortcuts } from '@/hooks/useMaskKeyboardShortcuts';
 import { Button } from './ui/button';
-import { Keyboard } from 'lucide-react';
 import { useFileSystemStore } from '@/store/fileSystemStore';
 import { useLayoutStore } from '@/store/layoutStore';
 
@@ -37,7 +36,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const [localPrompt, setLocalPrompt] = useState(shortDescription);
   const debouncedPrompt = useDebounce(localPrompt, 300);
   const [viewMode, setViewMode] = useState<ViewMode>('original');
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const metadataInputRef = useRef<HTMLInputElement>(null);

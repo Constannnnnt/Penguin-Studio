@@ -23,7 +23,7 @@ import {
   measureOperation,
   memoize,
 } from '@/lib/performance';
-import type { SceneConfiguration, PenguinConfig, LightingDirection } from '@/types';
+import type { SceneConfiguration, PenguinConfig } from '@/types';
 
 // Persist parsed state across tab mounts to avoid re-parsing on every tab switch
 let LAST_PARSED_METADATA_HASH: string | null = null;
@@ -105,46 +105,14 @@ export const SceneTab: React.FC<SceneTabProps> = ({
   }, []);
 
   const convertSceneToConfig = React.useCallback((scene: SceneConfiguration, base: PenguinConfig): PenguinConfig => {
-    const toDepth = (v: number) => (v <= 33 ? 'shallow' : v <= 66 ? 'medium' : 'deep');
-    const toFocus = (v: number) => (v <= 33 ? 'soft' : v <= 66 ? 'selective' : 'sharp');
-    const toDirection = (dir: SceneConfiguration['lighting']['direction']): LightingDirection => {
-      let resolved: LightingDirection = 'front-lit';
-      if (dir.y < 33) resolved = 'top-lit';
-      else if (dir.y > 67) resolved = 'bottom-lit';
-      if (dir.x < 33 || dir.x > 67) resolved = 'side-lit';
-      return resolved;
-    };
-    const toShadows = (v: number) => {
-      if (v <= 0) return 'none';
-      if (v === 1) return 'subtle';
-      if (v === 2) return 'soft';
-      if (v === 3) return 'subtle';
-      if (v === 4) return 'hard';
-      return 'dramatic';
-    };
-
     return {
       ...base,
       background_setting: scene.background_setting,
-      photographic_characteristics: {
-        camera_angle: scene.photographic_characteristics.camera_angle,
-        lens_focal_length: scene.photographic_characteristics.lens_focal_length,
-        depth_of_field: toDepth(scene.photographic_characteristics.depth_of_field),
-        focus: toFocus(scene.photographic_characteristics.focus),
-      },
-      lighting: {
-        conditions: scene.lighting.conditions,
-        direction: toDirection(scene.lighting.direction),
-        shadows: toShadows(scene.lighting.shadows),
-      },
-      aesthetics: {
-        ...base.aesthetics,
-        composition: scene.aesthetics.composition,
-        color_scheme: scene.aesthetics.color_scheme,
-        mood_atmosphere: scene.aesthetics.mood_atmosphere,
-      },
-      style_medium: scene.aesthetics.style_medium as any,
-      artistic_style: scene.aesthetics.aesthetic_style as any,
+      photographic_characteristics: scene.photographic_characteristics,
+      lighting: scene.lighting,
+      aesthetics: scene.aesthetics,
+      style_medium: scene.aesthetics.style_medium,
+      // artistic_style: scene.aesthetics.aesthetic_style,
     };
   }, []);
 
@@ -502,7 +470,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({
               className={cn(
                 'relative gap-2 h-10 text-sm font-medium transition-all duration-300 ease-in-out',
                 isActive 
-                  ? 'flex-grow px-4 text-primary-foreground shadow-sm' 
+                  ? 'flex-grow px-4 text-primary-background shadow-sm' 
                   : 'flex-shrink-0 w-10 px-0 text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
@@ -512,7 +480,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({
               <Icon 
                 className={cn(
                   'h-4 w-4 flex-shrink-0 transition-all duration-300',
-                  isActive ? 'text-primary-foreground' : 'text-current'
+                  isActive ? 'text-primary' : 'text-current'
                 )} 
               />
               <span 

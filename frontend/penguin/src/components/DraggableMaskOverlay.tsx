@@ -18,6 +18,14 @@ interface DraggableMaskOverlayProps {
    * Defaults to 1 (no scaling).
    */
   displayScale?: number;
+  /**
+   * Color for the mask highlight overlay
+   */
+  maskColor?: string;
+  /**
+   * Container dimensions for mask rendering (display pixels)
+   */
+  containerSize?: { width: number; height: number };
 }
 
 type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
@@ -32,6 +40,8 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   onMouseLeave,
   imageContainerRef,
   displayScale = 1,
+  maskColor,
+  containerSize,
 }) => {
   const {
     maskManipulation,
@@ -55,12 +65,15 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   }), [bbox.x1, bbox.y1, bbox.x2, bbox.y2, scale]);
   const transform = manipState?.transform;
 
+  // Ref to the container element for direct DOM manipulation during drag
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
   // Drag state (refs to avoid render loops)
   const dragSessionRef = React.useRef<{
     startX: number;
     startY: number;
     startBBox: BoundingBox;
-    lastApplied: { x: number; y: number };
+    currentOffset: { x: number; y: number }; // Current visual offset in pixels
   } | null>(null);
   const draggingRef = React.useRef(false);
 
@@ -73,24 +86,13 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   } | null>(null);
   const resizingRef = React.useRef(false);
 
-  // RAF batching for drag
-  const pendingDeltaRef = React.useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  // RAF for smooth visual updates
   const rafRef = React.useRef<number | null>(null);
 
   // Tooltip state
   const [tooltipVisible, setTooltipVisible] = React.useState(false);
   const [tooltipPosition, setTooltipPosition] = React.useState({ x: 0, y: 0 });
   const tooltipTimeoutRef = React.useRef<number | null>(null);
-
-  // Helpers
-  const setTooltipSafe = (visible: boolean, pos?: { x: number; y: number }) => {
-    if (visible && !draggingRef.current && !resizingRef.current) {
-      if (pos) setTooltipPosition(pos);
-      setTooltipVisible(true);
-    } else if (!visible) {
-      setTooltipVisible(false);
-    }
-  };
 
   const handlePointerDown = (e: React.PointerEvent): void => {
     e.stopPropagation();
@@ -104,9 +106,8 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
       startX: e.clientX,
       startY: e.clientY,
       startBBox: { ...bbox },
-      lastApplied: { x: bbox.x1, y: bbox.y1 },
+      currentOffset: { x: 0, y: 0 },
     };
-    pendingDeltaRef.current = { dx: 0, dy: 0 };
     startDragMask(mask.mask_id);
     setTooltipVisible(false);
   };
@@ -130,49 +131,45 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   // Global pointer listeners for drag/resize
   React.useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
-      // Drag
-      if (draggingRef.current && dragSessionRef.current) {
+      // Drag - use CSS transform for smooth visual updates
+      if (draggingRef.current && dragSessionRef.current && containerRef.current) {
         const session = dragSessionRef.current;
-        const dx = (e.clientX - session.startX) / scale;
-        const dy = (e.clientY - session.startY) / scale;
         const width = session.startBBox.x2 - session.startBBox.x1;
         const height = session.startBBox.y2 - session.startBBox.y1;
+        
+        // Calculate delta in logical coordinates
+        const dx = (e.clientX - session.startX) / scale;
+        const dy = (e.clientY - session.startY) / scale;
 
+        // Calculate new position and constrain it
         const newBbox = {
           x1: session.startBBox.x1 + dx,
           y1: session.startBBox.y1 + dy,
           x2: session.startBBox.x1 + dx + width,
           y2: session.startBBox.y1 + dy + height,
         };
-
         const constrained = constrainBoundingBox(newBbox, imageSize);
-        const incX = constrained.x1 - session.lastApplied.x;
-        const incY = constrained.y1 - session.lastApplied.y;
+        
+        // Calculate the actual offset after constraint (in display pixels)
+        const offsetX = (constrained.x1 - session.startBBox.x1) * scale;
+        const offsetY = (constrained.y1 - session.startBBox.y1) * scale;
+        
+        // Store for use on pointer up
+        session.currentOffset = { x: offsetX, y: offsetY };
 
-        if (incX !== 0 || incY !== 0) {
-          pendingDeltaRef.current = {
-            dx: pendingDeltaRef.current.dx + incX,
-            dy: pendingDeltaRef.current.dy + incY,
-          };
-
-          if (rafRef.current === null) {
-            rafRef.current = requestAnimationFrame(() => {
-              rafRef.current = null;
-              const { dx: pdx, dy: pdy } = pendingDeltaRef.current;
-              pendingDeltaRef.current = { dx: 0, dy: 0 };
-              if (pdx !== 0 || pdy !== 0) {
-                updateMaskPosition(mask.mask_id, pdx, pdy);
-                session.lastApplied = {
-                  x: session.lastApplied.x + pdx,
-                  y: session.lastApplied.y + pdy,
-                };
-              }
-            });
-          }
+        // Apply transform directly to DOM - bypasses React for smooth updates
+        if (rafRef.current === null) {
+          rafRef.current = requestAnimationFrame(() => {
+            rafRef.current = null;
+            if (containerRef.current && dragSessionRef.current) {
+              const { x, y } = dragSessionRef.current.currentOffset;
+              containerRef.current.style.transform = `translate(${x}px, ${y}px)`;
+            }
+          });
         }
       }
 
-      // Resize
+      // Resize - still updates store since resize is less frequent and needs accurate sizing
       if (resizingRef.current && resizeSessionRef.current) {
         const session = resizeSessionRef.current;
         const minSize = 8 / scale;
@@ -255,9 +252,24 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
 
     const onPointerUp = () => {
       if (draggingRef.current && dragSessionRef.current) {
+        const session = dragSessionRef.current;
+        
+        // Calculate final position from the visual offset
+        const finalDx = session.currentOffset.x / scale;
+        const finalDy = session.currentOffset.y / scale;
+        
+        // Reset the CSS transform before updating state
+        if (containerRef.current) {
+          containerRef.current.style.transform = '';
+        }
+        
+        // Update store with final delta (only if actually moved)
+        if (finalDx !== 0 || finalDy !== 0) {
+          updateMaskPosition(mask.mask_id, finalDx, finalDy);
+        }
+        
         draggingRef.current = false;
         dragSessionRef.current = null;
-        pendingDeltaRef.current = { dx: 0, dy: 0 };
         if (rafRef.current !== null) {
           cancelAnimationFrame(rafRef.current);
           rafRef.current = null;
@@ -290,32 +302,50 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }
   }, []);
 
-  const isManipulating = draggingRef.current || resizingRef.current || manipState?.isDragging || manipState?.isResizing || isAnyMaskDragging;
+  // Use refs for manipulation state checks to avoid re-renders
+  const isGloballyManipulatingRef = React.useRef(false);
+  isGloballyManipulatingRef.current = !!(isAnyMaskDragging || manipState?.isDragging || manipState?.isResizing);
 
-  const handleMouseEnterWithTooltip = (e: React.PointerEvent): void => {
-    if (draggingRef.current || resizingRef.current || isManipulating) return;
+  const handleMouseEnterWithTooltip = React.useCallback((e: React.PointerEvent): void => {
+    // Don't trigger hover effects if any mask is being manipulated
+    if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
     onMouseEnter();
     if (tooltipTimeoutRef.current) {
       clearTimeout(tooltipTimeoutRef.current);
       tooltipTimeoutRef.current = null;
     }
-    setTooltipSafe(true, { x: e.clientX, y: e.clientY });
-  };
+    setTooltipPosition({ x: e.clientX, y: e.clientY });
+    setTooltipVisible(true);
+  }, [onMouseEnter]);
 
-  const handleMouseMoveTooltip = (e: React.PointerEvent): void => {
-    if (!draggingRef.current && !resizingRef.current && !isManipulating && tooltipVisible) {
-      setTooltipPosition({ x: e.clientX, y: e.clientY });
-    }
-  };
+  // Throttle tooltip position updates using a ref to track last update time
+  const lastTooltipUpdateRef = React.useRef(0);
+  
+  const handleMouseMoveTooltip = React.useCallback((e: React.PointerEvent): void => {
+    // Skip if manipulating or tooltip not visible
+    if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
+    
+    // Throttle updates to max 60fps
+    const now = Date.now();
+    if (now - lastTooltipUpdateRef.current < 16) return;
+    lastTooltipUpdateRef.current = now;
+    
+    setTooltipPosition({ x: e.clientX, y: e.clientY });
+  }, []);
 
-  const handleMouseLeaveWithTooltip = (): void => {
-    if (draggingRef.current || resizingRef.current || isManipulating) return;
+  const handleMouseLeaveWithTooltip = React.useCallback((): void => {
+    // Don't trigger leave effects if any mask is being manipulated
+    if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
     onMouseLeave();
     tooltipTimeoutRef.current = window.setTimeout(() => {
       setTooltipVisible(false);
       tooltipTimeoutRef.current = null;
     }, 150);
-  };
+  }, [onMouseLeave]);
+
+  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || manipState?.isDragging || manipState?.isResizing;
+  // Disable pointer events on other masks while any mask is being dragged (prevents jumpiness)
+  const shouldDisablePointerEvents = isAnyMaskDragging && !isCurrentlyManipulating && !isSelected;
 
   const style: React.CSSProperties = {
     position: 'absolute',
@@ -325,11 +355,11 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     height: `${displayBBox.y2 - displayBBox.y1}px`,
     opacity: isSelected ? 0.4 : isHovered ? 0.35 : 0.15,
     backgroundColor: 'transparent',
-    transition: (manipState?.isDragging || manipState?.isResizing)
-      ? 'none'
-      : 'opacity 120ms ease, left 160ms ease, top 160ms ease, width 160ms ease, height 160ms ease',
-    cursor: isSelected ? (draggingRef.current ? 'grabbing' : 'grab') : 'pointer',
+    transition: isCurrentlyManipulating ? 'none' : 'opacity 120ms ease',
+    cursor: isSelected ? (isCurrentlyManipulating ? 'grabbing' : 'grab') : 'pointer',
     filter: transform ? combineImageEditFilters(transform.imageEdits) : undefined,
+    willChange: isCurrentlyManipulating ? 'transform' : 'auto',
+    pointerEvents: shouldDisablePointerEvents ? 'none' : 'auto',
   };
 
   const handlePositions: { handle: ResizeHandle; style: React.CSSProperties; cursor: string }[] = [
@@ -339,9 +369,44 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     { handle: 'se', style: { bottom: -6, right: -6 }, cursor: 'se-resize' },
   ];
 
+  // Calculate mask visual layer styling
+  const maskOpacity = isSelected ? 0.7 : isHovered ? 0.55 : 0.3;
+  const blendMode = (isSelected || isHovered) ? 'screen' : 'multiply';
+  
+  // Transform values for the mask (from manipulation state)
+  const translateX = (transform?.position.x ?? 0) * scale;
+  const translateY = (transform?.position.y ?? 0) * scale;
+  const scaleX = transform?.scale.width ?? 1;
+  const scaleY = transform?.scale.height ?? 1;
+
+  // Mask visual style - positioned relative to container bounds
+  const maskVisualStyle: React.CSSProperties | undefined = maskColor && containerSize ? {
+    position: 'absolute',
+    // Position the mask layer to cover the full container, offset by negative bbox position
+    left: -displayBBox.x1,
+    top: -displayBBox.y1,
+    width: containerSize.width,
+    height: containerSize.height,
+    backgroundColor: maskColor,
+    opacity: maskOpacity,
+    mixBlendMode: blendMode,
+    filter: 'saturate(1.4) contrast(1.2)',
+    maskImage: `url(${mask.mask_url})`,
+    WebkitMaskImage: `url(${mask.mask_url})`,
+    maskSize: '100% 100%',
+    WebkitMaskSize: '100% 100%',
+    maskRepeat: 'no-repeat',
+    WebkitMaskRepeat: 'no-repeat',
+    // Apply the stored transform for position/scale adjustments
+    transform: `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`,
+    transformOrigin: 'top left',
+    pointerEvents: 'none',
+  } : undefined;
+
   return (
     <>
       <div
+        ref={containerRef}
         style={style}
         onPointerDown={handlePointerDown}
         onPointerEnter={handleMouseEnterWithTooltip}
@@ -352,6 +417,12 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         aria-grabbed={manipState?.isDragging}
         tabIndex={isSelected ? 0 : -1}
       >
+        {/* Visual mask layer - moves with the draggable container */}
+        {maskVisualStyle && (
+          <div style={maskVisualStyle} aria-hidden="true" />
+        )}
+        
+        {/* Resize handles */}
         {isSelected && handlePositions.map(({ handle, style: hStyle, cursor }) => (
           <div
             key={handle}

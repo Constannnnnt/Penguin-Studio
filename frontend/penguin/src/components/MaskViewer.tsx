@@ -234,6 +234,7 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
             height: `${layout.height}px`,
           }}
         >
+          {/* Render masks with integrated visual overlay inside DraggableMaskOverlay */}
           {masks.map((mask) => {
             const manipState = maskManipulation.get(mask.mask_id);
             if (manipState?.isHidden) {
@@ -243,45 +244,6 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
             const isSelected = activeMaskId === mask.mask_id;
             const isHovered = hoveredMaskId === mask.mask_id;
             const color = getMaskColor(mask.mask_id);
-            const transform = manipState?.transform;
-            const translateX = (transform?.position.x ?? 0) * layout.scale;
-            const translateY = (transform?.position.y ?? 0) * layout.scale;
-            const scaleX = transform?.scale.width ?? 1;
-            const scaleY = transform?.scale.height ?? 1;
-
-            const opacity = isSelected ? 0.7 : isHovered ? 0.55 : 0.3;
-            const blendMode = (isSelected || isHovered) ? 'screen' : 'multiply';
-
-            return (
-              <div
-                key={`${mask.mask_id}-highlight`}
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundColor: color,
-                  opacity,
-                  mixBlendMode: blendMode,
-                  filter: 'saturate(1.4) contrast(1.2)',
-                  maskImage: `url(${mask.mask_url})`,
-                  WebkitMaskImage: `url(${mask.mask_url})`,
-                  maskSize: '100% 100%',
-                  WebkitMaskSize: '100% 100%',
-                  maskRepeat: 'no-repeat',
-                  WebkitMaskRepeat: 'no-repeat',
-                  transform: `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`,
-                  transformOrigin: 'top left',
-                }}
-              />
-            );
-          })}
-
-          {masks.map((mask) => {
-            const manipState = maskManipulation.get(mask.mask_id);
-            if (manipState?.isHidden) {
-              return null;
-            }
-
-            const isSelected = activeMaskId === mask.mask_id;
-            const isHovered = hoveredMaskId === mask.mask_id;
 
             return (
               <DraggableMaskOverlay
@@ -298,6 +260,8 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
                 onMouseLeave={() => handleHover(null)}
                 imageContainerRef={overlayRef as React.RefObject<HTMLElement>}
                 displayScale={layout.scale}
+                maskColor={color}
+                containerSize={{ width: layout.width, height: layout.height }}
               />
             );
           })}

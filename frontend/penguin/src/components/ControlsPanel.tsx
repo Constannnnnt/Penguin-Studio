@@ -8,7 +8,6 @@ import { PanelHeader } from './PanelHeader';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ImageControlsTab } from './ImageControlsTab';
-// import { GenerationControlsTab } from './GenerationControlsTab';
 import { ObjectsTab } from './ObjectsTab';
 import { SceneTab } from './SceneTab';
 import { cn } from '@/lib/utils';
@@ -38,10 +37,9 @@ export const ControlsPanel: React.FC = () => {
       })) || [];
 
     const lightingDirection =
-      typeof (config.lighting as any)?.direction === 'string'
-        ? (config.lighting as any).direction
-        : baseMetadata?.lighting?.direction ||
-          JSON.stringify((config.lighting as any).direction ?? {});
+      typeof config.lighting.direction === 'object'
+        ? JSON.stringify(config.lighting.direction)
+        : baseMetadata?.lighting?.direction || '';
 
     const toText = (value: unknown, fallback: string = ''): string => {
       if (value === undefined || value === null) return fallback;
@@ -54,44 +52,34 @@ export const ControlsPanel: React.FC = () => {
       objects: objectsFromMasks.length > 0 ? objectsFromMasks : baseMetadata?.objects || [],
       background_setting: config.background_setting || baseMetadata?.background_setting || '',
       lighting: {
-        conditions: (config.lighting as any)?.conditions || baseMetadata?.lighting?.conditions || '',
+        conditions: config.lighting.conditions || baseMetadata?.lighting?.conditions || '',
         direction: lightingDirection || '',
-        shadows: toText((config.lighting as any)?.shadows, baseMetadata?.lighting?.shadows || ''),
+        shadows: toText(config.lighting.shadows, baseMetadata?.lighting?.shadows || ''),
       },
       aesthetics: {
         composition: config.aesthetics.composition || baseMetadata?.aesthetics?.composition || '',
         color_scheme: config.aesthetics.color_scheme || baseMetadata?.aesthetics?.color_scheme || '',
         mood_atmosphere: config.aesthetics.mood_atmosphere || baseMetadata?.aesthetics?.mood_atmosphere || '',
-        preference_score: toText(
-          config.aesthetics.preference_score,
-          baseMetadata?.aesthetics?.preference_score || ''
-        ),
-        aesthetic_score: toText(
-          config.aesthetics.aesthetic_score,
-          baseMetadata?.aesthetics?.aesthetic_score || ''
-        ),
+        style_medium: config.aesthetics.style_medium || baseMetadata?.aesthetics?.style_medium || '',
+        aesthetic_style: config.aesthetics.aesthetic_style || baseMetadata?.aesthetics?.aesthetic_style || '',
       },
       photographic_characteristics: {
         depth_of_field: toText(
-          (config.photographic_characteristics as any)?.depth_of_field,
+          config.photographic_characteristics.depth_of_field,
           baseMetadata?.photographic_characteristics?.depth_of_field || ''
         ),
         focus: toText(
-          (config.photographic_characteristics as any)?.focus,
+          config.photographic_characteristics.focus,
           baseMetadata?.photographic_characteristics?.focus || ''
         ),
-        camera_angle:
-          (config.photographic_characteristics as any)?.camera_angle ||
-          baseMetadata?.photographic_characteristics?.camera_angle ||
-          '',
-        lens_focal_length:
-          (config.photographic_characteristics as any)?.lens_focal_length ||
-          baseMetadata?.photographic_characteristics?.lens_focal_length ||
-          '',
+        camera_angle: config.photographic_characteristics.camera_angle ||
+          baseMetadata?.photographic_characteristics?.camera_angle || '',
+        lens_focal_length: config.photographic_characteristics.lens_focal_length ||
+          baseMetadata?.photographic_characteristics?.lens_focal_length || '',
       },
-      style_medium: (config as any).style_medium || baseMetadata?.style_medium || '',
-      artistic_style: (config as any).artistic_style || baseMetadata?.artistic_style || '',
-      context: (config as any).context || baseMetadata?.context || '',
+      style_medium: config.style_medium || baseMetadata?.style_medium || '',
+      artistic_style: config.artistic_style || baseMetadata?.artistic_style || '',
+      context: config.context || baseMetadata?.context || '',
     };
   }, [config, segmentationResults]);
 

@@ -8,8 +8,6 @@ import type {
   PanelType,
   SceneObject,
   LightingCondition,
-  LightingDirection,
-  ShadowType,
   CompositionType,
   ColorScheme,
   MoodType,
@@ -33,29 +31,30 @@ const DEFAULT_CONFIG: PenguinConfig = {
   background_setting: '',
   lighting: {
     conditions: 'natural' as LightingCondition,
-    direction: 'front-lit' as LightingDirection,
-    shadows: 'soft' as ShadowType,
+    direction: {
+      x: 50,
+      y: 30,
+      rotation: 0,
+      tilt: 0,
+    },
+    shadows: 2,
   },
   aesthetics: {
+    style_medium: 'photograph',
+    aesthetic_style: 'realistic',
     composition: 'centered' as CompositionType,
     color_scheme: 'vibrant' as ColorScheme,
     mood_atmosphere: 'neutral' as MoodType,
-    preference_score: '0.5',
-    aesthetic_score: '0.5',
   },
   photographic_characteristics: {
-    depth_of_field: 'medium',
-    focus: 'sharp',
     camera_angle: 'eye-level',
     lens_focal_length: 'standard',
+    depth_of_field: 50,
+    focus: 75,
   },
   style_medium: 'photograph',
   artistic_style: 'realistic',
 };
-
-// ============================================================================
-// Default Configuration
-// ============================================================================
 
 const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   background_setting: '',
@@ -113,10 +112,6 @@ const setNestedProperty = (
   current[keys[keys.length - 1]] = value;
   return newObj;
 };
-
-// ============================================================================
-// Zustand Store
-// ============================================================================
 
 // ============================================================================
 // Config Store

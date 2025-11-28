@@ -27,23 +27,26 @@ export const LightingSection: React.FC = () => {
     <div className="space-y-6">
       <div className="space-y-3">
         <Label className="text-base font-medium">Lighting Conditions</Label>
-        <Select
-          value={config.conditions}
-          onValueChange={(value: string) => 
-            updateSceneConfig('lighting.conditions', value)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {LIGHTING_CONDITIONS.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="mt-3">
+          <Select
+            value={config.conditions}
+            onValueChange={(value: string) =>
+              updateSceneConfig('lighting.conditions', value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LIGHTING_CONDITIONS.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
       </div>
 
       <div className="space-y-3">
@@ -57,10 +60,10 @@ export const LightingSection: React.FC = () => {
 
       <div className="space-y-3">
         <Label className="text-base font-medium">Shadow Intensity</Label>
-        <div className="px-2">
+        <div className="px-2 mt-3">
           <Slider
             value={[config.shadows]}
-            onValueChange={([value]) => 
+            onValueChange={([value]) =>
               updateSceneConfig('lighting.shadows', value)
             }
             max={5}

@@ -128,22 +128,8 @@ export type AestheticStyle =
   | string; // custom values
 
 // ============================================================================
-// Legacy Types (for backward compatibility)
+// Composition and Style Types
 // ============================================================================
-
-export type DepthOfField = 'shallow' | 'medium' | 'deep';
-
-export type FocusType = 'sharp' | 'soft' | 'selective';
-
-export type LightingDirection =
-  | 'front-lit'
-  | 'back-lit'
-  | 'side-lit'
-  | 'top-lit'
-  | 'bottom-lit'
-  | 'diffused';
-
-export type ShadowType = 'soft' | 'hard' | 'subtle' | 'dramatic' | 'none';
 
 export type CompositionType =
   | 'centered'
@@ -304,46 +290,6 @@ export interface Presets {
 }
 
 // ============================================================================
-// Scene Configuration
-// ============================================================================
-
-export interface sceneConfiguration {
-  background_setting: string;
-  photographic_characteristics: PhotographicConfig;
-  lighting: LightingConfig;
-  aesthetics: AestheticsConfig;
-}
-
-// ============================================================================
-// Semantic Parsing Response Types
-// ============================================================================
-
-export interface ParsedValue<T> {
-  value: T;
-  confidence: number;
-  isCustom: boolean;
-}
-
-export interface SemanticParsingResponse {
-  background_setting: string;
-  photographic_characteristics: {
-    camera_angle: ParsedValue<CameraAngle>;
-    lens_focal_length: ParsedValue<LensType>;
-    depth_of_field: ParsedValue<number>;
-    focus: ParsedValue<number>;
-  };
-  lighting: {
-    conditions: ParsedValue<LightingCondition>;
-    direction: ParsedValue<LightingDirectionValue>;
-    shadows: ParsedValue<ShadowIntensity>;
-  };
-  aesthetics: {
-    style_medium: ParsedValue<StyleMedium>;
-    aesthetic_style: ParsedValue<AestheticStyle>;
-  };
-}
-
-// ============================================================================
 // Store State Interface
 // ============================================================================
 
@@ -359,10 +305,10 @@ export interface ConfigState {
 
   // Actions
   updateConfig: (path: string, value: unknown) => void;
+  updateSceneConfig: (path: string, value: unknown) => void;
   setConfig: (config: PenguinConfig) => void;
   setSceneConfig: (config: SceneConfiguration) => void;
   setActivePanel: (panel: PanelType) => void;
-  // setMode: (enabled: boolean) => void;
   addObject: () => void;
   removeObject: (index: number) => void;
   updateObject: (index: number, field: string, value: unknown) => void;

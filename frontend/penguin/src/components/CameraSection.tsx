@@ -31,52 +31,56 @@ export const CameraSection: React.FC = () => {
     <div className="space-y-6">
       <div className="space-y-3">
         <Label className="text-base font-medium">Camera Angle</Label>
-        <Select
-          value={config.camera_angle}
-          onValueChange={(value) => 
-            updateSceneConfig('photographic_characteristics.camera_angle', value)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CAMERA_ANGLES.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className='mt-3'>
+          <Select
+            value={config.camera_angle}
+            onValueChange={(value) =>
+              updateSceneConfig('photographic_characteristics.camera_angle', value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CAMERA_ANGLES.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-3">
         <Label className="text-base font-medium">Lens Focal Length</Label>
-        <Select
-          value={config.lens_focal_length}
-          onValueChange={(value) => 
-            updateSceneConfig('photographic_characteristics.lens_focal_length', value)
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FOCAL_LENGTHS.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className='mt-3'>
+          <Select
+            value={config.lens_focal_length}
+            onValueChange={(value) =>
+              updateSceneConfig('photographic_characteristics.lens_focal_length', value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FOCAL_LENGTHS.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-3">
         <Label className="text-base font-medium">Depth of Field</Label>
-        <div className="px-2">
+        <div className="px-2 mt-3">
           <Slider
             value={[config.depth_of_field]}
-            onValueChange={([value]) => 
+            onValueChange={([value]) =>
               updateSceneConfig('photographic_characteristics.depth_of_field', value)
             }
             max={100}
@@ -94,10 +98,10 @@ export const CameraSection: React.FC = () => {
 
       <div className="space-y-3">
         <Label className="text-base font-medium">Focus</Label>
-        <div className="px-2">
+        <div className="px-2 mt-3">
           <Slider
             value={[config.focus]}
-            onValueChange={([value]) => 
+            onValueChange={([value]) =>
               updateSceneConfig('photographic_characteristics.focus', value)
             }
             max={100}

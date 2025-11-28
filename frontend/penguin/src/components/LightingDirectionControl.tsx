@@ -360,16 +360,17 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
         <div
           ref={flashlightRef}
           className={cn(
-            'absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 cursor-grab transition-all duration-100',
-            'hover:scale-110 active:scale-95 will-change-transform',
-            isFocused && 'ring-2 ring-ring ring-offset-2',
-            isDragging && 'cursor-grabbing scale-110',
+            'absolute w-10 h-10 cursor-grab will-change-transform',
+            !isDragging && !isRotating && 'hover:scale-110',
+            isFocused && 'ring-2 ring-ring ring-offset-2 ring-offset-background rounded-full',
+            isDragging && 'cursor-grabbing',
             disabled && 'cursor-not-allowed'
           )}
           style={{
             left: `${clampedValue.x}%`,
             top: `${clampedValue.y}%`,
             transform: `translate(-50%, -50%) rotate(${clampedValue.rotation}deg) scale(${depthScale})`,
+            transition: (isDragging || isRotating) ? 'none' : 'transform 150ms ease-out',
           }}
           onPointerDown={handlePointerDown}
           onKeyDown={handleKeyDown}
@@ -381,24 +382,44 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
         >
           <Flashlight
             className={cn(
-              'w-full h-full text-primary drop-shadow-sm',
+              'w-full h-full text-primary drop-shadow-lg',
               isDragging && 'text-primary/80'
             )}
             style={{
-              filter: `brightness(${1 + (clampedValue.tilt / 180)})`, // Visual tilt indication
+              filter: `brightness(${1 + (clampedValue.tilt / 180)}) drop-shadow(0 2px 4px rgba(0,0,0,0.3))`,
             }}
           />
 
-          {/* Rotation Handle */}
+          {/* Rotation Handle - More visible pivot point */}
           <div
             className={cn(
-              'absolute -top-2 -right-2 w-4 h-4 bg-primary/20 border border-primary rounded-full cursor-grab',
-              'hover:bg-primary/30 hover:scale-110',
-              isRotating && 'cursor-grabbing bg-primary/40 scale-110'
+              'absolute -top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5',
+              'cursor-grab select-none',
+              isRotating && 'cursor-grabbing'
             )}
             onPointerDown={handleRotationPointerDown}
             aria-hidden="true"
-          />
+          >
+            {/* Connecting line */}
+            <div className={cn(
+              'w-0.5 h-3 rounded-full',
+              isRotating ? 'bg-primary' : 'bg-primary/60'
+            )} />
+            {/* Handle circle */}
+            <div
+              className={cn(
+                'w-5 h-5 rounded-full border-2 flex items-center justify-center',
+                'shadow-md backdrop-blur-sm',
+                isRotating 
+                  ? 'bg-primary border-primary-foreground scale-125' 
+                  : 'bg-primary/80 border-primary-foreground/80 hover:bg-primary hover:scale-110',
+                'transition-all duration-100'
+              )}
+            >
+              {/* Inner rotation indicator */}
+              <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground/90" />
+            </div>
+          </div>
         </div>
       </div>
 

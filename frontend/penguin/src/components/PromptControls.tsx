@@ -25,16 +25,16 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
 
   return (
     <TooltipProvider>
-      <div className="space-y-3 md:space-y-4">
-        <Label htmlFor="prompt-input" className="text-xs md:text-sm font-medium">
+      <div className="space-y-3 md:space-y-4 mb-1">
+        {/* <Label htmlFor="prompt-input" className="text-xs md:text-sm font-medium">
           Scene Description
-        </Label>
+        </Label> */}
         <div className="flex gap-2 items-start">
           <Textarea
             id="prompt-input"
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
-            placeholder="Describe your scene... (minimum 10 characters)"
+            placeholder="Describe your scene..."
             rows={3}
             aria-describedby="prompt-help"
             aria-required="true"
@@ -45,20 +45,20 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
               <Button
                 onClick={onGenerate}
                 disabled={isDisabled}
-                className="h-9 md:h-10 px-3 md:px-4 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] text-sm self-start"
+                className="h-9 mt-5 md:h-10 px-3 md:px-4 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] text-sm self-start"
                 aria-label={`Generate image from configuration (${generateShortcut})`}
               >
                 <Wand2 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="text-xs">Generate ({generateShortcut})</p>
+              <p className="text-xs"> Generate ({generateShortcut})</p>
             </TooltipContent>
           </Tooltip>
         </div>
-        <p id="prompt-help" className="text-xs text-muted-foreground">
+        {/* <p id="prompt-help" className="text-xs text-muted-foreground">
           Minimum 10 characters required
-        </p>
+        </p> */}
       </div>
     </TooltipProvider>
   );

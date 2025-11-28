@@ -35,7 +35,7 @@ export const BackgroundSection: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        <Label htmlFor="background-setting" className="text-base font-medium">
+        <Label htmlFor="background-setting" className="text-base font-medium ">
           Background Setting
         </Label>
         <Textarea
@@ -43,12 +43,12 @@ export const BackgroundSection: React.FC = () => {
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
           placeholder="Describe the background environment..."
-          rows={4}
-          className="resize-none"
+          rows={10}
+          className="mt-3 resize-none"
         />
-        <p className="text-sm text-muted-foreground">
+        {/* <p className="text-sm text-muted-foreground">
           Describe the environment, setting, or backdrop for your scene
-        </p>
+        </p> */}
       </div>
     </div>
   );
