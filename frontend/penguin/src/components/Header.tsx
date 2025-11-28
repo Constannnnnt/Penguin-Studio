@@ -1,6 +1,7 @@
-import { Sparkles, SidebarOpen, SlidersHorizontal } from 'lucide-react';
+// import { Sparkles, SidebarOpen, SlidersHorizontal } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
+import PenguinSVG from '@/assets/penguin';
 
 interface HeaderProps {
   onToggleLibrary?: () => void;
@@ -18,7 +19,10 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" role="banner">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+        {/* <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" /> */}
+        <div className="flex items-center gap-2">
+          <PenguinSVG/>
+        </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Penguin Studio</p>
         </div>

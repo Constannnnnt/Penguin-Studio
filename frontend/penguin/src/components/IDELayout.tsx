@@ -54,15 +54,15 @@ export const IDELayout: React.FC = () => {
 
   const handleControlsResize = (delta: number): void => {
     if (ControlsPanelCollapsed) return;
-    const minWidth = window.innerWidth < 1536 ? 280 : 300;
-    const maxWidth = window.innerWidth < 1536 ? 400 : 500;
+    const minWidth = window.innerWidth < 1920 ? 280 : 300;
+    const maxWidth = window.innerWidth < 1920 ? 400 : 500;
     const newWidth = Math.min(maxWidth, Math.max(minWidth, ControlsPanelWidth - delta));
     setControlsPanelWidth(newWidth);
   };
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
-      <div className="border-b border-border bg-background/80 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="border-b border-border bg-background/80 px-4 py-1 shadow-sm backdrop-blur">
         <Header
           // onToggleLibrary={toggleLibraryPanel}
           // onToggleControls={toggleControlsPanel}
