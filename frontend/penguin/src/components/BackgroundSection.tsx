@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useRef} from 'react';
 import { useConfigStore } from '@/store/configStore';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +13,7 @@ export const BackgroundSection: React.FC = () => {
   );
 
   const [localValue, setLocalValue] = React.useState(backgroundSetting);
+  const isInitialMount = useRef(true);
 
   const debouncedUpdate = useDebouncedCallback(
     (value: string) => {
@@ -23,11 +24,14 @@ export const BackgroundSection: React.FC = () => {
   );
 
   useEffect(() => {
-    setLocalValue(backgroundSetting);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      setLocalValue(backgroundSetting);
+    }
   }, [backgroundSetting]);
 
   useEffect(() => {
-    if (localValue !== backgroundSetting) {
+    if (!isInitialMount.current && localValue !== backgroundSetting) {
       debouncedUpdate(localValue);
     }
   }, [localValue, backgroundSetting, debouncedUpdate]);

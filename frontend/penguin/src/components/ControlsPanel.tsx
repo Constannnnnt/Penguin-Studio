@@ -60,8 +60,8 @@ export const ControlsPanel: React.FC = () => {
         composition: config.aesthetics.composition || baseMetadata?.aesthetics?.composition || '',
         color_scheme: config.aesthetics.color_scheme || baseMetadata?.aesthetics?.color_scheme || '',
         mood_atmosphere: config.aesthetics.mood_atmosphere || baseMetadata?.aesthetics?.mood_atmosphere || '',
-        style_medium: config.aesthetics.style_medium || baseMetadata?.aesthetics?.style_medium || '',
-        aesthetic_style: config.aesthetics.aesthetic_style || baseMetadata?.aesthetics?.aesthetic_style || '',
+        style_medium: config.aesthetics.style_medium || baseMetadata?.style_medium || '',
+        aesthetic_style: config.aesthetics.aesthetic_style || '',
       },
       photographic_characteristics: {
         depth_of_field: toText(
@@ -78,7 +78,7 @@ export const ControlsPanel: React.FC = () => {
           baseMetadata?.photographic_characteristics?.lens_focal_length || '',
       },
       style_medium: config.style_medium || baseMetadata?.style_medium || '',
-      artistic_style: config.artistic_style || baseMetadata?.artistic_style || '',
+      artistic_style: config.artistic_style || '',
       context: config.context || baseMetadata?.context || '',
     };
   }, [config, segmentationResults]);
@@ -143,7 +143,7 @@ export const ControlsPanel: React.FC = () => {
             size="sm"
             variant="secondary"
             onClick={handleRefineAndSave}
-            disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine}
+            disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
           >
             <Sparkles className="h-4 w-4 mr-2" />
             {isSavingMetadata ? 'Saving...' : 'Refine'}

@@ -61,7 +61,7 @@ export interface MaskManipulationState {
   isHidden: boolean;
 }
 
-export interface ExampleMetadata {
+export interface StructedPrompt {
   short_description: string;
   objects: Array<{
     description: string;
@@ -102,7 +102,7 @@ export interface SegmentationResponse {
   masks: MaskMetadata[];
   processing_time_ms: number;
   timestamp: string;
-  metadata?: ExampleMetadata;
+  metadata?: StructedPrompt;
 }
 
 export interface SegmentationState {
@@ -155,7 +155,7 @@ const toAbsoluteUrl = (url: string): string => {
   return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 };
 
-const normalizeResults = (results: SegmentationResponse, metadata?: ExampleMetadata): SegmentationResponse => {
+const normalizeResults = (results: SegmentationResponse, metadata?: StructedPrompt): SegmentationResponse => {
   const meta = metadata ?? (results as any).metadata;
   return {
     ...results,
@@ -215,14 +215,14 @@ const deriveExampleId = (file: File): string | null => {
   return base || null;
 };
 
-const tryFetchSidecarMetadata = async (file: File): Promise<{ blob: Blob; data: ExampleMetadata } | null> => {
+const tryFetchSidecarMetadata = async (file: File): Promise<{ blob: Blob; data: StructedPrompt } | null> => {
   const exampleId = deriveExampleId(file);
   if (!exampleId) return null;
 
   try {
     const res = await fetch(`${API_BASE_URL}/examples/${exampleId}.json`);
     if (!res.ok) return null;
-    const data: ExampleMetadata = await res.json();
+    const data: StructedPrompt = await res.json();
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     return { blob, data };
   } catch {
@@ -304,7 +304,7 @@ export const useSegmentationStore = create<SegmentationState>()(
           const formData = new FormData();
           formData.append('image', file);
           let metadataToSend = metadata;
-          let metadataParsed: ExampleMetadata | undefined;
+          let metadataParsed: StructedPrompt | undefined;
 
           if (!metadataToSend) {
             const sidecar = await tryFetchSidecarMetadata(file);
