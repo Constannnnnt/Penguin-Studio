@@ -583,9 +583,6 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     Returns the image, structured prompt, all prompt versions, and masks.
     No segmentation is performed - just reads existing files.
     """
-    from datetime import datetime
-    import glob
-    
     generation_dir = settings.outputs_dir / generation_id
     
     if not generation_dir.exists():

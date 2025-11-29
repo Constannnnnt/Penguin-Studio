@@ -278,7 +278,7 @@ export const useConfigStore = create<ConfigState>()(
             const lighting = (sp.lighting as Record<string, unknown>) || {};
             const aesthetics = (sp.aesthetics as Record<string, unknown>) || {};
             const photo = (sp.photographic_characteristics as Record<string, unknown>) || {};
-            const objects = (sp.objects as Array<Record<string, unknown>>) || [];
+            const rawObjects = sp.objects as Array<Record<string, unknown>> | undefined;
 
             const newBackgroundSetting = (sp.background_setting as string) || state.config.background_setting;
             const newLightingConditions = (lighting.conditions as string) || state.config.lighting.conditions;
@@ -290,15 +290,9 @@ export const useConfigStore = create<ConfigState>()(
             const newColorScheme = ((aesthetics.color_scheme as string) || state.config.aesthetics.color_scheme) as ColorScheme;
             const newMoodAtmosphere = ((aesthetics.mood_atmosphere as string) || state.config.aesthetics.mood_atmosphere) as MoodType;
 
-            return {
-              config: {
-                ...state.config,
-                short_description: (sp.short_description as string) || state.config.short_description,
-                background_setting: newBackgroundSetting,
-                style_medium: newStyleMedium,
-                artistic_style: newAestheticStyle,
-                context: (sp.context as string) || state.config.context,
-                objects: objects.map((obj) => ({
+            // Only update objects if there are new ones, otherwise keep existing
+            const newObjects = rawObjects && rawObjects.length > 0
+              ? rawObjects.map((obj) => ({
                   description: (obj.description as string) || '',
                   location: (obj.location as string) || 'center',
                   relative_size: (obj.relative_size as string) || 'medium',
@@ -309,7 +303,18 @@ export const useConfigStore = create<ConfigState>()(
                   pose: (obj.pose as string) || undefined,
                   expression: (obj.expression as string) || undefined,
                   action: (obj.action as string) || undefined,
-                })) as SceneObject[],
+                })) as SceneObject[]
+              : state.config.objects;
+
+            return {
+              config: {
+                ...state.config,
+                short_description: (sp.short_description as string) || state.config.short_description,
+                background_setting: newBackgroundSetting,
+                style_medium: newStyleMedium,
+                artistic_style: newAestheticStyle,
+                context: (sp.context as string) || state.config.context,
+                objects: newObjects,
                 lighting: {
                   ...state.config.lighting,
                   conditions: newLightingConditions,

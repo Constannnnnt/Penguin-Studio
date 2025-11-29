@@ -3,3 +3,4 @@ checkpoints
 outputs
 thirdparty
 uploads
+.env

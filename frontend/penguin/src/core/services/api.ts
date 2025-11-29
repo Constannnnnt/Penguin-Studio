@@ -1,6 +1,7 @@
 import type {
   PenguinConfig,
   GenerationResponse,
+  LoadGenerationResponse,
   ValidationResponse,
   Presets,
   LightingDirectionValue,

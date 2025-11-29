@@ -87,20 +87,20 @@ export const ControlsPanel: React.FC = () => {
     };
   }, [config, segmentationResults]);
 
-  const handleSaveMetadata = useCallback(async () => {
-    if (!segmentationResults?.result_id) {
-      toast({
-        title: 'No segmented image',
-        description: 'Upload and segment an image before saving metadata.',
-        variant: 'destructive',
-      });
-      return;
+  const handleSaveMetadata = useCallback(async (): Promise<boolean> => {
+    const resultId = segmentationResults?.result_id;
+    if (!resultId) {
+      return false;
     }
 
-    setIsSavingMetadata(true);
+    // Skip metadata save for generation folders (they use save-prompt endpoint)
+    if (resultId.startsWith('gen-')) {
+      return true;
+    }
+
     try {
       const response = await fetch(
-        `${env.apiBaseUrl}/api/v1/results/${segmentationResults.result_id}/metadata`,
+        `${env.apiBaseUrl}/api/v1/results/${resultId}/metadata`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -109,31 +109,27 @@ export const ControlsPanel: React.FC = () => {
       );
 
       if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Failed to save metadata');
+        return false;
       }
 
-      toast({
-        title: 'Metadata saved',
-        description: 'Updated JSON stored alongside the result.',
-      });
       await refreshFileTree();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save metadata';
-      toast({
-        title: 'Save failed',
-        description: message,
-        variant: 'destructive',
-      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [metadataPayload, refreshFileTree, segmentationResults?.result_id]);
+
+  const handleRefineAndSave = useCallback(async () => {
+    setIsSavingMetadata(true);
+    toast({ title: 'Refining...', description: 'Generating new image' });
+    
+    try {
+      await handleSaveMetadata();
+      workspaceHandlers?.handleRefine?.();
     } finally {
       setIsSavingMetadata(false);
     }
-  }, [metadataPayload, refreshFileTree, segmentationResults?.result_id, toast]);
-
-  const handleRefineAndSave = useCallback(async () => {
-    await handleSaveMetadata();
-    workspaceHandlers?.handleRefine?.();
-  }, [handleSaveMetadata, workspaceHandlers]);
+  }, [handleSaveMetadata, toast, workspaceHandlers]);
 
   const handleExportScene = useCallback(async () => {
     setIsExporting(true);

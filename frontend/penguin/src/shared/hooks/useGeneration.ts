@@ -86,9 +86,8 @@ export const useGeneration = () => {
       await runPostGenerationPipeline(response.id, response.structured_prompt);
       
     } else if (response.status === 'failed') {
-      const errorMessage = response.error || 'Generation failed';
-      setError(errorMessage);
-      showError('Generation Failed', errorMessage);
+      setError(response.error || 'Generation failed');
+      showError('Failed', 'Generation error');
     }
   }, [runPostGenerationPipeline]);
 
@@ -110,16 +109,15 @@ export const useGeneration = () => {
           return;
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to check generation status';
+        const errorMessage = err instanceof Error ? err.message : 'Status check failed';
         setError(errorMessage);
-        showError('Generation Error', errorMessage);
+        console.error('[Generation] Poll error:', err);
         return;
       }
     }
 
-    const timeoutMessage = 'Generation timed out. Please try again.';
-    setError(timeoutMessage);
-    showError('Generation Timeout', timeoutMessage);
+    setError('Generation timed out');
+    showError('Timeout', 'Please try again');
   };
 
   /**
@@ -141,9 +139,9 @@ export const useGeneration = () => {
         await handleResponse(response);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      const errorMessage = err instanceof Error ? err.message : 'Generation failed';
       setError(errorMessage);
-      showError('Generation Error', errorMessage);
+      showError('Failed', 'Generation error');
     } finally {
       setIsLoading(false);
     }
@@ -154,7 +152,9 @@ export const useGeneration = () => {
    */
   const refineImage = async (config: PenguinConfig): Promise<void> => {
     if (lastSeedRef.current === null) {
-      showError('Refinement Error', 'No generated image to refine. Generate an image first.');
+      // Silent fail - just log, don't show error toast
+      console.warn('[Generation] No seed available for refinement');
+      setError('Generate an image first');
       return;
     }
 
@@ -170,12 +170,19 @@ export const useGeneration = () => {
         await handleResponse(response);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      const errorMessage = err instanceof Error ? err.message : 'Refinement failed';
       setError(errorMessage);
-      showError('Refinement Error', errorMessage);
+      showError('Failed', 'Refine error');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /**
+   * Set seed from loaded generation
+   */
+  const setSeed = (seed: number): void => {
+    lastSeedRef.current = seed;
   };
 
   /**
@@ -191,6 +198,7 @@ export const useGeneration = () => {
   return {
     generateImage,
     refineImage,
+    setSeed,
     clearGeneration,
     isLoading,
     generatedImage,

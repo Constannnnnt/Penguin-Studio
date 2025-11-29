@@ -279,6 +279,21 @@ export interface GenerationResponse {
   error?: string;
 }
 
+export interface LoadGenerationMask {
+  mask_id: string;
+  mask_url: string;
+  label: string;
+}
+
+export interface LoadGenerationResponse {
+  generation_id: string;
+  image_url: string;
+  structured_prompt: Record<string, unknown>;
+  prompt_versions: string[];
+  masks: LoadGenerationMask[];
+  metadata?: Record<string, unknown>;
+}
+
 export interface ValidationError {
   field: string;
   message: string;

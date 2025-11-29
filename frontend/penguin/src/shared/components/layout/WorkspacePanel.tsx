@@ -34,7 +34,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const metadataInputRef = useRef<HTMLInputElement>(null);
 
-  const { generateImage, refineImage, isLoading, generatedImage, error } = useGeneration();
+  const { generateImage, refineImage, setSeed, isLoading, generatedImage, error } = useGeneration();
+  const currentSeed = useFileSystemStore((state) => state.currentSeed);
   const [libraryImage, setLibraryImage] = useState<string | null>(null);
   const viewerStyle: React.CSSProperties = {
     width: '100%',
@@ -153,6 +154,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
       setLibraryImage(null);
     }
   }, [selectedFileUrl]);
+
+  // Set seed when loading a generation from library
+  useEffect(() => {
+    if (currentSeed !== null) {
+      setSeed(currentSeed);
+    }
+  }, [currentSeed, setSeed]);
 
   const showSegmentedView = viewMode === 'segmented' && segmentationResults;
   const showSegmentationOriginal = viewMode === 'original' && segmentationResults;
