@@ -1,0 +1,59 @@
+import React, {useEffect, useRef} from 'react';
+import { useConfigStore } from '@/features/scene/store/configStore';
+import { Label } from '@/shared/components/ui/label';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { useDebouncedCallback } from '@/shared/lib/performance';
+
+export const BackgroundSection: React.FC = () => {
+  const backgroundSetting = useConfigStore(
+    (state) => state.sceneConfig.background_setting
+  );
+  const updateSceneConfig = useConfigStore(
+    (state) => state.updateSceneConfig
+  );
+
+  const [localValue, setLocalValue] = React.useState(backgroundSetting);
+  const isInitialMount = useRef(true);
+
+  const debouncedUpdate = useDebouncedCallback(
+    (value: string) => {
+      updateSceneConfig('background_setting', value);
+    },
+    500,
+    [updateSceneConfig]
+  );
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      setLocalValue(backgroundSetting);
+    }
+  }, [backgroundSetting]);
+
+  useEffect(() => {
+    if (!isInitialMount.current && localValue !== backgroundSetting) {
+      debouncedUpdate(localValue);
+    }
+  }, [localValue, backgroundSetting, debouncedUpdate]);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <Label htmlFor="background-setting" className="text-base font-medium ">
+          Background Setting
+        </Label>
+        <Textarea
+          id="background-setting"
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+          placeholder="Describe the background environment..."
+          rows={10}
+          className="mt-3 resize-none"
+        />
+        {/* <p className="text-sm text-muted-foreground">
+          Describe the environment, setting, or backdrop for your scene
+        </p> */}
+      </div>
+    </div>
+  );
+};

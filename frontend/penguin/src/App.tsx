@@ -1,6 +1,5 @@
-import { ThemeProvider, IDELayout } from "@/components";
-import { ErrorBoundary } from "@/components";
-import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider, IDELayout, ErrorBoundary } from "@/shared/components";
+import { Toaster } from "@/shared/components/ui/sonner";
 import "./App.css";
 
 function App() {

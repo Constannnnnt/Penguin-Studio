@@ -1,5 +1,5 @@
 
-const PenguinSVG = (props) => (
+const PenguinSVG = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     width={48}
     height={48}
