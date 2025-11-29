@@ -66,6 +66,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   }, [shortDescription]);
 
   const configRef = useRef(config);
+  const localPromptRef = useRef(localPrompt);
   const generatedImageRef = useRef<string | null>(generatedImage);
   const generateImageRef = useRef(generateImage);
   const refineImageRef = useRef(refineImage);
@@ -74,6 +75,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  useEffect(() => {
+    localPromptRef.current = localPrompt;
+  }, [localPrompt]);
 
   useEffect(() => {
     generatedImageRef.current = generatedImage;
@@ -92,14 +97,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   }, [refineImage]);
 
   const handleGenerate = (): void => {
-    generateImageRef.current?.(configRef.current);
+    // Generate uses just the text prompt (simple text-to-image)
+    generateImageRef.current?.(localPromptRef.current);
   };
 
   const handleRefine = (): void => {
-    const currentImage = generatedImageRef.current || libraryImageRef.current;
-    if (currentImage) {
-      refineImageRef.current?.(configRef.current, currentImage);
-    }
+    // Refine uses the full structured config + seed from previous generation
+    refineImageRef.current?.(configRef.current);
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {

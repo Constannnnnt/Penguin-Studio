@@ -24,11 +24,8 @@ describe('LightingDirectionControl', () => {
       />
     );
 
-    expect(screen.getByText('Lighting Direction')).toBeInTheDocument();
-    expect(screen.getByText('Position:')).toBeInTheDocument();
-    expect(screen.getByText('Orientation:')).toBeInTheDocument();
-    expect(screen.getByText('X: 50%')).toBeInTheDocument();
-    expect(screen.getByText('Y: 30%')).toBeInTheDocument();
+    expect(screen.getByText(/Horizontal: 50%/)).toBeInTheDocument();
+    expect(screen.getByText(/Vertical: 30%/)).toBeInTheDocument();
   });
 
   it('displays current values correctly', () => {
@@ -46,10 +43,10 @@ describe('LightingDirectionControl', () => {
       />
     );
 
-    expect(screen.getByText('X: 75%')).toBeInTheDocument();
-    expect(screen.getByText('Y: 25%')).toBeInTheDocument();
-    expect(screen.getByText('Rotation: 45°')).toBeInTheDocument();
-    expect(screen.getByText('Tilt: -30°')).toBeInTheDocument();
+    expect(screen.getByText(/Horizontal: 75%/)).toBeInTheDocument();
+    expect(screen.getByText(/Vertical: 25%/)).toBeInTheDocument();
+    expect(screen.getByText(/Angle: 45°/)).toBeInTheDocument();
+    expect(screen.getByText(/Depth: -30/)).toBeInTheDocument();
   });
 
   it('clamps values to valid ranges', () => {
@@ -67,13 +64,15 @@ describe('LightingDirectionControl', () => {
       />
     );
 
-    expect(screen.getByText('X: 100%')).toBeInTheDocument();
-    expect(screen.getByText('Y: 0%')).toBeInTheDocument();
-    expect(screen.getByText('Rotation: 90°')).toBeInTheDocument();
-    expect(screen.getByText('Tilt: 90°')).toBeInTheDocument();
+    expect(screen.getByText(/Horizontal: 100%/)).toBeInTheDocument();
+    expect(screen.getByText(/Vertical: 0%/)).toBeInTheDocument();
+    expect(screen.getByText(/Angle: 90°/)).toBeInTheDocument();
+    expect(screen.getByText(/Depth: 90/)).toBeInTheDocument();
   });
 
-  it('handles keyboard navigation', () => {
+  it('handles keyboard navigation', async () => {
+    vi.useFakeTimers();
+    
     render(
       <LightingDirectionControl
         value={mockValue}
@@ -85,6 +84,7 @@ describe('LightingDirectionControl', () => {
     
     // Right arrow should increase x
     fireEvent.keyDown(flashlight, { key: 'ArrowRight' });
+    vi.runAllTimers();
     expect(mockOnChange).toHaveBeenCalledWith({
       ...mockValue,
       x: 51,
@@ -93,6 +93,7 @@ describe('LightingDirectionControl', () => {
     // Left arrow should decrease x
     mockOnChange.mockClear();
     fireEvent.keyDown(flashlight, { key: 'ArrowLeft' });
+    vi.runAllTimers();
     expect(mockOnChange).toHaveBeenCalledWith({
       ...mockValue,
       x: 49,
@@ -101,6 +102,7 @@ describe('LightingDirectionControl', () => {
     // Up arrow should decrease y
     mockOnChange.mockClear();
     fireEvent.keyDown(flashlight, { key: 'ArrowUp' });
+    vi.runAllTimers();
     expect(mockOnChange).toHaveBeenCalledWith({
       ...mockValue,
       y: 29,
@@ -109,10 +111,13 @@ describe('LightingDirectionControl', () => {
     // Down arrow should increase y
     mockOnChange.mockClear();
     fireEvent.keyDown(flashlight, { key: 'ArrowDown' });
+    vi.runAllTimers();
     expect(mockOnChange).toHaveBeenCalledWith({
       ...mockValue,
       y: 31,
     });
+    
+    vi.useRealTimers();
   });
 
   it('handles rotation and tilt keyboard controls', () => {

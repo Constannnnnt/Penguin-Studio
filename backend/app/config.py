@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, Optional
 
-from pydantic import Field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,10 +18,17 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")
 
-    cors_origins: List[str] = Field(
-        default=["http://localhost:5173"],
-        description="Allowed CORS origins",
+    cors_origins_str: str = Field(
+        default="http://localhost:5173",
+        alias="cors_origins",
+        description="Allowed CORS origins (comma-separated)",
     )
+
+    @computed_field
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.cors_origins_str.split(",") if origin.strip()]
 
     device: str = Field(default="cuda", description="Device for model (cuda or cpu)")
     confidence_threshold: float = Field(
@@ -50,6 +57,11 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", description="Logging level")
     log_format: Literal["json", "text"] = Field(
         default="text", description="Logging format (json or text)"
+    )
+
+    # Bria API Configuration
+    bria_api_key: Optional[str] = Field(
+        default=None, description="Bria API key for image generation"
     )
 
 

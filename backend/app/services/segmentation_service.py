@@ -3,7 +3,7 @@ import json
 import math
 import time
 from typing import Any, Callable, Dict, List, Optional
-
+from pathlib import Path
 import torch
 from fastapi import UploadFile
 from loguru import logger
@@ -40,6 +40,8 @@ class SegmentationService:
         metadata_file: Optional[UploadFile] = None,
         prompts: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
+        output_dir: Optional[Path] = None,
+        result_id_override: Optional[str] = None,
     ) -> SegmentationResponse:
         """
         Main segmentation workflow.
@@ -50,9 +52,21 @@ class SegmentationService:
         3. Run SAM3 detection
         4. Generate and save mask images
         5. Create response with URLs
+        
+        Args:
+            image_file: Uploaded image file
+            metadata_file: Optional metadata JSON file
+            prompts: Optional text prompts for segmentation
+            progress_callback: Optional callback for progress updates
+            output_dir: Optional custom output directory (for saving masks with generations)
+            result_id_override: Optional result ID to use instead of generating new one
         """
         start_time = time.time()
-        result_id = FileService.generate_result_id()
+        result_id = result_id_override or FileService.generate_result_id()
+        
+        # Use custom output dir or default
+        actual_output_dir = output_dir or (self.file_service.outputs_dir / result_id)
+        actual_output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             if progress_callback:
@@ -60,7 +74,15 @@ class SegmentationService:
 
             if progress_callback:
                 progress_callback(10, "Saving uploaded image...")
-            image_path = await self.file_service.save_upload(image_file, result_id)
+            
+            # If custom output_dir, save image there; otherwise use default
+            if output_dir:
+                image_path = output_dir / "original.png"
+                content = await image_file.read()
+                await image_file.seek(0)
+                image_path.write_bytes(content)
+            else:
+                image_path = await self.file_service.save_upload(image_file, result_id)
 
             loop = asyncio.get_event_loop()
             image = await loop.run_in_executor(
@@ -97,14 +119,17 @@ class SegmentationService:
             if progress_callback:
                 progress_callback(60, "Generating mask images...")
             mask_urls = await self._generate_mask_images(
-                detection_result, image, result_id
+                detection_result, image, result_id, output_dir=output_dir
             )
 
             if progress_callback:
                 progress_callback(80, "Calculating mask metadata...")
-            original_image_path = self.file_service.outputs_dir / result_id / "original.png"
-            original_image_path.parent.mkdir(parents=True, exist_ok=True)
-            await loop.run_in_executor(None, image.save, original_image_path)
+            
+            # Save original image (skip if using custom output_dir with existing image)
+            if not output_dir:
+                original_image_path = self.file_service.outputs_dir / result_id / "original.png"
+                original_image_path.parent.mkdir(parents=True, exist_ok=True)
+                await loop.run_in_executor(None, image.save, original_image_path)
 
             masks_metadata = self._calculate_mask_metadata(
                 detection_result, mask_urls, img_width, img_height, prompt_info, parsed_metadata
@@ -115,9 +140,16 @@ class SegmentationService:
             if progress_callback:
                 progress_callback(100, "Segmentation complete!")
 
+            # Use appropriate URL based on output directory
+            if output_dir:
+                folder_name = output_dir.name
+                original_url = f"/outputs/{folder_name}/generated.png"
+            else:
+                original_url = f"/outputs/{result_id}/original.png"
+
             response = SegmentationResponse(
                 result_id=result_id,
-                original_image_url=f"/outputs/{result_id}/original.png",
+                original_image_url=original_url,
                 masks=masks_metadata,
                 processing_time_ms=processing_time_ms,
                 metadata=parsed_metadata if isinstance(parsed_metadata, dict) else None,
@@ -180,7 +212,8 @@ class SegmentationService:
             raise RuntimeError(f"Failed to read metadata: {e}") from e
 
     async def _generate_mask_images(
-        self, detection_result: DetectionResult, original_image: Image.Image, result_id: str
+        self, detection_result: DetectionResult, original_image: Image.Image, result_id: str,
+        output_dir: Optional[Path] = None
     ) -> List[str]:
         """Convert mask tensors to PNG files and return URLs."""
         mask_urls = []
@@ -191,7 +224,7 @@ class SegmentationService:
             for i in range(num_masks):
                 mask_tensor = detection_result.masks[i]
                 mask_url = await self.file_service.save_mask(
-                    mask_tensor, result_id, i
+                    mask_tensor, result_id, i, output_dir=output_dir
                 )
                 mask_urls.append(mask_url)
 

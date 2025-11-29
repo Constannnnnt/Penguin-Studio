@@ -11,6 +11,8 @@ import type {
   CompositionType,
   ColorScheme,
   MoodType,
+  StyleMedium,
+  ArtisticStyle,
 } from '@/core/types';
 
 // ============================================================================
@@ -266,6 +268,88 @@ export const useConfigStore = create<ConfigState>()(
               },
             },
           })),
+
+        /**
+         * Updates both config and sceneConfig from Bria's structured prompt response
+         */
+        updateConfigFromStructuredPrompt: (structuredPrompt: Record<string, unknown>) =>
+          set((state) => {
+            const sp = structuredPrompt;
+            const lighting = (sp.lighting as Record<string, unknown>) || {};
+            const aesthetics = (sp.aesthetics as Record<string, unknown>) || {};
+            const photo = (sp.photographic_characteristics as Record<string, unknown>) || {};
+            const objects = (sp.objects as Array<Record<string, unknown>>) || [];
+
+            const newBackgroundSetting = (sp.background_setting as string) || state.config.background_setting;
+            const newLightingConditions = (lighting.conditions as string) || state.config.lighting.conditions;
+            const newCameraAngle = (photo.camera_angle as string) || state.config.photographic_characteristics.camera_angle;
+            const newLensFocalLength = (photo.lens_focal_length as string) || state.config.photographic_characteristics.lens_focal_length;
+            const newStyleMedium = ((sp.style_medium as string) || state.config.style_medium) as StyleMedium;
+            const newAestheticStyle = ((sp.artistic_style as string) || state.config.artistic_style) as ArtisticStyle;
+            const newComposition = ((aesthetics.composition as string) || state.config.aesthetics.composition) as CompositionType;
+            const newColorScheme = ((aesthetics.color_scheme as string) || state.config.aesthetics.color_scheme) as ColorScheme;
+            const newMoodAtmosphere = ((aesthetics.mood_atmosphere as string) || state.config.aesthetics.mood_atmosphere) as MoodType;
+
+            return {
+              config: {
+                ...state.config,
+                short_description: (sp.short_description as string) || state.config.short_description,
+                background_setting: newBackgroundSetting,
+                style_medium: newStyleMedium,
+                artistic_style: newAestheticStyle,
+                context: (sp.context as string) || state.config.context,
+                objects: objects.map((obj) => ({
+                  description: (obj.description as string) || '',
+                  location: (obj.location as string) || 'center',
+                  relative_size: (obj.relative_size as string) || 'medium',
+                  shape_and_color: (obj.shape_and_color as string) || '',
+                  texture: (obj.texture as string) || undefined,
+                  appearance_details: (obj.appearance_details as string) || undefined,
+                  orientation: (obj.orientation as string) || 'front-facing',
+                  pose: (obj.pose as string) || undefined,
+                  expression: (obj.expression as string) || undefined,
+                  action: (obj.action as string) || undefined,
+                })) as SceneObject[],
+                lighting: {
+                  ...state.config.lighting,
+                  conditions: newLightingConditions,
+                },
+                aesthetics: {
+                  ...state.config.aesthetics,
+                  composition: newComposition,
+                  color_scheme: newColorScheme,
+                  mood_atmosphere: newMoodAtmosphere,
+                },
+                photographic_characteristics: {
+                  ...state.config.photographic_characteristics,
+                  camera_angle: newCameraAngle,
+                  lens_focal_length: newLensFocalLength,
+                },
+              },
+              // Also update sceneConfig for the scene panel
+              sceneConfig: {
+                ...state.sceneConfig,
+                background_setting: newBackgroundSetting,
+                lighting: {
+                  ...state.sceneConfig.lighting,
+                  conditions: newLightingConditions,
+                },
+                aesthetics: {
+                  ...state.sceneConfig.aesthetics,
+                  style_medium: newStyleMedium,
+                  aesthetic_style: newAestheticStyle,
+                  composition: newComposition,
+                  color_scheme: newColorScheme,
+                  mood_atmosphere: newMoodAtmosphere,
+                },
+                photographic_characteristics: {
+                  ...state.sceneConfig.photographic_characteristics,
+                  camera_angle: newCameraAngle,
+                  lens_focal_length: newLensFocalLength,
+                },
+              },
+            };
+          }),
       }),
       {
         name: 'penguin-config-storage',

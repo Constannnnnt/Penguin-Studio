@@ -8,7 +8,7 @@ import type { SaveResult, ValidationResult } from './types';
 export const notifySaveSuccess = (result: SaveResult): void => {
   if (result.success && result.filename) {
     toast.success('Scene exported successfully', {
-      description: `Saved as ${result.filename}`,
+      description: `Refining the scene`,
       duration: 4000,
     });
   }

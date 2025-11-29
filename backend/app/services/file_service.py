@@ -52,11 +52,12 @@ class FileService:
             raise RuntimeError(f"Failed to save uploaded file: {e}") from e
 
     async def save_mask(
-        self, mask_array: torch.Tensor, result_id: str, mask_index: int
+        self, mask_array: torch.Tensor, result_id: str, mask_index: int,
+        output_dir: Optional[Path] = None
     ) -> str:
         """Save mask as PNG and return URL."""
         try:
-            result_dir = self.outputs_dir / result_id
+            result_dir = output_dir or (self.outputs_dir / result_id)
             result_dir.mkdir(parents=True, exist_ok=True)
 
             mask_filename = f"mask_{mask_index}.png"
@@ -82,7 +83,13 @@ class FileService:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, mask_image.save, mask_path)
 
-            mask_url = f"/outputs/{result_id}/{mask_filename}"
+            # Generate URL based on the actual output directory
+            if output_dir:
+                # Extract the folder name from the output_dir path
+                folder_name = output_dir.name
+                mask_url = f"/outputs/{folder_name}/{mask_filename}"
+            else:
+                mask_url = f"/outputs/{result_id}/{mask_filename}"
             logger.debug(f"Saved mask to {mask_path}, URL: {mask_url}")
 
             return mask_url

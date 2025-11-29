@@ -121,6 +121,7 @@ export interface SegmentationState {
 
   uploadImage: (file: File, metadata?: File, promptText?: string) => Promise<void>;
   uploadForSegmentation: (exampleId: string) => Promise<void>;
+  segmentGeneration: (generationId: string) => Promise<void>;
   selectMask: (maskId: string | null) => void;
   hoverMask: (maskId: string | null) => void;
   toggleMasksVisibility: () => void;
@@ -463,6 +464,84 @@ export const useSegmentationStore = create<SegmentationState>()(
               const { message, code } = handleSegmentationError(error);
               set({ error: message, errorCode: code, isProcessing: false, progress: 0, progressMessage: '' });
               console.error('[Segmentation] Example loading error:', error);
+            }
+          }
+        };
+
+        set({ lastOperation: operation });
+        await operation();
+      },
+
+      segmentGeneration: async (generationId: string) => {
+        const operation = async (): Promise<void> => {
+          set({ isProcessing: true, progress: 0, progressMessage: 'Segmenting generated image...', error: null, errorCode: null });
+
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+            const response = await fetch(`${API_BASE_URL}/api/segment-generation/${generationId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              const errorMessage = errorData.detail || errorData.error || 'Segmentation failed';
+              throw new Error(errorMessage);
+            }
+
+            set({ progress: 80, progressMessage: 'Processing results...' });
+
+            const data = await response.json();
+            
+            // Convert response to SegmentationResponse format
+            const results: SegmentationResponse = {
+              result_id: data.result_id || generationId,
+              original_image_url: data.original_image_url,
+              masks: data.masks || [],
+              timestamp: data.timestamp || new Date().toISOString(),
+            };
+
+            const normalizedResults = normalizeResults(results);
+
+            const { preloadImages } = await import('@/shared/hooks/useOptimizedImage');
+            const maskUrls = normalizedResults.masks.map((mask) => mask.mask_url);
+            preloadImages(maskUrls).catch(err => {
+              console.warn('[Segmentation] Failed to preload some mask images:', err);
+            });
+            
+            const maskManipulation = new Map<string, MaskManipulationState>();
+            normalizedResults.masks.forEach(mask => {
+              maskManipulation.set(mask.mask_id, initializeMaskManipulation(mask));
+            });
+            
+            set({
+              results: normalizedResults,
+              maskManipulation,
+              isProcessing: false,
+              progress: 100,
+              progressMessage: 'Complete',
+              error: null,
+              errorCode: null,
+            });
+
+            console.log('[Segmentation] Generation segmentation successful:', generationId);
+
+          } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+              const { message, code } = handleSegmentationError(
+                new Error('Request timed out. Please try again.')
+              );
+              set({ error: message, errorCode: code, isProcessing: false, progress: 0, progressMessage: '' });
+              console.error('[Segmentation] Request timeout for generation:', generationId);
+            } else {
+              const { message, code } = handleSegmentationError(error);
+              set({ error: message, errorCode: code, isProcessing: false, progress: 0, progressMessage: '' });
+              console.error('[Segmentation] Generation segmentation error:', error);
             }
           }
         };

@@ -171,17 +171,70 @@ class PenguinApiClient {
   }
 
   /**
-   * Generate image from configuration
+   * Transform PenguinConfig to backend StructuredPrompt format
    */
-  async generateImage(config: PenguinConfig): Promise<GenerationResponse> {
-    // Validate config before sending
-    const validation = validateConfig(config);
-    if (!validation.valid) {
-      throw new ValidationError("Invalid configuration", validation.errors);
+  private transformToStructuredPrompt(config: PenguinConfig): Record<string, unknown> {
+    const lighting = config.lighting;
+    const direction = lighting.direction;
+    
+    return {
+      short_description: config.short_description,
+      objects: config.objects.map((obj) => ({
+        description: obj.description,
+        location: obj.location,
+        relationship: "",
+        relative_size: obj.relative_size,
+        shape_and_color: obj.shape_and_color,
+        texture: obj.texture || "",
+        appearance_details: obj.appearance_details || "",
+        orientation: obj.orientation,
+        number_of_objects: 1,
+        pose: obj.pose || "",
+        expression: obj.expression || "",
+        action: obj.action || "",
+      })),
+      background_setting: config.background_setting,
+      lighting: {
+        conditions: lighting.conditions,
+        direction: `x:${direction.x}, y:${direction.y}, rotation:${direction.rotation}, tilt:${direction.tilt}`,
+        shadows: lighting.shadows.toString(),
+      },
+      aesthetics: {
+        composition: config.aesthetics.composition,
+        color_scheme: config.aesthetics.color_scheme,
+        mood_atmosphere: config.aesthetics.mood_atmosphere,
+        preference_score: "",
+        aesthetic_score: "",
+      },
+      photographic_characteristics: {
+        camera_angle: config.photographic_characteristics.camera_angle,
+        lens_focal_length: config.photographic_characteristics.lens_focal_length,
+        depth_of_field: config.photographic_characteristics.depth_of_field.toString(),
+        focus: config.photographic_characteristics.focus.toString(),
+      },
+      style_medium: config.style_medium,
+      artistic_style: config.artistic_style,
+      context: config.context,
+    };
+  }
+
+  /**
+   * Generate image from text prompt only (simple text-to-image)
+   */
+  async generateImage(prompt: string): Promise<GenerationResponse> {
+    const sanitizedPrompt = sanitizeInput(prompt);
+    
+    if (!sanitizedPrompt.trim()) {
+      throw new ValidationError("Prompt is required", ["Please enter a text prompt"]);
     }
 
-    // Sanitize inputs
-    const sanitizedConfig = this.sanitizeConfig(config);
+    const generateRequest = {
+      prompt: sanitizedPrompt,
+      aspect_ratio: "1:1",
+      resolution: 1024,
+      num_inference_steps: 50,
+      skip_cache: false,
+    };
 
     try {
       const response = await this.fetchWithTimeout(
@@ -191,7 +244,7 @@ class PenguinApiClient {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(sanitizedConfig),
+          body: JSON.stringify(generateRequest),
         }
       );
 
@@ -218,11 +271,11 @@ class PenguinApiClient {
   }
 
   /**
-   * Refine existing image with new prompt
+   * Refine existing image using structured prompt and seed
    */
   async refineImage(
     config: PenguinConfig,
-    imageUrl: string
+    seed: number
   ): Promise<GenerationResponse> {
     const validation = validateConfig(config);
     if (!validation.valid) {
@@ -230,6 +283,14 @@ class PenguinApiClient {
     }
 
     const sanitizedConfig = this.sanitizeConfig(config);
+    const structuredPrompt = this.transformToStructuredPrompt(sanitizedConfig);
+
+    const refineRequest = {
+      structured_prompt: structuredPrompt,
+      seed,
+      aspect_ratio: "1:1",
+      resolution: 1024,
+    };
 
     try {
       const response = await this.fetchWithTimeout(
@@ -239,10 +300,7 @@ class PenguinApiClient {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            config: sanitizedConfig,
-            image_url: imageUrl,
-          }),
+          body: JSON.stringify(refineRequest),
         }
       );
 
@@ -299,6 +357,72 @@ class PenguinApiClient {
         throw error;
       }
       throw new NetworkError("Failed to fetch generation status");
+    }
+  }
+
+  /**
+   * Load a generation folder with all its data
+   */
+  async loadGeneration(generationId: string): Promise<LoadGenerationResponse> {
+    try {
+      const response = await this.fetchWithTimeout(
+        `${this.baseUrl}/api/load-generation/${generationId}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          errorData.message || `HTTP error! status: ${response.status}`,
+          response.status,
+          errorData
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error instanceof ApiError || error instanceof NetworkError) {
+        throw error;
+      }
+      throw new NetworkError("Failed to load generation");
+    }
+  }
+
+  /**
+   * Save a new version of the structured prompt
+   */
+  async savePromptVersion(
+    generationId: string,
+    structuredPrompt: Record<string, unknown>
+  ): Promise<{ filename: string; timestamp: string }> {
+    try {
+      const response = await this.fetchWithTimeout(
+        `${this.baseUrl}/api/generation/${generationId}/save-prompt`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ structured_prompt: structuredPrompt }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          errorData.message || `HTTP error! status: ${response.status}`,
+          response.status,
+          errorData
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error instanceof ApiError || error instanceof NetworkError) {
+        throw error;
+      }
+      throw new NetworkError("Failed to save prompt version");
     }
   }
 

@@ -33,7 +33,7 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
             id="prompt-input"
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
-            placeholder="Describe your scene..."
+            placeholder="Describe your scene... minimum 10 characters"
             rows={3}
             aria-describedby="prompt-help"
             aria-required="true"

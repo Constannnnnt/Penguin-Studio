@@ -271,8 +271,12 @@ export interface GenerationResponse {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   image_url?: string;
+  structured_prompt?: Record<string, unknown>;
+  seed?: number;
+  generation_time_ms?: number;
+  ip_warning?: string;
+  from_cache?: boolean;
   error?: string;
-  created_at: string;
 }
 
 export interface ValidationError {
@@ -315,4 +319,5 @@ export interface ConfigState {
   setSelectedObject: (index: number | null) => void;
   resetConfig: () => void;
   applySemanticParsing: (parsedData: SemanticParsingResponse) => void;
+  updateConfigFromStructuredPrompt: (structuredPrompt: Record<string, unknown>) => void;
 }
