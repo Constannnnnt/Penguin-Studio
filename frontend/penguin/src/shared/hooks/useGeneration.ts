@@ -130,6 +130,10 @@ export const useGeneration = () => {
     lastSeedRef.current = null;
     lastGenerationIdRef.current = null;
 
+    // Clear old segmentation results so original viewer shows loading state
+    const segmentationStore = useSegmentationStore.getState();
+    segmentationStore.clearResults();
+
     try {
       const response: GenerationResponse = await apiClient.generateImage(prompt);
 
@@ -160,6 +164,10 @@ export const useGeneration = () => {
 
     setIsLoading(true);
     setError(null);
+
+    // Clear old segmentation results so original viewer shows loading state
+    const segmentationStore = useSegmentationStore.getState();
+    segmentationStore.clearResults();
 
     try {
       const response: GenerationResponse = await apiClient.refineImage(config, lastSeedRef.current);
