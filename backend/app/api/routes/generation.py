@@ -581,6 +581,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     Load a generation folder with all its data.
     
     Returns the image, structured prompt, all prompt versions, and masks.
+    If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
     generation_dir = settings.outputs_dir / generation_id
@@ -616,16 +617,25 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     for f in sorted(generation_dir.glob("structured_prompt*.json")):
         prompt_versions.append(f.name)
 
-    # Load masks
+    # Load masks - prefer segmentation_meta.json for full object metadata
     masks = []
-    mask_files = sorted(generation_dir.glob("mask_*.png"))
-    for i, mask_file in enumerate(mask_files):
-        mask_url = f"/outputs/{generation_id}/{mask_file.name}"
-        masks.append({
-            "mask_id": f"mask_{i}",
-            "mask_url": mask_url,
-            "label": f"Object {i + 1}",
-        })
+    seg_meta_path = generation_dir / "segmentation_meta.json"
+    
+    if seg_meta_path.exists():
+        # Rich metadata available - use it
+        seg_meta = json.loads(seg_meta_path.read_text())
+        masks = seg_meta.get("masks", [])
+        logger.debug(f"Loaded {len(masks)} masks from segmentation_meta.json")
+    else:
+        # Fallback to basic mask file enumeration
+        mask_files = sorted(generation_dir.glob("mask_*.png"))
+        for i, mask_file in enumerate(mask_files):
+            mask_url = f"/outputs/{generation_id}/{mask_file.name}"
+            masks.append({
+                "mask_id": f"mask_{i}",
+                "mask_url": mask_url,
+                "label": f"Object {i + 1}",
+            })
 
     # Load metadata if exists
     metadata = None

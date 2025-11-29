@@ -3,7 +3,9 @@ inclusion: always
 fileMatchPattern: '*.py'
 ---
 
-<!-- Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file -->
+<!-- 
+Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file, MIT License Vivek V. @awsdataarchitect
+-->
 
 # Python
 

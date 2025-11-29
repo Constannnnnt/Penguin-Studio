@@ -2,7 +2,9 @@
 inclusion: always
 ---
 
-<!-- Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file -->
+<!-- 
+Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file, MIT License Vivek V. @awsdataarchitect
+-->
 
 # MCP (Model Context Protocol) Best Practices
 

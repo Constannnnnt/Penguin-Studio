@@ -155,6 +155,11 @@ class SegmentationService:
                 metadata=parsed_metadata if isinstance(parsed_metadata, dict) else None,
             )
 
+            # Save segmentation metadata for later retrieval
+            await self._save_segmentation_meta(
+                actual_output_dir, masks_metadata, parsed_metadata
+            )
+
             logger.info(
                 f"Segmentation completed for result_id={result_id} "
                 f"in {processing_time_ms:.2f}ms with {len(masks_metadata)} masks"
@@ -499,6 +504,50 @@ class SegmentationService:
         y2 = _sanitize(raw_y2, y1, h)
 
         return BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
+
+    async def _save_segmentation_meta(
+        self,
+        output_dir: Path,
+        masks_metadata: List[MaskMetadata],
+        parsed_metadata: Optional[Dict[str, Any]],
+    ) -> None:
+        """
+        Save segmentation metadata linking masks to objects.
+        
+        This file enables reconstruction of mask-object relationships
+        when loading a generation later.
+        """
+        segmentation_meta = {
+            "masks": [
+                {
+                    "mask_id": m.mask_id,
+                    "object_id": m.object_id,
+                    "label": m.label,
+                    "confidence": m.confidence,
+                    "bounding_box": {
+                        "x1": m.bounding_box.x1,
+                        "y1": m.bounding_box.y1,
+                        "x2": m.bounding_box.x2,
+                        "y2": m.bounding_box.y2,
+                    },
+                    "area_pixels": m.area_pixels,
+                    "area_percentage": m.area_percentage,
+                    "centroid": list(m.centroid),
+                    "mask_url": m.mask_url,
+                    "prompt_tier": m.prompt_tier,
+                    "prompt_text": m.prompt_text,
+                    "object_metadata": (
+                        m.object_metadata.model_dump() if m.object_metadata else None
+                    ),
+                }
+                for m in masks_metadata
+            ],
+            "source_metadata": parsed_metadata,
+        }
+        
+        meta_path = output_dir / "segmentation_meta.json"
+        meta_path.write_text(json.dumps(segmentation_meta, indent=2))
+        logger.debug(f"Saved segmentation metadata to {meta_path}")
 
     @staticmethod
     def _get_image_dims(image: Image.Image) -> tuple[int, int]:

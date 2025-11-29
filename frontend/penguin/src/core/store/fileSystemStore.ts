@@ -144,23 +144,38 @@ export const useFileSystemStore = create<FileSystemState>()(
           const segmentationStore = useSegmentationStore.getState();
           
           if (response.masks && response.masks.length > 0) {
+            // Use full mask data from segmentation_meta.json if available
             const segmentationResults = {
               result_id: generationId,
               original_image_url: response.image_url.startsWith('http') 
                 ? response.image_url 
                 : `${env.apiBaseUrl}${response.image_url}`,
-              masks: response.masks.map((mask, index) => ({
-                mask_id: mask.mask_id,
-                label: mask.label || `Object ${index + 1}`,
-                confidence: 1.0,
-                bounding_box: { x1: 0, y1: 0, x2: 100, y2: 100 },
-                area_pixels: 0,
-                area_percentage: 0,
-                centroid: [50, 50] as [number, number],
-                mask_url: mask.mask_url.startsWith('http') 
+              masks: response.masks.map((mask, index) => {
+                const maskUrl = mask.mask_url?.startsWith('http') 
                   ? mask.mask_url 
-                  : `${env.apiBaseUrl}${mask.mask_url}`,
-              })),
+                  : `${env.apiBaseUrl}${mask.mask_url}`;
+                
+                // Check if we have rich metadata from segmentation_meta.json
+                const hasRichData = mask.bounding_box && 
+                  typeof mask.bounding_box.x1 === 'number';
+                
+                return {
+                  mask_id: mask.mask_id,
+                  object_id: mask.object_id,
+                  label: mask.label || `Object ${index + 1}`,
+                  confidence: mask.confidence ?? 1.0,
+                  bounding_box: hasRichData 
+                    ? mask.bounding_box 
+                    : { x1: 0, y1: 0, x2: 100, y2: 100 },
+                  area_pixels: mask.area_pixels ?? 0,
+                  area_percentage: mask.area_percentage ?? 0,
+                  centroid: mask.centroid ?? [50, 50] as [number, number],
+                  mask_url: maskUrl,
+                  prompt_tier: mask.prompt_tier,
+                  prompt_text: mask.prompt_text,
+                  object_metadata: mask.object_metadata,
+                };
+              }),
               processing_time_ms: 0,
               timestamp: new Date().toISOString(),
               metadata: response.structured_prompt,

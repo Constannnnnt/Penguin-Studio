@@ -2,7 +2,9 @@
 inclusion: always
 fileMatchPattern: '*.tsx,*.jsx,*react*'
 ---
-<!-- Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file -->
+<!-- 
+Modified from: https://github.com/awsdataarchitect/kiro-best-practices?tab=readme-ov-file, MIT License Vivek V. @awsdataarchitect
+-->
 
 # React
 
