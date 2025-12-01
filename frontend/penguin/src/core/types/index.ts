@@ -201,7 +201,7 @@ export type ArtisticStyle =
 // Aspect ratio options for image generation
 export const ASPECT_RATIO_OPTIONS = [
   { value: "1:1", label: "1:1", width: 1, height: 1 },
-  { value: "2:3", label: "2:3", width: 2, height: 3 },
+  // { value: "2:3", label: "2:3", width: 2, height: 3 },
   { value: "3:4", label: "3:4", width: 3, height: 4 },
   { value: "4:3", label: "4:3", width: 4, height: 3 },
   { value: "9:16", label: "9:16", width: 9, height: 16 },
@@ -215,7 +215,7 @@ export type AspectRatio =
   | "3:4"
   | "16:9"
   | "9:16"
-  | "2:3"
+  // | "2:3"
   | string;
 
 // ============================================================================

@@ -30,3 +30,6 @@ def setup_models(device: str | None = None) -> Sam3Detector:
 
     sam3_processor = load_sam3(device=device, confidence_threshold=0.5)
     return Sam3Detector(processor=sam3_processor)
+
+if __name__ == "__main__":
+    setup_models()

@@ -384,7 +384,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
         )}
       </div>
 
-      {import.meta.env.DEV && (
+      {/* {import.meta.env.DEV && (
         <details className="mt-6 p-4 bg-muted rounded-lg mx-4 mb-4">
           <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
             Current Configuration
@@ -393,7 +393,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
             {JSON.stringify(sceneConfig, null, 2)}
           </pre>
         </details>
-      )}
+      )} */}
     </div>
   );
 };
