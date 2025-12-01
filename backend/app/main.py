@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -14,6 +14,36 @@ from app.utils.logging import setup_logging
 from app.utils.middleware import RequestLoggingMiddleware
 
 setup_logging()
+
+
+class CORSStaticFiles(StaticFiles):
+    """StaticFiles with CORS headers for cross-origin access."""
+    
+    async def __call__(self, scope, receive, send) -> None:
+        # Handle OPTIONS preflight requests
+        if scope["type"] == "http" and scope["method"] == "OPTIONS":
+            response = Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, OPTIONS",
+                    "Access-Control-Allow-Headers": "*",
+                },
+            )
+            await response(scope, receive, send)
+            return
+        
+        # Wrap send to add CORS headers to response
+        async def send_with_cors(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"access-control-allow-origin", b"*"))
+                headers.append((b"access-control-allow-methods", b"GET, OPTIONS"))
+                headers.append((b"access-control-allow-headers", b"*"))
+                message["headers"] = headers
+            await send(message)
+        
+        await super().__call__(scope, receive, send_with_cors)
 
 
 @asynccontextmanager
@@ -87,12 +117,14 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     logger.info("Request logging middleware registered")
     
+    # CORS middleware for API routes
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
     logger.info(f"CORS configured with origins: {settings.cors_origins}")
     
@@ -105,14 +137,8 @@ def create_app() -> FastAPI:
     logger.info("API routers registered")
     
     settings.outputs_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/outputs", StaticFiles(directory=str(settings.outputs_dir)), name="outputs")
-    logger.info(f"Static files mounted at /outputs -> {settings.outputs_dir}")
-    
-    if settings.examples_dir.exists():
-        app.mount("/examples", StaticFiles(directory=str(settings.examples_dir)), name="examples")
-        logger.info(f"Static files mounted at /examples -> {settings.examples_dir}")
-    else:
-        logger.warning(f"Examples directory not found: {settings.examples_dir}")
+    app.mount("/outputs", CORSStaticFiles(directory=str(settings.outputs_dir)), name="outputs")
+    logger.info(f"Static files mounted at /outputs -> {settings.outputs_dir} (with CORS)")
     
     return app
 
