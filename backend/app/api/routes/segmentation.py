@@ -88,16 +88,16 @@ def _build_library_tree(file_service: FileService) -> FileNode:
     """Construct a file tree rooted at Home with examples and results."""
     root = FileNode(name="Home", path="/", type="directory", children=[])
 
-    try:
-        examples_dir = settings.examples_dir
-        if examples_dir.exists():
-            examples_node = _build_file_node(
-                examples_dir, "/examples", "/", name="examples"
-            )
-            if examples_node.children:
-                root.children.append(examples_node)
-    except Exception as e:
-        logger.warning(f"Failed to build examples tree: {e}")
+    # try:
+    #     examples_dir = settings.examples_dir
+    #     if examples_dir.exists():
+    #         examples_node = _build_file_node(
+    #             examples_dir, "/examples", "/", name="examples"
+    #         )
+    #         if examples_node.children:
+    #             root.children.append(examples_node)
+    # except Exception as e:
+    #     logger.warning(f"Failed to build examples tree: {e}")
 
     try:
         results_dir = file_service.outputs_dir
