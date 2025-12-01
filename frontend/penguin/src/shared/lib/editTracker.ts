@@ -18,15 +18,44 @@ export interface EditRecord {
 export interface EditTrackerState {
   edits: EditRecord[];
   baselineConfig: Record<string, unknown> | null;
+  listeners: Set<() => void>;
 }
+
+/**
+ * Describe light direction in natural language
+ */
+const describeLightDirection = (direction: { x?: number; y?: number; rotation?: number; tilt?: number }): string => {
+  const parts: string[] = [];
+  const x = direction.x ?? 50;
+  const y = direction.y ?? 50;
+  const tilt = direction.tilt ?? 0;
+  
+  // Horizontal position
+  if (x < 30) parts.push('from the left');
+  else if (x > 70) parts.push('from the right');
+  else parts.push('from center');
+  
+  // Vertical position
+  if (y < 30) parts.push('above');
+  else if (y > 70) parts.push('below');
+  
+  // Tilt/angle
+  if (tilt < -20) parts.push('angled forward');
+  else if (tilt > 20) parts.push('angled back');
+  
+  return parts.length > 0 ? `light ${parts.join(', ')}` : 'centered light';
+};
 
 const FIELD_DESCRIPTIONS: Record<string, (oldVal: unknown, newVal: unknown) => string> = {
   'lighting.conditions': (_, newVal) => `change lighting to ${newVal}`,
-  'lighting.shadows': (oldVal, newVal) => {
+  'lighting.shadows': (_, newVal) => {
     const shadowLabels = ['no shadows', 'subtle shadows', 'soft shadows', 'moderate shadows', 'strong shadows', 'dramatic shadows'];
     return `change shadows to ${shadowLabels[newVal as number] || newVal}`;
   },
-  'lighting.direction': () => 'adjust light direction',
+  'lighting.direction': (_, newVal) => {
+    const dir = newVal as { x?: number; y?: number; rotation?: number; tilt?: number };
+    return describeLightDirection(dir);
+  },
   'aesthetics.composition': (_, newVal) => `use ${newVal} composition`,
   'aesthetics.color_scheme': (_, newVal) => `change color scheme to ${newVal}`,
   'aesthetics.mood_atmosphere': (_, newVal) => `set mood to ${newVal}`,
@@ -47,8 +76,8 @@ const FIELD_DESCRIPTIONS: Record<string, (oldVal: unknown, newVal: unknown) => s
     return 'soften the focus';
   },
   'background_setting': (_, newVal) => `change background to ${(newVal as string).substring(0, 50)}`,
-  'style_medium': (_, newVal) => `change medium to ${newVal}`,
-  'artistic_style': (_, newVal) => `make style more ${newVal}`,
+  'style_medium': (_, newVal) => `change overall style to ${newVal}`,
+  'artistic_style': (_, newVal) => `make overall aesthetic more ${newVal}`,
 };
 
 /**
@@ -76,6 +105,10 @@ const describeObjectEdit = (
       return `change ${label} texture`;
     case 'orientation':
       return `rotate ${label} to face ${newValue}`;
+    case 'rotation':
+      return `rotate ${label} by ${newValue} degrees`;
+    case 'flip':
+      return `flip ${label} ${newValue === 'flipped horizontally' ? 'horizontally (mirror)' : newValue === 'flipped vertically' ? 'vertically (upside down)' : ''}`;
     case 'pose':
       return `change ${label} pose`;
     case 'expression':
@@ -121,16 +154,23 @@ export const createEditTracker = (): {
   getModificationPrompt: () => string;
   clearEdits: () => void;
   hasEdits: () => boolean;
+  subscribe: (listener: () => void) => () => void;
 } => {
   const state: EditTrackerState = {
     edits: [],
     baselineConfig: null,
+    listeners: new Set(),
+  };
+
+  const notifyListeners = (): void => {
+    state.listeners.forEach(listener => listener());
   };
 
   return {
     setBaseline: (config: Record<string, unknown>) => {
       state.baselineConfig = JSON.parse(JSON.stringify(config));
       state.edits = [];
+      notifyListeners();
     },
 
     trackEdit: (path: string, oldValue: unknown, newValue: unknown, objectIndex?: number, objectLabel?: string) => {
@@ -180,6 +220,8 @@ export const createEditTracker = (): {
           description,
         });
       }
+      
+      notifyListeners();
     },
 
     getEdits: () => [...state.edits],
@@ -201,9 +243,17 @@ export const createEditTracker = (): {
 
     clearEdits: () => {
       state.edits = [];
+      notifyListeners();
     },
 
     hasEdits: () => state.edits.length > 0,
+    
+    subscribe: (listener: () => void) => {
+      state.listeners.add(listener);
+      return () => {
+        state.listeners.delete(listener);
+      };
+    },
   };
 };
 
