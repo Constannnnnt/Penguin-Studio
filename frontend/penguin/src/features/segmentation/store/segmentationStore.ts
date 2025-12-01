@@ -39,6 +39,9 @@ export interface MaskMetadata {
 export interface MaskTransform {
   position: { x: number; y: number };
   scale: { width: number; height: number };
+  rotation: number; // Rotation in degrees (around center)
+  flipHorizontal: boolean;
+  flipVertical: boolean;
   imageEdits: {
     brightness: number;
     contrast: number;
@@ -57,6 +60,8 @@ export interface MaskManipulationState {
   transform: MaskTransform;
   isDragging: boolean;
   isResizing: boolean;
+  isRotating: boolean;
+  isRotationMode: boolean; // Toggle via double-click
   resizeHandle: 'nw' | 'ne' | 'sw' | 'se' | null;
   isHidden: boolean;
 }
@@ -146,6 +151,16 @@ export interface SegmentationState {
   applyImageEditToMask: (maskId: string, edit: Partial<MaskTransform['imageEdits']>) => void;
   
   updateMaskMetadata: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => void;
+  
+  // Rotation mode (toggle via double-click)
+  toggleRotationMode: (maskId: string) => void;
+  startRotateMask: (maskId: string) => void;
+  updateMaskRotation: (maskId: string, rotation: number) => void;
+  endRotateMask: (maskId: string, imageSize?: { width: number; height: number }) => void;
+  
+  // Flip operations
+  flipMaskHorizontal: (maskId: string) => void;
+  flipMaskVertical: (maskId: string) => void;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -191,6 +206,9 @@ const normalizeResults = (results: SegmentationResponse, metadata?: StructedProm
 const createDefaultTransform = (): MaskTransform => ({
   position: { x: 0, y: 0 },
   scale: { width: 1, height: 1 },
+  rotation: 0,
+  flipHorizontal: false,
+  flipVertical: false,
   imageEdits: {
     brightness: 0,
     contrast: 0,
@@ -209,6 +227,8 @@ const initializeMaskManipulation = (mask: MaskMetadata): MaskManipulationState =
   transform: createDefaultTransform(),
   isDragging: false,
   isResizing: false,
+  isRotating: false,
+  isRotationMode: false,
   resizeHandle: null,
   isHidden: false,
 });
@@ -245,7 +265,8 @@ const createDebouncedMetadataUpdater = () => {
     allMasks: MaskMetadata[],
     manipulationStates: Map<string, MaskManipulationState>,
     imageSize: { width: number; height: number },
-    updateFn: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => void
+    updateFn: (maskId: string, metadata: Partial<NonNullable<MaskMetadata['objectMetadata']>>) => void,
+    originalOrientation?: string
   ) => {
     const updater = new MetadataUpdater();
     
@@ -262,11 +283,9 @@ const createDebouncedMetadataUpdater = () => {
       manipulationStates
     );
     
-    // Update orientation metadata
-    const orientation = updater.updateOrientationMetadata(
-      manipState.originalBoundingBox,
-      manipState.currentBoundingBox
-    );
+    // Only update orientation if rotation has changed (not on move/resize)
+    const rotation = manipState.transform.rotation ?? 0;
+    const orientation = updater.updateOrientationMetadata(rotation, originalOrientation);
     
     // Update the mask metadata
     updateFn(maskId, {
@@ -681,15 +700,18 @@ export const useSegmentationStore = create<SegmentationState>()(
         }
         
         // Update metadata after drag completes (debounced)
+        // Pass original orientation to preserve it (move doesn't change orientation)
         const manipState = state.maskManipulation.get(maskId);
         if (state.results && manipState && imageSize && mask) {
+          const originalOrientation = mask.objectMetadata?.orientation;
           debouncedMetadataUpdater(
             maskId,
             manipState,
             state.results.masks,
             state.maskManipulation,
             imageSize,
-            get().updateMaskMetadata
+            get().updateMaskMetadata,
+            originalOrientation
           );
         }
       },
@@ -1014,6 +1036,7 @@ export const useSegmentationStore = create<SegmentationState>()(
         
         const updatedMasks = [...state.results.masks];
         const mask = updatedMasks[maskIndex];
+        const oldMetadata = mask.objectMetadata;
         
         updatedMasks[maskIndex] = {
           ...mask,
@@ -1032,6 +1055,44 @@ export const useSegmentationStore = create<SegmentationState>()(
           },
         };
         
+        // Track edits for the edit prompt
+        import('@/shared/lib/editTracker').then(({ editTracker }) => {
+          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          
+          // Track location changes
+          if (metadata.location && metadata.location !== oldMetadata?.location) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].location`,
+              oldMetadata?.location,
+              metadata.location,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track size changes
+          if (metadata.relative_size && metadata.relative_size !== oldMetadata?.relative_size) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].relative_size`,
+              oldMetadata?.relative_size,
+              metadata.relative_size,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track orientation changes
+          if (metadata.orientation && metadata.orientation !== oldMetadata?.orientation) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].orientation`,
+              oldMetadata?.orientation,
+              metadata.orientation,
+              maskIndex,
+              objectLabel
+            );
+          }
+        });
+        
         return {
           results: {
             ...state.results,
@@ -1039,6 +1100,162 @@ export const useSegmentationStore = create<SegmentationState>()(
           },
         };
       }),
+
+      toggleRotationMode: (maskId: string) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            isRotationMode: !manipState.isRotationMode,
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      startRotateMask: (maskId: string) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            isRotating: true,
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      updateMaskRotation: (maskId: string, rotation: number) => set((state) => {
+        const newManipulation = new Map(state.maskManipulation);
+        const manipState = newManipulation.get(maskId);
+        if (manipState) {
+          newManipulation.set(maskId, {
+            ...manipState,
+            transform: {
+              ...manipState.transform,
+              rotation,
+            },
+          });
+        }
+        return { maskManipulation: newManipulation };
+      }),
+
+      endRotateMask: (maskId: string, imageSize?: { width: number; height: number }) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            newManipulation.set(maskId, {
+              ...manipState,
+              isRotating: false,
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Announce to screen reader
+        if (mask) {
+          announceManipulation('rotated', mask.label);
+        }
+        
+        // Update orientation metadata after rotation completes
+        const manipState = state.maskManipulation.get(maskId);
+        if (state.results && manipState && imageSize && mask) {
+          const originalOrientation = mask.objectMetadata?.orientation;
+          debouncedMetadataUpdater(
+            maskId,
+            manipState,
+            state.results.masks,
+            state.maskManipulation,
+            imageSize,
+            get().updateMaskMetadata,
+            originalOrientation
+          );
+        }
+      },
+
+      flipMaskHorizontal: (maskId: string) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        const currentFlipH = state.maskManipulation.get(maskId)?.transform.flipHorizontal ?? false;
+        console.log('[Store] flipMaskHorizontal called for', maskId, 'current:', currentFlipH, 'new:', !currentFlipH);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            const newFlipH = !manipState.transform.flipHorizontal;
+            newManipulation.set(maskId, {
+              ...manipState,
+              transform: {
+                ...manipState.transform,
+                flipHorizontal: newFlipH,
+              },
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Track the flip edit
+        if (mask) {
+          announceManipulation('flipped horizontally', mask.label);
+          const maskIndex = state.results?.masks.findIndex(m => m.mask_id === maskId) ?? 0;
+          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          import('@/shared/lib/editTracker').then(({ editTracker }) => {
+            const manipState = get().maskManipulation.get(maskId);
+            const isFlipped = manipState?.transform.flipHorizontal ?? false;
+            editTracker.trackEdit(
+              `objects[${maskIndex}].flip`,
+              null,
+              isFlipped ? 'flipped horizontally' : 'normal',
+              maskIndex,
+              objectLabel
+            );
+          });
+        }
+      },
+
+      flipMaskVertical: (maskId: string) => {
+        const state = get();
+        const mask = state.results?.masks.find(m => m.mask_id === maskId);
+        
+        set((state) => {
+          const newManipulation = new Map(state.maskManipulation);
+          const manipState = newManipulation.get(maskId);
+          if (manipState) {
+            const newFlipV = !manipState.transform.flipVertical;
+            newManipulation.set(maskId, {
+              ...manipState,
+              transform: {
+                ...manipState.transform,
+                flipVertical: newFlipV,
+              },
+            });
+          }
+          return { maskManipulation: newManipulation };
+        });
+        
+        // Track the flip edit
+        if (mask) {
+          announceManipulation('flipped vertically', mask.label);
+          const maskIndex = state.results?.masks.findIndex(m => m.mask_id === maskId) ?? 0;
+          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          import('@/shared/lib/editTracker').then(({ editTracker }) => {
+            const manipState = get().maskManipulation.get(maskId);
+            const isFlipped = manipState?.transform.flipVertical ?? false;
+            editTracker.trackEdit(
+              `objects[${maskIndex}].flip`,
+              null,
+              isFlipped ? 'flipped vertically' : 'normal',
+              maskIndex,
+              objectLabel
+            );
+          });
+        }
+      },
     }),
     {
       name: 'Segmentation Store',

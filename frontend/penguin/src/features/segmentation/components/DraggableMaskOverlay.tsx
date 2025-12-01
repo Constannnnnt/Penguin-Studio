@@ -52,6 +52,12 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     updateMaskSize,
     endResizeMask,
     isAnyMaskDragging,
+    toggleRotationMode,
+    startRotateMask,
+    updateMaskRotation,
+    endRotateMask,
+    flipMaskHorizontal,
+    flipMaskVertical,
   } = useSegmentationStore();
 
   const manipState = maskManipulation.get(mask.mask_id);
@@ -86,6 +92,15 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   } | null>(null);
   const resizingRef = React.useRef(false);
 
+  // Rotation state
+  const rotateSessionRef = React.useRef<{
+    startAngle: number;
+    startRotation: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
+  const rotatingRef = React.useRef(false);
+
   // RAF for smooth visual updates
   const rafRef = React.useRef<number | null>(null);
 
@@ -94,6 +109,46 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   const [tooltipPosition, setTooltipPosition] = React.useState({ x: 0, y: 0 });
   const tooltipTimeoutRef = React.useRef<number | null>(null);
 
+  const isRotationMode = manipState?.isRotationMode ?? false;
+  const currentRotation = transform?.rotation ?? 0;
+  
+  // Use ref to always have latest rotation value for event handlers
+  const currentRotationRef = React.useRef(currentRotation);
+  currentRotationRef.current = currentRotation;
+  
+  // Debug rotation state
+  // React.useEffect(() => {
+  //   console.log('[MaskOverlay] Rotation state:', { 
+  //     maskId: mask.mask_id, 
+  //     currentRotation, 
+  //     isRotationMode,
+  //     transformRotation: transform?.rotation 
+  //   });
+  // }, [mask.mask_id, currentRotation, isRotationMode, transform?.rotation]);
+
+  const handleDoubleClick = (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    if (isSelected) {
+      toggleRotationMode(mask.mask_id);
+    }
+  };
+
+  // Keyboard handler for flip shortcuts (H = horizontal, V = vertical)
+  const handleKeyDown = React.useCallback((e: React.KeyboardEvent): void => {
+    if (!isSelected) return;
+    
+    if (e.key === 'h' || e.key === 'H') {
+      e.preventDefault();
+      flipMaskHorizontal(mask.mask_id);
+    } else if (e.key === 'v' || e.key === 'V') {
+      e.preventDefault();
+      flipMaskVertical(mask.mask_id);
+    } else if (e.key === 'Escape' && isRotationMode) {
+      e.preventDefault();
+      toggleRotationMode(mask.mask_id);
+    }
+  }, [isSelected, isRotationMode, mask.mask_id, flipMaskHorizontal, flipMaskVertical, toggleRotationMode]);
+
   const handlePointerDown = (e: React.PointerEvent): void => {
     e.stopPropagation();
     if (!isSelected) {
@@ -101,14 +156,37 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
-    draggingRef.current = true;
-    dragSessionRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startBBox: { ...bbox },
-      currentOffset: { x: 0, y: 0 },
-    };
-    startDragMask(mask.mask_id);
+    
+    // In rotation mode, start rotation instead of drag
+    if (isRotationMode) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+        
+        const startRot = currentRotationRef.current;
+        // console.log('[MaskOverlay] Starting rotation with currentRotation:', startRot);
+        
+        rotatingRef.current = true;
+        rotateSessionRef.current = {
+          startAngle,
+          startRotation: startRot,
+          centerX,
+          centerY,
+        };
+        startRotateMask(mask.mask_id);
+      }
+    } else {
+      draggingRef.current = true;
+      dragSessionRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startBBox: { ...bbox },
+        currentOffset: { x: 0, y: 0 },
+      };
+      startDragMask(mask.mask_id);
+    }
     setTooltipVisible(false);
   };
 
@@ -128,9 +206,18 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     setTooltipVisible(false);
   };
 
-  // Global pointer listeners for drag/resize
+  // Global pointer listeners for drag/resize/rotate
   React.useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
+      // Rotation
+      if (rotatingRef.current && rotateSessionRef.current) {
+        const session = rotateSessionRef.current;
+        const currentAngle = Math.atan2(e.clientY - session.centerY, e.clientX - session.centerX) * (180 / Math.PI);
+        const deltaAngle = currentAngle - session.startAngle;
+        const newRotation = session.startRotation + deltaAngle;
+        updateMaskRotation(mask.mask_id, newRotation);
+      }
+
       // Drag - use CSS transform for smooth visual updates
       if (draggingRef.current && dragSessionRef.current && containerRef.current) {
         const session = dragSessionRef.current;
@@ -158,12 +245,16 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         session.currentOffset = { x: offsetX, y: offsetY };
 
         // Apply transform directly to DOM - bypasses React for smooth updates
+        // Preserve rotation when dragging
         if (rafRef.current === null) {
           rafRef.current = requestAnimationFrame(() => {
             rafRef.current = null;
             if (containerRef.current && dragSessionRef.current) {
               const { x, y } = dragSessionRef.current.currentOffset;
-              containerRef.current.style.transform = `translate(${x}px, ${y}px)`;
+              // Get current rotation from transform state
+              const rot = transform?.rotation ?? 0;
+              const rotStr = rot !== 0 ? ` rotate(${rot}deg)` : '';
+              containerRef.current.style.transform = `translate(${x}px, ${y}px)${rotStr}`;
             }
           });
         }
@@ -251,6 +342,12 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     };
 
     const onPointerUp = () => {
+      if (rotatingRef.current && rotateSessionRef.current) {
+        rotatingRef.current = false;
+        rotateSessionRef.current = null;
+        endRotateMask(mask.mask_id, imageSize);
+      }
+
       if (draggingRef.current && dragSessionRef.current) {
         const session = dragSessionRef.current;
         
@@ -258,9 +355,11 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         const finalDx = session.currentOffset.x / scale;
         const finalDy = session.currentOffset.y / scale;
         
-        // Reset the CSS transform before updating state
+        // Set the transform to just rotation (removing the drag translate)
+        // This avoids the jumpy effect of removing and re-applying
         if (containerRef.current) {
-          containerRef.current.style.transform = '';
+          const rot = currentRotationRef.current;
+          containerRef.current.style.transform = rot !== 0 ? `rotate(${rot}deg)` : '';
         }
         
         // Update store with final delta (only if actually moved)
@@ -293,7 +392,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [endDragMask, endResizeMask, imageSize, mask.mask_id, scale, updateMaskPosition, updateMaskSize]);
+  }, [endDragMask, endResizeMask, endRotateMask, imageSize, mask.mask_id, scale, updateMaskPosition, updateMaskSize, updateMaskRotation, transform]);
 
   // Tooltip cleanup
   React.useEffect(() => () => {
@@ -343,9 +442,40 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }, 150);
   }, [onMouseLeave]);
 
-  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || manipState?.isDragging || manipState?.isResizing;
+  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || rotatingRef.current || manipState?.isDragging || manipState?.isResizing || manipState?.isRotating;
   // Disable pointer events on other masks while any mask is being dragged (prevents jumpiness)
   const shouldDisablePointerEvents = isAnyMaskDragging && !isCurrentlyManipulating && !isSelected;
+
+  // Determine cursor based on mode
+  const getCursor = (): string => {
+    if (!isSelected) return 'pointer';
+    if (isCurrentlyManipulating) {
+      if (rotatingRef.current || manipState?.isRotating) return 'grabbing';
+      return 'grabbing';
+    }
+    if (isRotationMode) return 'crosshair';
+    return 'grab';
+  };
+
+  // Transform values for the mask (from manipulation state)
+  const translateX = (transform?.position.x ?? 0) * scale;
+  const translateY = (transform?.position.y ?? 0) * scale;
+  const scaleX = transform?.scale.width ?? 1;
+  const scaleY = transform?.scale.height ?? 1;
+  const flipH = transform?.flipHorizontal ?? false;
+  const flipV = transform?.flipVertical ?? false;
+
+  // Debug: log flip state changes
+  // React.useEffect(() => {
+  //   console.log(`[MaskOverlay] ${mask.mask_id} flip state: H=${flipH}, V=${flipV}, rotation=${currentRotation}`);
+  // }, [mask.mask_id, flipH, flipV, currentRotation]);
+
+  // Build rotation transform for the container (rotation only)
+  const containerTransform = currentRotation !== 0 
+    ? `rotate(${currentRotation}deg)`
+    : undefined;
+  
+  // console.log(`[MaskOverlay] ${mask.mask_id} containerTransform:`, containerTransform, 'currentRotation:', currentRotation);
 
   const style: React.CSSProperties = {
     position: 'absolute',
@@ -356,10 +486,13 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     opacity: isSelected ? 0.4 : isHovered ? 0.35 : 0.15,
     backgroundColor: 'transparent',
     transition: isCurrentlyManipulating ? 'none' : 'opacity 120ms ease',
-    cursor: isSelected ? (isCurrentlyManipulating ? 'grabbing' : 'grab') : 'pointer',
+    cursor: getCursor(),
     filter: transform ? combineImageEditFilters(transform.imageEdits) : undefined,
     willChange: isCurrentlyManipulating ? 'transform' : 'auto',
     pointerEvents: shouldDisablePointerEvents ? 'none' : 'auto',
+    // Apply rotation around center of bounding box
+    transform: containerTransform,
+    transformOrigin: 'center center',
   };
 
   const handlePositions: { handle: ResizeHandle; style: React.CSSProperties; cursor: string }[] = [
@@ -372,15 +505,34 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   // Calculate mask visual layer styling
   const maskOpacity = isSelected ? 0.7 : isHovered ? 0.55 : 0.3;
   const blendMode = (isSelected || isHovered) ? 'screen' : 'multiply';
-  
-  // Transform values for the mask (from manipulation state)
-  const translateX = (transform?.position.x ?? 0) * scale;
-  const translateY = (transform?.position.y ?? 0) * scale;
-  const scaleX = transform?.scale.width ?? 1;
-  const scaleY = transform?.scale.height ?? 1;
 
-  // Mask visual style - positioned relative to container bounds
-  const maskVisualStyle: React.CSSProperties | undefined = maskColor && containerSize ? {
+  // The mask visual layer is positioned at (-displayBBox.x1, -displayBBox.y1) and covers the full container
+  // The actual mask content is at the original bbox position within this layer
+  // For flip to work around the mask's center, we use transformOrigin
+  
+  // Calculate the center of the current bounding box (where the mask appears)
+  const bboxCenterX = (displayBBox.x1 + displayBBox.x2) / 2;
+  const bboxCenterY = (displayBBox.y1 + displayBBox.y2) / 2;
+  
+  // The mask visual style will use this center as transform origin
+  const maskTransformStr = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
+  
+  // Flip transform string - applied separately with center origin
+  const flipScaleX = flipH ? -1 : 1;
+  const flipScaleY = flipV ? -1 : 1;
+  
+  // console.log('[MaskOverlay] maskTransform:', maskTransformStr, 'flipH:', flipH, 'flipV:', flipV, 'bboxCenter:', bboxCenterX, bboxCenterY);
+
+  // Flip wrapper style - flips around the center of the bounding box
+  const flipWrapperStyle: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    transform: (flipH || flipV) ? `scale(${flipScaleX}, ${flipScaleY})` : undefined,
+    transformOrigin: 'center center', // Flip around bbox center (which is the container center)
+    pointerEvents: 'none',
+  };
+
+  const maskVisualStyle: React.CSSProperties | undefined = maskColor && containerSize && mask.mask_url ? {
     position: 'absolute',
     // Position the mask layer to cover the full container, offset by negative bbox position
     left: -displayBBox.x1,
@@ -397,11 +549,12 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     WebkitMaskSize: '100% 100%',
     maskRepeat: 'no-repeat',
     WebkitMaskRepeat: 'no-repeat',
-    // Apply the stored transform for position/scale adjustments
-    transform: `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`,
+    transform: maskTransformStr,
     transformOrigin: 'top left',
     pointerEvents: 'none',
   } : undefined;
+
+
 
   return (
     <>
@@ -409,21 +562,34 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         ref={containerRef}
         style={style}
         onPointerDown={handlePointerDown}
+        onDoubleClick={handleDoubleClick}
         onPointerEnter={handleMouseEnterWithTooltip}
         onPointerLeave={handleMouseLeaveWithTooltip}
         onPointerMove={handleMouseMoveTooltip}
+        onKeyDown={handleKeyDown}
         role="button"
-        aria-label={`Mask for ${mask.label}, ${isSelected ? 'selected, draggable' : 'click to select'}`}
-        aria-grabbed={manipState?.isDragging}
+        aria-label={`Mask for ${mask.label}, ${isSelected ? (isRotationMode ? 'rotation mode, drag to rotate, H to flip horizontal, V to flip vertical' : 'selected, draggable, double-click for rotation') : 'click to select'}`}
         tabIndex={isSelected ? 0 : -1}
       >
-        {/* Visual mask layer - moves with the draggable container */}
+        {/* Visual mask layer with flip wrapper */}
         {maskVisualStyle && (
-          <div style={maskVisualStyle} aria-hidden="true" />
+          <div style={flipWrapperStyle} aria-hidden="true">
+            <div style={maskVisualStyle} />
+          </div>
         )}
         
-        {/* Resize handles */}
-        {isSelected && handlePositions.map(({ handle, style: hStyle, cursor }) => (
+        {/* Rotation mode indicator */}
+        {isSelected && isRotationMode && (
+          <div className="absolute inset-0 border-2 border-dashed border-orange-400 rounded pointer-events-none" />
+        )}
+        
+        {/* Center point indicator in rotation mode */}
+        {isSelected && isRotationMode && (
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-orange-500 rounded-full pointer-events-none shadow-md" />
+        )}
+        
+        {/* Resize handles - hidden in rotation mode */}
+        {isSelected && !isRotationMode && handlePositions.map(({ handle, style: hStyle, cursor }) => (
           <div
             key={handle}
             className="absolute w-3 h-3 bg-blue-500 border-2 border-white rounded-full hover:scale-125 transition-transform"
@@ -434,6 +600,71 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
             tabIndex={-1}
           />
         ))}
+        
+        {/* Rotation mode controls */}
+        {isSelected && isRotationMode && (
+          <>
+            {/* Rotation handle indicator at top */}
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
+              <div className="w-0.5 h-4 bg-orange-400" />
+              <div className="w-5 h-5 bg-orange-500 border-2 border-white rounded-full cursor-grab shadow-lg flex items-center justify-center">
+                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M4 12a8 8 0 0 1 8-8m0 0v4m0-4l-3 3m3-3l3 3" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Flip buttons - larger and more visible */}
+            <div 
+              className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex gap-1 bg-black/80 backdrop-blur-sm rounded-lg p-1 shadow-xl border border-white/20"
+              style={{ pointerEvents: 'auto' }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-all ${
+                  flipH 
+                    ? 'bg-orange-500 text-white ring-2 ring-orange-300' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+                onPointerDown={(e) => { 
+                  e.stopPropagation(); 
+                  e.preventDefault();
+                  // console.log('[MaskOverlay] Flip H clicked for', mask.mask_id);
+                  flipMaskHorizontal(mask.mask_id); 
+                }}
+                title="Flip Horizontal (H key)"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 3v18" strokeDasharray="2 2" />
+                  <path d="M5 12l-3-3v6l3-3" />
+                  <path d="M19 12l3-3v6l-3-3" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-md transition-all ${
+                  flipV 
+                    ? 'bg-orange-500 text-white ring-2 ring-orange-300' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+                onPointerDown={(e) => { 
+                  e.stopPropagation(); 
+                  e.preventDefault();
+                  // console.log('[MaskOverlay] Flip V clicked for', mask.mask_id);
+                  flipMaskVertical(mask.mask_id); 
+                }}
+                title="Flip Vertical (V key)"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M3 12h18" strokeDasharray="2 2" />
+                  <path d="M12 5l-3-3h6l-3 3" />
+                  <path d="M12 19l-3 3h6l-3-3" />
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <MaskTooltip
