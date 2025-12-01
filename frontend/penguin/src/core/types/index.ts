@@ -3,22 +3,22 @@
 // ============================================================================
 
 export type LocationOption =
-  | 'center'
-  | 'top-left'
-  | 'top-right'
-  | 'bottom-left'
-  | 'bottom-right'
-  | 'center-left'
-  | 'center-right';
+  | "center"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "center-left"
+  | "center-right";
 
-export type SizeOption = 'small' | 'medium' | 'large' | 'very large';
+export type SizeOption = "small" | "medium" | "large" | "very large";
 
 export type OrientationOption =
-  | 'front-facing'
-  | 'left'
-  | 'right'
-  | 'back'
-  | 'angled';
+  | "front-facing"
+  | "left"
+  | "right"
+  | "back"
+  | "angled";
 
 // ============================================================================
 // Scene Tab Constants
@@ -26,42 +26,78 @@ export type OrientationOption =
 
 // Camera angle options for  scene tab
 export const CAMERA_ANGLE_OPTIONS = [
-  'eye-level', 'overhead', 'low-angle', 'high-angle', 'custom'
+  "eye-level",
+  "overhead",
+  "low-angle",
+  "high-angle",
+  "custom",
 ] as const;
 
 // Lens focal length options for scene tab
 export const LENS_FOCAL_LENGTH_OPTIONS = [
-  'wide-angle', 'standard', 'portrait', 'macro', 'custom'
+  "wide-angle",
+  "standard",
+  "portrait",
+  "macro",
+  "custom",
 ] as const;
 
 // Lighting condition options for scene tab
 export const LIGHTING_CONDITIONS_OPTIONS = [
-  'natural', 'studio', 'soft diffused', 'dramatic', 'golden hour', 'custom'
+  "natural",
+  "studio",
+  "soft diffused",
+  "dramatic",
+  "golden hour",
+  "custom",
 ] as const;
 
 // Style medium options for scene tab
 export const STYLE_MEDIUM_OPTIONS = [
-  'photograph', 'painting', 'digital art', 'sketch', '3D render', 'custom'
+  "photograph",
+  "painting",
+  "digital art",
+  "sketch",
+  "3D render",
+  "custom",
 ] as const;
 
 // Aesthetic style options for scene tab
 export const AESTHETIC_STYLE_OPTIONS = [
-  'realistic', 'artistic', 'vintage', 'modern', 'dramatic', 'custom'
+  "realistic",
+  "artistic",
+  "vintage",
+  "modern",
+  "dramatic",
+  "custom",
 ] as const;
 
 // Shadow intensity labels for discrete slider
 export const INTENSITY_LABELS = [
-  'none', 'subtle', 'soft', 'moderate', 'strong', 'dramatic'
+  "none",
+  "subtle",
+  "soft",
+  "moderate",
+  "strong",
+  "dramatic",
 ] as const;
 
 // Depth of field labels for discrete slider
 export const DEPTH_OF_FIELD_LABELS = [
-  'Very Shallow', 'Shallow', 'Medium', 'Deep', 'Very Deep'
+  "Very Shallow",
+  "Shallow",
+  "Medium",
+  "Deep",
+  "Very Deep",
 ] as const;
 
 // Focus labels for discrete slider
 export const FOCUS_LABELS = [
-  'Soft Focus', 'Slight Soft', 'Sharp', 'Very Sharp', 'Hyper Sharp'
+  "Soft Focus",
+  "Slight Soft",
+  "Sharp",
+  "Very Sharp",
+  "Hyper Sharp",
 ] as const;
 
 // ============================================================================
@@ -69,19 +105,19 @@ export const FOCUS_LABELS = [
 // ============================================================================
 
 // Extended camera angle type with custom support
-export type CameraAngle = 
-  | 'eye-level' 
-  | 'overhead' 
-  | 'low-angle' 
-  | 'high-angle'
+export type CameraAngle =
+  | "eye-level"
+  | "overhead"
+  | "low-angle"
+  | "high-angle"
   | string; // custom values
 
-// Extended lens type with custom support  
-export type LensType = 
-  | 'wide-angle' 
-  | 'standard' 
-  | 'portrait' 
-  | 'macro'
+// Extended lens type with custom support
+export type LensType =
+  | "wide-angle"
+  | "standard"
+  | "portrait"
+  | "macro"
   | string; // custom values
 
 // Numeric depth of field (0-100 scale)
@@ -91,18 +127,18 @@ export type DepthOfFieldValue = number;
 export type FocusValue = number;
 
 // Extended lighting condition with custom support
-export type LightingCondition = 
-  | 'natural' 
-  | 'studio' 
-  | 'soft diffused' 
-  | 'dramatic' 
-  | 'golden hour'
+export type LightingCondition =
+  | "natural"
+  | "studio"
+  | "soft diffused"
+  | "dramatic"
+  | "golden hour"
   | string; // custom values
 
 // 6DOF lighting direction
 export interface LightingDirectionValue {
   x: number; // 0-100 (left to right)
-  y: number; // 0-100 (top to bottom) 
+  y: number; // 0-100 (top to bottom)
   rotation: number; // 0-360 degrees
   tilt: number; // -90 to 90 degrees
 }
@@ -111,20 +147,20 @@ export interface LightingDirectionValue {
 export type ShadowIntensity = 0 | 1 | 2 | 3 | 4 | 5;
 
 // Extended style types with custom support
-export type StyleMedium = 
-  | 'photograph' 
-  | 'painting' 
-  | 'digital art' 
-  | 'sketch' 
-  | '3D render'
+export type StyleMedium =
+  | "photograph"
+  | "painting"
+  | "digital art"
+  | "sketch"
+  | "3D render"
   | string; // custom values
 
-export type AestheticStyle = 
-  | 'realistic' 
-  | 'artistic' 
-  | 'vintage' 
-  | 'modern' 
-  | 'dramatic'
+export type AestheticStyle =
+  | "realistic"
+  | "artistic"
+  | "vintage"
+  | "modern"
+  | "dramatic"
   | string; // custom values
 
 // ============================================================================
@@ -132,35 +168,55 @@ export type AestheticStyle =
 // ============================================================================
 
 export type CompositionType =
-  | 'centered'
-  | 'rule-of-thirds'
-  | 'diagonal'
-  | 'symmetrical'
-  | 'asymmetrical';
+  | "centered"
+  | "rule-of-thirds"
+  | "diagonal"
+  | "symmetrical"
+  | "asymmetrical";
 
 export type ColorScheme =
-  | 'vibrant'
-  | 'muted'
-  | 'monochrome'
-  | 'warm'
-  | 'cool'
-  | 'pastel'
-  | 'cinematic';
+  | "vibrant"
+  | "muted"
+  | "monochrome"
+  | "warm"
+  | "cool"
+  | "pastel"
+  | "cinematic";
 
 export type MoodType =
-  | 'neutral'
-  | 'cheerful'
-  | 'dramatic'
-  | 'serene'
-  | 'mysterious';
+  | "neutral"
+  | "cheerful"
+  | "dramatic"
+  | "serene"
+  | "mysterious";
 
 export type ArtisticStyle =
-  | 'realistic'
-  | 'surreal'
-  | 'cinematic'
-  | 'minimalism'
-  | 'impressionist'
-  | 'abstract';
+  | "realistic"
+  | "surreal"
+  | "cinematic"
+  | "minimalism"
+  | "impressionist"
+  | "abstract";
+
+// Aspect ratio options for image generation
+export const ASPECT_RATIO_OPTIONS = [
+  { value: "1:1", label: "1:1", width: 1, height: 1 },
+  { value: "2:3", label: "2:3", width: 2, height: 3 },
+  { value: "3:4", label: "3:4", width: 3, height: 4 },
+  { value: "4:3", label: "4:3", width: 4, height: 3 },
+  { value: "9:16", label: "9:16", width: 9, height: 16 },
+  { value: "16:9", label: "16:9", width: 16, height: 9 },
+  { value: "custom", label: "Custom", width: 1, height: 1 },
+] as const;
+
+export type AspectRatio =
+  | "1:1"
+  | "4:3"
+  | "3:4"
+  | "16:9"
+  | "9:16"
+  | "2:3"
+  | string;
 
 // ============================================================================
 // Scene Object Interface
@@ -239,6 +295,7 @@ export interface SemanticParsingResponse {
 
 export interface SceneConfiguration {
   background_setting: string;
+  aspect_ratio: AspectRatio;
   photographic_characteristics: PhotographicConfig;
   lighting: LightingConfig;
   aesthetics: AestheticsConfig;
@@ -252,6 +309,7 @@ export interface PenguinConfig {
   short_description: string;
   objects: SceneObject[];
   background_setting: string;
+  aspect_ratio: AspectRatio;
   lighting: LightingConfig;
   aesthetics: AestheticsConfig;
   photographic_characteristics: PhotographicConfig;
@@ -266,7 +324,7 @@ export interface PenguinConfig {
 
 export interface GenerationResponse {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed";
   image_url?: string;
   structured_prompt?: Record<string, unknown>;
   seed?: number;
@@ -285,7 +343,7 @@ export interface LoadGenerationMask {
   area_pixels?: number;
   area_percentage?: number;
   centroid?: [number, number];
-  prompt_tier?: 'CORE' | 'CORE_VISUAL' | 'CORE_VISUAL_SPATIAL';
+  prompt_tier?: "CORE" | "CORE_VISUAL" | "CORE_VISUAL_SPATIAL";
   prompt_text?: string;
   object_metadata?: {
     description?: string;
@@ -326,7 +384,12 @@ export interface Presets {
 // Store State Interface
 // ============================================================================
 
-export type PanelType = 'scene' | 'camera' | 'lighting' | 'aesthetics' | 'medium';
+export type PanelType =
+  | "scene"
+  | "camera"
+  | "lighting"
+  | "aesthetics"
+  | "medium";
 
 export interface ConfigState {
   // State
@@ -348,5 +411,7 @@ export interface ConfigState {
   setSelectedObject: (index: number | null) => void;
   resetConfig: () => void;
   applySemanticParsing: (parsedData: SemanticParsingResponse) => void;
-  updateConfigFromStructuredPrompt: (structuredPrompt: Record<string, unknown>) => void;
+  updateConfigFromStructuredPrompt: (
+    structuredPrompt: Record<string, unknown>
+  ) => void;
 }

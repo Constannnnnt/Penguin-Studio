@@ -123,7 +123,7 @@ export const useGeneration = () => {
   /**
    * Generate image from text prompt only (simple text-to-image)
    */
-  const generateImage = async (prompt: string): Promise<void> => {
+  const generateImage = async (prompt: string, aspectRatio?: string): Promise<void> => {
     setIsLoading(true);
     setError(null);
     setGeneratedImage(null);
@@ -134,8 +134,12 @@ export const useGeneration = () => {
     const segmentationStore = useSegmentationStore.getState();
     segmentationStore.clearResults();
 
+    // Get aspect ratio from config if not provided
+    const configStore = useConfigStore.getState();
+    const ratio = aspectRatio || configStore.sceneConfig.aspect_ratio || '1:1';
+
     try {
-      const response: GenerationResponse = await apiClient.generateImage(prompt);
+      const response: GenerationResponse = await apiClient.generateImage(prompt, ratio);
 
       if (response.status === 'pending' || response.status === 'processing') {
         await pollGeneration(response.id);

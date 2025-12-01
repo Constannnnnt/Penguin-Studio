@@ -222,7 +222,7 @@ class PenguinApiClient {
   /**
    * Generate image from text prompt only (simple text-to-image)
    */
-  async generateImage(prompt: string): Promise<GenerationResponse> {
+  async generateImage(prompt: string, aspectRatio: string = "1:1"): Promise<GenerationResponse> {
     const sanitizedPrompt = sanitizeInput(prompt);
     
     if (!sanitizedPrompt.trim()) {
@@ -231,7 +231,7 @@ class PenguinApiClient {
 
     const generateRequest = {
       prompt: sanitizedPrompt,
-      aspect_ratio: "1:1",
+      aspect_ratio: aspectRatio,
       resolution: 1024,
       num_inference_steps: 50,
       skip_cache: false,
@@ -309,7 +309,7 @@ class PenguinApiClient {
     const refineRequest: Record<string, unknown> = {
       structured_prompt: originalStructuredPrompt || structuredPrompt,
       seed,
-      aspect_ratio: "1:1",
+      aspect_ratio: config.aspect_ratio || "1:1",
       resolution: 1024,
     };
 
