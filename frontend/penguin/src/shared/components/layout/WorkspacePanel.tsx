@@ -11,6 +11,7 @@ import { useMaskKeyboardShortcuts } from '@/features/segmentation/hooks/useMaskK
 import { Button } from '@/shared/components/ui/button';
 import { useFileSystemStore } from '@/core/store/fileSystemStore';
 import { useLayoutStore } from '@/core/store/layoutStore';
+import { editTracker } from '@/shared/lib/editTracker';
 
 export interface WorkspacePanelRef {
   handleGenerate: () => void;
@@ -36,6 +37,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
   const { generateImage, refineImage, setSeed, isLoading, generatedImage, error } = useGeneration();
   const currentSeed = useFileSystemStore((state) => state.currentSeed);
+  const originalStructuredPrompt = useFileSystemStore((state) => state.originalStructuredPrompt);
   const [libraryImage, setLibraryImage] = useState<string | null>(null);
   const viewerStyle: React.CSSProperties = {
     width: '100%',
@@ -56,15 +58,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
   useMaskKeyboardShortcuts({ enabled: viewMode === 'segmented' && !!segmentationResults });
 
+  // Sync local prompt to config store (only when user types, not when config is loaded)
   useEffect(() => {
-    if (debouncedPrompt !== shortDescription) {
+    // Only update config if debouncedPrompt has content and differs from shortDescription
+    // This prevents overwriting loaded config with empty local state
+    if (debouncedPrompt && debouncedPrompt !== shortDescription) {
       updateConfig('short_description', debouncedPrompt);
     }
   }, [debouncedPrompt, shortDescription, updateConfig]);
 
+  // Sync config store to local prompt (when config is loaded externally)
   useEffect(() => {
-    setLocalPrompt(shortDescription);
-  }, [shortDescription]);
+    if (shortDescription && shortDescription !== localPrompt) {
+      setLocalPrompt(shortDescription);
+    }
+  }, [shortDescription, localPrompt]);
 
   const configRef = useRef(config);
   const localPromptRef = useRef(localPrompt);
@@ -72,6 +80,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const generateImageRef = useRef(generateImage);
   const refineImageRef = useRef(refineImage);
   const libraryImageRef = useRef<string | null>(null);
+  const originalStructuredPromptRef = useRef<Record<string, unknown> | null>(originalStructuredPrompt);
 
   useEffect(() => {
     configRef.current = config;
@@ -97,14 +106,34 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     refineImageRef.current = refineImage;
   }, [refineImage]);
 
+  useEffect(() => {
+    originalStructuredPromptRef.current = originalStructuredPrompt;
+  }, [originalStructuredPrompt]);
+
   const handleGenerate = (): void => {
     // Generate uses just the text prompt (simple text-to-image)
     generateImageRef.current?.(localPromptRef.current);
   };
 
   const handleRefine = (): void => {
-    // Refine uses the full structured config + seed from previous generation
-    refineImageRef.current?.(configRef.current);
+    // Generate modification prompt from tracked edits
+    const modificationPrompt = editTracker.getModificationPrompt();
+    
+    console.log('[Refine] Modification prompt:', modificationPrompt);
+    console.log('[Refine] Tracked edits:', editTracker.getEdits());
+    
+    // Refine uses:
+    // - Current config (with user modifications)
+    // - Modification prompt (natural language description of changes)
+    // - Original structured prompt (baseline for Bria's modification mode)
+    refineImageRef.current?.(
+      configRef.current,
+      modificationPrompt || undefined,
+      originalStructuredPromptRef.current || undefined
+    );
+    
+    // Clear edits after refine (they've been applied)
+    editTracker.clearEdits();
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {

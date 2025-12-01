@@ -12,7 +12,7 @@ import { ObjectsTab } from '@/features/objects/components/ObjectsTab';
 import { SceneTab } from '@/features/scene/components/SceneTab';
 import { cn } from '@/shared/lib/utils';
 import { env } from '@/shared/lib/env';
-import { useToast } from '@/shared/hooks/useToast';
+
 import { semanticGenerationService } from '@/core/services/semanticGeneration';
 import { generateSemanticJSONFilename } from '@/core/services/semanticGeneration/fileSaver';
 import { notifySaveSuccess, notifySaveError, notifyGenerationStarted } from '@/core/services/semanticGeneration/notifier';
@@ -22,7 +22,7 @@ export const ControlsPanel: React.FC = () => {
   const config = useConfigStore((state) => state.config);
   const segmentationResults = useSegmentationStore((state) => state.results);
   const refreshFileTree = useFileSystemStore((state) => state.refreshFileTree);
-  const { toast } = useToast();
+
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -121,7 +121,6 @@ export const ControlsPanel: React.FC = () => {
 
   const handleRefineAndSave = useCallback(async () => {
     setIsSavingMetadata(true);
-    toast({ title: 'Refining...', description: 'Generating new image' });
     
     try {
       await handleSaveMetadata();
@@ -129,7 +128,7 @@ export const ControlsPanel: React.FC = () => {
     } finally {
       setIsSavingMetadata(false);
     }
-  }, [handleSaveMetadata, toast, workspaceHandlers]);
+  }, [handleSaveMetadata, workspaceHandlers]);
 
   const handleExportScene = useCallback(async () => {
     setIsExporting(true);

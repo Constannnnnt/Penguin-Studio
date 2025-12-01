@@ -273,25 +273,50 @@ class PenguinApiClient {
 
   /**
    * Refine existing image using structured prompt and seed
+   * 
+   * @param config - Current PenguinConfig with user modifications
+   * @param seed - Original seed for consistency
+   * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight")
+   * @param originalStructuredPrompt - Optional original structured prompt (if provided, uses modification mode)
    */
   async refineImage(
     config: PenguinConfig,
-    seed: number
+    seed: number,
+    modificationPrompt?: string,
+    originalStructuredPrompt?: Record<string, unknown>
   ): Promise<GenerationResponse> {
     const validation = validateConfig(config);
     if (!validation.valid) {
+      console.error('[API] Refine validation failed:', validation.errors);
+      console.error('[API] Config state:', {
+        short_description: config.short_description?.substring(0, 50),
+        objects_count: config.objects?.length,
+        lighting: config.lighting,
+        aesthetics: config.aesthetics,
+        style_medium: config.style_medium,
+        artistic_style: config.artistic_style,
+      });
       throw new ValidationError("Invalid configuration", validation.errors);
     }
 
     const sanitizedConfig = this.sanitizeConfig(config);
     const structuredPrompt = this.transformToStructuredPrompt(sanitizedConfig);
 
-    const refineRequest = {
-      structured_prompt: structuredPrompt,
+    // Build refine request
+    // If modificationPrompt is provided, use the Bria modification pattern:
+    // - prompt = modification description (e.g., "add sunlight")
+    // - structured_prompt = original or current structured prompt
+    const refineRequest: Record<string, unknown> = {
+      structured_prompt: originalStructuredPrompt || structuredPrompt,
       seed,
       aspect_ratio: "1:1",
       resolution: 1024,
     };
+
+    // Add modification prompt if provided
+    if (modificationPrompt && modificationPrompt.trim()) {
+      refineRequest.modification_prompt = modificationPrompt.trim();
+    }
 
     try {
       const response = await this.fetchWithTimeout(

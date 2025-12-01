@@ -153,12 +153,20 @@ export const useGeneration = () => {
 
   /**
    * Refine existing image using structured prompt (full config) and seed
+   * 
+   * @param config - Current config with user modifications
+   * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight", "make it warmer")
+   * @param originalStructuredPrompt - Optional original structured prompt for modification mode
    */
-  const refineImage = async (config: PenguinConfig): Promise<void> => {
+  const refineImage = async (
+    config: PenguinConfig,
+    modificationPrompt?: string,
+    originalStructuredPrompt?: Record<string, unknown>
+  ): Promise<void> => {
     if (lastSeedRef.current === null) {
-      // Silent fail - just log, don't show error toast
       console.warn('[Generation] No seed available for refinement');
       setError('Generate an image first');
+      showError('Refine Failed', 'No seed available. Generate an image first or load a generation with a seed.');
       return;
     }
 
@@ -170,7 +178,12 @@ export const useGeneration = () => {
     segmentationStore.clearResults();
 
     try {
-      const response: GenerationResponse = await apiClient.refineImage(config, lastSeedRef.current);
+      const response: GenerationResponse = await apiClient.refineImage(
+        config,
+        lastSeedRef.current,
+        modificationPrompt,
+        originalStructuredPrompt
+      );
 
       if (response.status === 'pending' || response.status === 'processing') {
         await pollGeneration(response.id);
