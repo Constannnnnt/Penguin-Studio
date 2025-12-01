@@ -1,0 +1,48 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="realSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E3A5F;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#3B6B8C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7BA3C4;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="realGrass" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A7C23;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D5016;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="realWood" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#8B4513;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#A0522D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B4513;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="realRoof" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#654321;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4A3520;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#realSky)"/>
+  <rect x="0" y="180" width="400" height="120" fill="url(#realGrass)"/>
+  <rect x="140" y="140" width="120" height="100" fill="url(#realWood)"/>
+  <polygon points="130,140 200,80 270,140" fill="url(#realRoof)"/>
+  <rect x="175" y="190" width="30" height="50" fill="#4A3520"/>
+  <circle cx="198" cy="215" r="3" fill="#D4AF37"/>
+  <rect x="150" y="155" width="25" height="25" fill="#87CEEB" opacity="0.7"/>
+  <rect x="150" y="155" width="25" height="25" stroke="#5D3A1A" stroke-width="2" fill="none"/>
+  <line x1="162" y1="155" x2="162" y2="180" stroke="#5D3A1A" stroke-width="1"/>
+  <line x1="150" y1="167" x2="175" y2="167" stroke="#5D3A1A" stroke-width="1"/>
+  <rect x="225" y="155" width="25" height="25" fill="#87CEEB" opacity="0.7"/>
+  <rect x="225" y="155" width="25" height="25" stroke="#5D3A1A" stroke-width="2" fill="none"/>
+  <line x1="237" y1="155" x2="237" y2="180" stroke="#5D3A1A" stroke-width="1"/>
+  <line x1="225" y1="167" x2="250" y2="167" stroke="#5D3A1A" stroke-width="1"/>
+  <rect x="195" y="90" width="10" height="25" fill="#8B4513"/>
+  <path d="M60,240 L60,180 Q65,175 70,180 L70,240" fill="#5D3A1A"/>
+  <ellipse cx="65" cy="160" rx="30" ry="25" fill="#228B22"/>
+  <ellipse cx="50" cy="170" rx="20" ry="18" fill="#2E8B2E"/>
+  <ellipse cx="80" cy="165" rx="22" ry="20" fill="#32CD32" opacity="0.9"/>
+  <path d="M320,240 L320,190 Q323,187 326,190 L326,240" fill="#5D3A1A"/>
+  <ellipse cx="323" cy="175" rx="25" ry="22" fill="#228B22"/>
+  <ellipse cx="310" cy="182" rx="18" ry="15" fill="#2E8B2E"/>
+  <ellipse cx="335" cy="178" rx="20" ry="17" fill="#32CD32" opacity="0.9"/>
+  <ellipse cx="80" cy="50" rx="40" ry="20" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="100" cy="48" rx="30" ry="15" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="300" cy="60" rx="35" ry="18" fill="#FFFFFF" opacity="0.7"/>
+</svg>

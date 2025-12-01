@@ -1,0 +1,30 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sereneSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E6F3FF;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#CCE5FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B3D9FF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sereneWater" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A8D4E6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7FBCD2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#sereneSky)"/>
+  <rect x="0" y="180" width="400" height="120" fill="url(#sereneWater)"/>
+  <polygon points="0,180 60,120 120,180" fill="#C5D5C5" opacity="0.6"/>
+  <polygon points="80,180 160,100 240,180" fill="#B5C5B5" opacity="0.5"/>
+  <polygon points="200,180 300,90 400,180" fill="#A5B5A5" opacity="0.4"/>
+  <ellipse cx="200" cy="190" rx="180" ry="6" fill="#8EC4D6" opacity="0.4"/>
+  <ellipse cx="200" cy="210" rx="160" ry="5" fill="#8EC4D6" opacity="0.3"/>
+  <ellipse cx="200" cy="230" rx="140" ry="4" fill="#8EC4D6" opacity="0.25"/>
+  <ellipse cx="200" cy="250" rx="120" ry="3" fill="#8EC4D6" opacity="0.2"/>
+  <polygon points="160,100 160,180 165,180 165,100" fill="#A5B5A5" opacity="0.3"/>
+  <polygon points="300,90 300,180 305,180 305,90" fill="#95A595" opacity="0.25"/>
+  <ellipse cx="100" cy="40" rx="50" ry="25" fill="#FFFFFF" opacity="0.5"/>
+  <ellipse cx="130" cy="38" rx="40" ry="20" fill="#FFFFFF" opacity="0.6"/>
+  <ellipse cx="300" cy="55" rx="45" ry="22" fill="#FFFFFF" opacity="0.45"/>
+  <ellipse cx="330" cy="52" rx="35" ry="18" fill="#FFFFFF" opacity="0.55"/>
+  <circle cx="350" cy="60" r="30" fill="#FFF5E6" opacity="0.7"/>
+  <circle cx="350" cy="60" r="22" fill="#FFFAF0" opacity="0.8"/>
+</svg>

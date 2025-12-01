@@ -1,0 +1,33 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="styleSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667EEA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764BA2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#styleSky)"/>
+  <rect x="0" y="200" width="400" height="100" fill="#2D3436"/>
+  <polygon points="50,200 100,100 150,200" fill="#636E72"/>
+  <polygon points="100,100 115,80 130,100" fill="#DFE6E9"/>
+  <polygon points="120,200 180,80 240,200" fill="#74B9FF"/>
+  <polygon points="180,80 195,55 210,80" fill="#FFFFFF"/>
+  <polygon points="200,200 270,90 340,200" fill="#A29BFE"/>
+  <polygon points="270,90 285,65 300,90" fill="#DFE6E9"/>
+  <polygon points="300,200 360,120 400,170 400,200" fill="#636E72"/>
+  <circle cx="60" cy="60" r="30" fill="#FDCB6E"/>
+  <circle cx="60" cy="60" r="22" fill="#F9CA24"/>
+  <line x1="60" y1="20" x2="60" y2="10" stroke="#FDCB6E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="60" y1="100" x2="60" y2="110" stroke="#FDCB6E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="20" y1="60" x2="10" y2="60" stroke="#FDCB6E" stroke-width="3" stroke-linecap="round"/>
+  <line x1="100" y1="60" x2="110" y2="60" stroke="#FDCB6E" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="320" cy="50" r="4" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="350" cy="70" r="3" fill="#FFFFFF" opacity="0.7"/>
+  <circle cx="280" cy="40" r="2" fill="#FFFFFF" opacity="0.6"/>
+  <circle cx="370" cy="45" r="3" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="300" cy="65" r="2" fill="#FFFFFF" opacity="0.5"/>
+  <rect x="160" y="220" width="80" height="60" fill="#2D3436"/>
+  <polygon points="150,220 200,180 250,220" fill="#636E72"/>
+  <rect x="185" y="245" width="20" height="35" fill="#FDCB6E" opacity="0.8"/>
+  <rect x="165" y="230" width="15" height="15" fill="#74B9FF" opacity="0.6"/>
+  <rect x="210" y="230" width="15" height="15" fill="#74B9FF" opacity="0.6"/>
+</svg>

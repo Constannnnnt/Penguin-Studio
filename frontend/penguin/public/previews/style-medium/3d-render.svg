@@ -1,0 +1,56 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="render3dBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A1A2E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0D0D1A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sphereMain" x1="30%" y1="20%" x2="70%" y2="80%">
+      <stop offset="0%" style="stop-color:#60A5FA;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="sphereHighlight" cx="35%" cy="30%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.9" />
+      <stop offset="30%" style="stop-color:#FFFFFF;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#60A5FA;stop-opacity:0" />
+    </radialGradient>
+    <linearGradient id="cubeTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F472B6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EC4899;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cubeLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#BE185D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#DB2777;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cubeRight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#DB2777;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#9D174D;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="torusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34D399;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="floorGrad" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#374151;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#1F2937;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#render3dBg)"/>
+  <ellipse cx="200" cy="270" rx="180" ry="25" fill="url(#floorGrad)"/>
+  <g transform="translate(80, 160)">
+    <polygon points="40,0 80,20 80,70 40,50 0,70 0,20" fill="url(#cubeTop)"/>
+    <polygon points="0,20 40,0 40,50 0,70" fill="url(#cubeLeft)"/>
+    <polygon points="40,0 80,20 80,70 40,50" fill="url(#cubeRight)"/>
+  </g>
+  <circle cx="200" cy="120" r="55" fill="url(#sphereMain)"/>
+  <circle cx="200" cy="120" r="55" fill="url(#sphereHighlight)"/>
+  <ellipse cx="200" cy="250" rx="40" ry="8" fill="#1E40AF" opacity="0.4"/>
+  <g transform="translate(290, 170)">
+    <ellipse cx="30" cy="25" rx="35" ry="12" fill="url(#torusGrad)" opacity="0.9"/>
+    <ellipse cx="30" cy="25" rx="20" ry="7" fill="url(#render3dBg)"/>
+    <ellipse cx="30" cy="20" rx="35" ry="12" fill="url(#torusGrad)" opacity="0.7"/>
+    <ellipse cx="30" cy="20" rx="20" ry="7" fill="url(#render3dBg)"/>
+  </g>
+  <ellipse cx="320" cy="250" rx="30" ry="6" fill="#059669" opacity="0.3"/>
+  <ellipse cx="120" cy="250" rx="35" ry="7" fill="#BE185D" opacity="0.3"/>
+</svg>

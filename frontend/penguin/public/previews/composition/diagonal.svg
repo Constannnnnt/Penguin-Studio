@@ -1,0 +1,20 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="diagBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2C3E50;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4CA1AF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#diagBg)"/>
+  <line x1="0" y1="300" x2="400" y2="0" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="8,4" opacity="0.3"/>
+  <line x1="0" y1="0" x2="400" y2="300" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="8,4" opacity="0.3"/>
+  <polygon points="0,300 0,150 200,0 400,0 400,150 200,300" fill="#1A252F" opacity="0.4"/>
+  <path d="M0,280 L150,130 L300,180 L400,80" stroke="#E74C3C" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M0,250 L120,120 L250,160 L400,50" stroke="#F39C12" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <circle cx="50" cy="250" r="20" fill="#3498DB" opacity="0.8"/>
+  <circle cx="150" cy="130" r="25" fill="#E74C3C" opacity="0.9"/>
+  <circle cx="300" cy="180" r="22" fill="#2ECC71" opacity="0.85"/>
+  <circle cx="380" cy="60" r="18" fill="#9B59B6" opacity="0.8"/>
+  <polygon points="80,80 100,40 120,80" fill="#F1C40F" opacity="0.7"/>
+  <polygon points="320,250 340,210 360,250" fill="#1ABC9C" opacity="0.7"/>
+</svg>

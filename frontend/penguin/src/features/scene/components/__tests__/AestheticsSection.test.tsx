@@ -1,22 +1,26 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AestheticsSection } from '../AestheticsSection';
-import { useConfigStore } from '@/core/store';
+import { useConfigStore } from '@/features/scene/store/configStore';
 
-// Mock the enhanced config store
-const mockUpdateConfig = vi.fn();
+const mockUpdateSceneConfig = vi.fn();
 
-vi.mock('@/store', () => ({
+vi.mock('@/features/scene/store/configStore', () => ({
   useConfigStore: vi.fn(),
+}));
+
+vi.mock('@/features/scene/lib/colorSchemeIntegration', () => ({
+  applyColorScheme: vi.fn(),
+  resetColorSchemeAndAdjustments: vi.fn(),
+  getPreviousColorAdjustments: vi.fn(() => null),
 }));
 
 describe('AestheticsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Mock store state
-    (useConfigStore as any).mockImplementation((selector: any) => {
+    (useConfigStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector: (state: unknown) => unknown) => {
       const mockState = {
         sceneConfig: {
           aesthetics: {
@@ -27,17 +31,16 @@ describe('AestheticsSection', () => {
             mood_atmosphere: 'neutral',
           },
         },
-        updateConfig: mockUpdateConfig,
+        updateSceneConfig: mockUpdateSceneConfig,
       };
       
       return selector(mockState);
     });
   });
 
-  it('renders all aesthetic control sections', () => {
+  it('renders all aesthetic section headers', () => {
     render(<AestheticsSection />);
     
-    expect(screen.getByText('Aesthetic & Style Configuration')).toBeInTheDocument();
     expect(screen.getByText('Style Medium')).toBeInTheDocument();
     expect(screen.getByText('Aesthetic Style')).toBeInTheDocument();
     expect(screen.getByText('Composition')).toBeInTheDocument();
@@ -45,84 +48,79 @@ describe('AestheticsSection', () => {
     expect(screen.getByText('Mood & Atmosphere')).toBeInTheDocument();
   });
 
-  it('displays current values correctly', () => {
+  it('displays current values in section headers', () => {
     render(<AestheticsSection />);
     
-    // Check that default values are displayed
-    expect(screen.getByRole('button', { name: /photograph/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /realistic/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /centered/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /vibrant/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /neutral/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Style Medium section, currently Photograph/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Aesthetic Style section, currently Realistic/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Composition section, currently Centered/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Color Scheme section, currently Vibrant/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mood & Atmosphere section, currently Neutral/i })).toBeInTheDocument();
   });
 
-  it('includes custom input buttons for style medium and aesthetic style', () => {
+  it('sections are collapsed by default', () => {
     render(<AestheticsSection />);
     
-    const customButtons = screen.getAllByText('Custom');
-    expect(customButtons).toHaveLength(2); // One for style medium, one for aesthetic style
+    const buttons = screen.getAllByRole('button');
+    buttons.forEach((button) => {
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+    });
   });
 
-  it('calls updateEnhancedConfig when style medium is changed', () => {
+  it('expands section when header is clicked', () => {
     render(<AestheticsSection />);
     
-    const paintingButton = screen.getByRole('button', { name: /painting/i });
-    fireEvent.click(paintingButton);
+    const styleMediumButton = screen.getByRole('button', { name: /Style Medium section/i });
+    fireEvent.click(styleMediumButton);
     
-    expect(mockUpdateConfig).toHaveBeenCalledWith('aesthetics.style_medium', 'painting');
+    expect(styleMediumButton).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('calls updateEnhancedConfig when aesthetic style is changed', () => {
+  it('implements accordion behavior - only one section expanded at a time', () => {
     render(<AestheticsSection />);
     
-    const artisticButton = screen.getByRole('button', { name: /artistic/i });
-    fireEvent.click(artisticButton);
+    const styleMediumButton = screen.getByRole('button', { name: /Style Medium section/i });
+    const aestheticStyleButton = screen.getByRole('button', { name: /Aesthetic Style section/i });
     
-    expect(mockUpdateConfig).toHaveBeenCalledWith('aesthetics.aesthetic_style', 'artistic');
+    fireEvent.click(styleMediumButton);
+    expect(styleMediumButton).toHaveAttribute('aria-expanded', 'true');
+    
+    fireEvent.click(aestheticStyleButton);
+    expect(aestheticStyleButton).toHaveAttribute('aria-expanded', 'true');
+    expect(styleMediumButton).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('calls updateEnhancedConfig when composition is changed', () => {
+  it('collapses section when clicking the same header again', () => {
     render(<AestheticsSection />);
     
-    const ruleOfThirdsButton = screen.getByRole('button', { name: /rule of thirds/i });
-    fireEvent.click(ruleOfThirdsButton);
+    const styleMediumButton = screen.getByRole('button', { name: /Style Medium section/i });
     
-    expect(mockUpdateConfig).toHaveBeenCalledWith('aesthetics.composition', 'rule of thirds');
+    fireEvent.click(styleMediumButton);
+    expect(styleMediumButton).toHaveAttribute('aria-expanded', 'true');
+    
+    fireEvent.click(styleMediumButton);
+    expect(styleMediumButton).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('handles custom style medium input', () => {
+  it('maintains section order: Style Medium, Aesthetic Style, Composition, Mood & Atmosphere, Color Scheme', () => {
     render(<AestheticsSection />);
     
-    // Find and click the first Custom button (style medium)
-    const customButtons = screen.getAllByText('Custom');
-    fireEvent.click(customButtons[0]);
+    const buttons = screen.getAllByRole('button');
+    const labels = buttons.map((button) => button.textContent);
     
-    // Should show input field
-    const input = screen.getByPlaceholderText('Enter custom style medium...');
-    expect(input).toBeInTheDocument();
-    
-    // Type custom value and submit
-    fireEvent.change(input, { target: { value: 'oil painting' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    
-    expect(mockUpdateConfig).toHaveBeenCalledWith('aesthetics.style_medium', 'oil painting');
+    expect(labels[0]).toContain('Style Medium');
+    expect(labels[1]).toContain('Aesthetic Style');
+    expect(labels[2]).toContain('Composition');
+    expect(labels[3]).toContain('Mood & Atmosphere');
+    expect(labels[4]).toContain('Color Scheme');
   });
 
-  it('handles custom aesthetic style input', () => {
+  it('Color Scheme section is positioned last', () => {
     render(<AestheticsSection />);
     
-    // Find and click the second Custom button (aesthetic style)
-    const customButtons = screen.getAllByText('Custom');
-    fireEvent.click(customButtons[1]);
+    const buttons = screen.getAllByRole('button');
+    const lastButton = buttons[buttons.length - 1];
     
-    // Should show input field
-    const input = screen.getByPlaceholderText('Enter custom aesthetic style...');
-    expect(input).toBeInTheDocument();
-    
-    // Type custom value and submit
-    fireEvent.change(input, { target: { value: 'surreal' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    
-    expect(mockUpdateConfig).toHaveBeenCalledWith('aesthetics.aesthetic_style', 'surreal');
+    expect(lastButton.textContent).toContain('Color Scheme');
   });
 });

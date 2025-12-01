@@ -1,0 +1,46 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="digitalBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F0F23;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1A1A2E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213E;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF006E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF4D94;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="neonBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00A8CC;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="neonPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A78BFA;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="400" height="300" fill="url(#digitalBg)"/>
+  <line x1="0" y1="280" x2="400" y2="280" stroke="#00D4FF" stroke-width="2" opacity="0.3"/>
+  <line x1="0" y1="260" x2="400" y2="260" stroke="#00D4FF" stroke-width="1" opacity="0.2"/>
+  <line x1="0" y1="240" x2="400" y2="240" stroke="#00D4FF" stroke-width="0.5" opacity="0.15"/>
+  <path d="M0,280 L200,200 L400,280" stroke="url(#neonBlue)" stroke-width="2" fill="none" filter="url(#glow)" opacity="0.8"/>
+  <polygon points="120,280 200,140 280,280" fill="none" stroke="url(#neonPink)" stroke-width="3" filter="url(#glow)"/>
+  <polygon points="150,280 200,180 250,280" fill="#FF006E" opacity="0.15"/>
+  <circle cx="200" cy="80" r="35" fill="none" stroke="url(#neonPurple)" stroke-width="3" filter="url(#glow)"/>
+  <circle cx="200" cy="80" r="25" fill="none" stroke="url(#neonPurple)" stroke-width="2" opacity="0.7"/>
+  <circle cx="200" cy="80" r="15" fill="#8B5CF6" opacity="0.3"/>
+  <polygon points="60,220 90,160 120,220" fill="none" stroke="url(#neonBlue)" stroke-width="2" filter="url(#glow)" opacity="0.8"/>
+  <polygon points="300,240 330,180 360,240" fill="none" stroke="url(#neonPink)" stroke-width="2" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="50" cy="60" r="2" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="350" cy="40" r="1.5" fill="#FFFFFF" opacity="0.6"/>
+  <circle cx="320" cy="90" r="1" fill="#FFFFFF" opacity="0.5"/>
+  <circle cx="80" cy="120" r="1.5" fill="#FFFFFF" opacity="0.7"/>
+  <circle cx="370" cy="150" r="2" fill="#FFFFFF" opacity="0.6"/>
+  <circle cx="30" cy="180" r="1" fill="#FFFFFF" opacity="0.4"/>
+</svg>

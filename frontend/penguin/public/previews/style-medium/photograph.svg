@@ -1,0 +1,42 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="photoSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#B0E0E6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E0F4FF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="photoMountain1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A5568;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D3748;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="photoMountain2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#718096;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4A5568;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="photoLake" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5B9BD5;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#4A90C2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3D7EAF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="snowCap" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E2E8F0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#photoSky)"/>
+  <polygon points="0,180 80,80 160,180" fill="url(#photoMountain1)"/>
+  <polygon points="80,80 100,60 120,80" fill="url(#snowCap)"/>
+  <polygon points="100,180 200,60 300,180" fill="url(#photoMountain2)"/>
+  <polygon points="200,60 220,40 240,60" fill="url(#snowCap)"/>
+  <polygon points="240,180 340,90 400,150 400,180" fill="url(#photoMountain1)"/>
+  <polygon points="340,90 355,75 370,90" fill="url(#snowCap)"/>
+  <rect x="0" y="180" width="400" height="120" fill="url(#photoLake)"/>
+  <ellipse cx="200" cy="200" rx="180" ry="8" fill="#6BA3D6" opacity="0.3"/>
+  <ellipse cx="200" cy="220" rx="160" ry="6" fill="#6BA3D6" opacity="0.2"/>
+  <ellipse cx="200" cy="240" rx="140" ry="5" fill="#6BA3D6" opacity="0.15"/>
+  <polygon points="100,180 200,60 300,180" fill="url(#photoMountain2)" opacity="0.3" transform="scale(1,-0.4) translate(0,-630)"/>
+  <ellipse cx="60" cy="50" rx="30" ry="15" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="80" cy="48" rx="25" ry="12" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="320" cy="70" rx="35" ry="18" fill="#FFFFFF" opacity="0.7"/>
+  <ellipse cx="345" cy="68" rx="28" ry="14" fill="#FFFFFF" opacity="0.8"/>
+</svg>

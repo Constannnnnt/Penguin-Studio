@@ -1,0 +1,27 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dramSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A1A2E;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#4A1942;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#8B0000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2C1810;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="dramLight" cx="30%" cy="60%">
+      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#FF6B35;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#dramSky)"/>
+  <rect width="400" height="300" fill="url(#dramLight)"/>
+  <polygon points="0,300 0,180 100,120 200,180 200,300" fill="#0D0D0D"/>
+  <polygon points="150,300 150,150 280,80 400,160 400,300" fill="#1A1A1A"/>
+  <polygon points="280,80 295,60 310,80" fill="#2D2D2D"/>
+  <rect x="170" y="200" width="25" height="40" fill="#FF6B35" opacity="0.8"/>
+  <rect x="210" y="180" width="20" height="30" fill="#FF6B35" opacity="0.6"/>
+  <rect x="320" y="220" width="30" height="50" fill="#FF6B35" opacity="0.7"/>
+  <polygon points="50,50 55,70 75,70 60,82 65,102 50,90 35,102 40,82 25,70 45,70" fill="#FFD700" opacity="0.9"/>
+  <polygon points="350,40 353,50 363,50 355,57 358,67 350,60 342,67 345,57 337,50 347,50" fill="#FFD700" opacity="0.7"/>
+  <polygon points="300,100 302,107 309,107 304,112 306,119 300,114 294,119 296,112 291,107 298,107" fill="#FFD700" opacity="0.6"/>
+  <ellipse cx="100" cy="250" rx="80" ry="8" fill="#FF6B35" opacity="0.15"/>
+  <path d="M0,280 Q50,270 100,280 Q150,290 200,275 Q250,260 300,280 Q350,300 400,285" stroke="#4A1942" stroke-width="2" fill="none" opacity="0.5"/>
+</svg>

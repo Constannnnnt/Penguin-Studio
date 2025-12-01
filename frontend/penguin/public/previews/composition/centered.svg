@@ -1,0 +1,27 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="centBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8F4F8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D4E5ED;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="centFlower" cx="50%" cy="30%">
+      <stop offset="0%" style="stop-color:#FFB6C1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF69B4;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#centBg)"/>
+  <line x1="200" y1="0" x2="200" y2="300" stroke="#B0C4DE" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>
+  <line x1="0" y1="150" x2="400" y2="150" stroke="#B0C4DE" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>
+  <ellipse cx="200" cy="150" rx="70" ry="70" fill="url(#centFlower)"/>
+  <circle cx="200" cy="150" r="20" fill="#FFD700"/>
+  <ellipse cx="200" cy="80" rx="25" ry="35" fill="#FF69B4" opacity="0.9"/>
+  <ellipse cx="200" cy="220" rx="25" ry="35" fill="#FF69B4" opacity="0.9"/>
+  <ellipse cx="130" cy="150" rx="35" ry="25" fill="#FF69B4" opacity="0.9"/>
+  <ellipse cx="270" cy="150" rx="35" ry="25" fill="#FF69B4" opacity="0.9"/>
+  <ellipse cx="150" cy="100" rx="28" ry="22" fill="#FFB6C1" opacity="0.85" transform="rotate(-45, 150, 100)"/>
+  <ellipse cx="250" cy="100" rx="28" ry="22" fill="#FFB6C1" opacity="0.85" transform="rotate(45, 250, 100)"/>
+  <ellipse cx="150" cy="200" rx="28" ry="22" fill="#FFB6C1" opacity="0.85" transform="rotate(45, 150, 200)"/>
+  <ellipse cx="250" cy="200" rx="28" ry="22" fill="#FFB6C1" opacity="0.85" transform="rotate(-45, 250, 200)"/>
+  <circle cx="200" cy="150" r="12" fill="#FFA500"/>
+  <circle cx="200" cy="150" r="6" fill="#8B4513"/>
+</svg>

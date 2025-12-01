@@ -1,0 +1,36 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cheerSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B0E0E6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#cheerSky)"/>
+  <circle cx="320" cy="60" r="45" fill="#FFD700"/>
+  <circle cx="320" cy="60" r="35" fill="#FFA500"/>
+  <line x1="320" y1="5" x2="320" y2="-10" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <line x1="370" y1="60" x2="385" y2="60" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <line x1="355" y1="25" x2="370" y2="10" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <line x1="355" y1="95" x2="370" y2="110" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <rect x="0" y="200" width="400" height="100" fill="#90EE90"/>
+  <path d="M0,200 Q100,180 200,200 Q300,220 400,195 L400,200 L0,200 Z" fill="#7CCD7C"/>
+  <ellipse cx="80" cy="180" rx="25" ry="30" fill="#FF6B6B"/>
+  <ellipse cx="65" cy="175" rx="18" ry="22" fill="#FF8E8E"/>
+  <ellipse cx="95" cy="175" rx="18" ry="22" fill="#FF8E8E"/>
+  <ellipse cx="80" cy="165" rx="12" ry="15" fill="#FFB3B3"/>
+  <path d="M80,210 L80,250" stroke="#228B22" stroke-width="4"/>
+  <ellipse cx="160" cy="170" rx="30" ry="35" fill="#FFB347"/>
+  <ellipse cx="145" cy="165" rx="22" ry="26" fill="#FFCC66"/>
+  <ellipse cx="175" cy="165" rx="22" ry="26" fill="#FFCC66"/>
+  <ellipse cx="160" cy="155" rx="15" ry="18" fill="#FFE066"/>
+  <path d="M160,205 L160,250" stroke="#228B22" stroke-width="4"/>
+  <ellipse cx="260" cy="175" rx="28" ry="32" fill="#DA70D6"/>
+  <ellipse cx="245" cy="170" rx="20" ry="24" fill="#EE82EE"/>
+  <ellipse cx="275" cy="170" rx="20" ry="24" fill="#EE82EE"/>
+  <ellipse cx="260" cy="160" rx="14" ry="16" fill="#FFB6C1"/>
+  <path d="M260,207 L260,250" stroke="#228B22" stroke-width="4"/>
+  <ellipse cx="60" cy="50" rx="30" ry="15" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="80" cy="48" rx="22" ry="12" fill="#FFFFFF" opacity="0.95"/>
+  <ellipse cx="150" cy="70" rx="35" ry="18" fill="#FFFFFF" opacity="0.85"/>
+  <ellipse cx="175" cy="68" rx="25" ry="13" fill="#FFFFFF" opacity="0.9"/>
+</svg>

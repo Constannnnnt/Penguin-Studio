@@ -1,0 +1,33 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="neutSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#B8C6D6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D4DDE6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#neutSky)"/>
+  <rect x="0" y="180" width="400" height="120" fill="#8B9A6B"/>
+  <path d="M0,180 Q100,170 200,185 Q300,200 400,175 L400,180 L0,180 Z" fill="#9AAB7B"/>
+  <rect x="150" y="120" width="100" height="80" fill="#A0A0A0"/>
+  <polygon points="140,120 200,70 260,120" fill="#808080"/>
+  <rect x="180" y="155" width="25" height="45" fill="#606060"/>
+  <rect x="155" y="130" width="20" height="20" fill="#B8C6D6" opacity="0.7"/>
+  <rect x="155" y="130" width="20" height="20" stroke="#707070" stroke-width="1" fill="none"/>
+  <line x1="165" y1="130" x2="165" y2="150" stroke="#707070" stroke-width="1"/>
+  <line x1="155" y1="140" x2="175" y2="140" stroke="#707070" stroke-width="1"/>
+  <rect x="225" y="130" width="20" height="20" fill="#B8C6D6" opacity="0.7"/>
+  <rect x="225" y="130" width="20" height="20" stroke="#707070" stroke-width="1" fill="none"/>
+  <line x1="235" y1="130" x2="235" y2="150" stroke="#707070" stroke-width="1"/>
+  <line x1="225" y1="140" x2="245" y2="140" stroke="#707070" stroke-width="1"/>
+  <path d="M60,200 L60,160 Q63,157 66,160 L66,200" fill="#5D4E37"/>
+  <ellipse cx="63" cy="145" rx="25" ry="22" fill="#6B8E4E"/>
+  <ellipse cx="50" cy="152" rx="18" ry="16" fill="#7A9E5E"/>
+  <ellipse cx="76" cy="150" rx="20" ry="18" fill="#8AAE6E"/>
+  <path d="M320,200 L320,165 Q323,162 326,165 L326,200" fill="#5D4E37"/>
+  <ellipse cx="323" cy="150" rx="22" ry="20" fill="#6B8E4E"/>
+  <ellipse cx="310" cy="157" rx="16" ry="14" fill="#7A9E5E"/>
+  <ellipse cx="336" cy="155" rx="18" ry="16" fill="#8AAE6E"/>
+  <ellipse cx="80" cy="50" rx="40" ry="20" fill="#FFFFFF" opacity="0.6"/>
+  <ellipse cx="100" cy="48" rx="30" ry="15" fill="#FFFFFF" opacity="0.7"/>
+  <ellipse cx="300" cy="60" rx="35" ry="18" fill="#FFFFFF" opacity="0.5"/>
+</svg>

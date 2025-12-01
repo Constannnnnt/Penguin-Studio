@@ -1,0 +1,26 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rotSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF7E5F;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FEB47B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFD194;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#rotSky)"/>
+  <line x1="133" y1="0" x2="133" y2="300" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+  <line x1="267" y1="0" x2="267" y2="300" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+  <line x1="0" y1="100" x2="400" y2="100" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+  <line x1="0" y1="200" x2="400" y2="200" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="6,4" opacity="0.4"/>
+  <rect x="0" y="200" width="400" height="100" fill="#2C3E50" opacity="0.8"/>
+  <path d="M0,200 Q100,180 200,200 Q300,220 400,195 L400,200 L0,200 Z" fill="#34495E" opacity="0.6"/>
+  <circle cx="267" cy="100" r="35" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="267" cy="100" r="28" fill="#FFF5E6" opacity="0.9"/>
+  <path d="M120,300 L120,180 Q125,175 130,180 L130,300" fill="#4A3520"/>
+  <ellipse cx="125" cy="160" rx="35" ry="30" fill="#228B22" opacity="0.9"/>
+  <ellipse cx="105" cy="170" rx="25" ry="22" fill="#2E8B2E" opacity="0.85"/>
+  <ellipse cx="145" cy="165" rx="28" ry="24" fill="#32CD32" opacity="0.8"/>
+  <ellipse cx="125" cy="145" rx="22" ry="18" fill="#3CB371" opacity="0.75"/>
+  <circle cx="133" cy="100" r="6" fill="#FFFFFF" opacity="0.3"/>
+  <circle cx="267" cy="200" r="6" fill="#FFFFFF" opacity="0.3"/>
+  <circle cx="133" cy="200" r="6" fill="#FFFFFF" opacity="0.3"/>
+</svg>
