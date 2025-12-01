@@ -69,6 +69,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
 
   const buildSceneConfigFromParsed = React.useCallback((parsedData: any, prevScene: SceneConfiguration): SceneConfiguration => ({
     background_setting: parsedData.background_setting,
+    aspect_ratio: prevScene.aspect_ratio, // Preserve existing aspect ratio
     photographic_characteristics: {
       camera_angle: parsedData.photographic_characteristics.camera_angle.value,
       lens_focal_length: parsedData.photographic_characteristics.lens_focal_length.value,

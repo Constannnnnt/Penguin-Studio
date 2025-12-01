@@ -93,28 +93,33 @@ export class MetadataUpdater {
     return direction;
   }
   
+  /**
+   * Update orientation metadata based on rotation angle.
+   * Note: Moving an object does NOT change its orientation - only rotation does.
+   * @param rotationDegrees - The rotation angle in degrees (0-360)
+   * @param originalOrientation - The original orientation string (preserved if no rotation)
+   */
   updateOrientationMetadata(
-    originalBbox: BoundingBox,
-    currentBbox: BoundingBox
+    rotationDegrees: number,
+    originalOrientation?: string
   ): string {
-    const originalCenter = {
-      x: (originalBbox.x1 + originalBbox.x2) / 2,
-      y: (originalBbox.y1 + originalBbox.y2) / 2,
-    };
-    
-    const currentCenter = {
-      x: (currentBbox.x1 + currentBbox.x2) / 2,
-      y: (currentBbox.y1 + currentBbox.y2) / 2,
-    };
-    
-    const dx = currentCenter.x - originalCenter.x;
-    const dy = currentCenter.y - originalCenter.y;
-    
-    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
-      return 'centered';
+    // If no rotation applied, preserve original orientation
+    if (rotationDegrees === 0 && originalOrientation) {
+      return originalOrientation;
     }
     
-    return this.getDirection(dx, dy);
+    // Normalize rotation to 0-360 range
+    const normalized = ((rotationDegrees % 360) + 360) % 360;
+    
+    // Convert rotation angle to orientation description
+    if (normalized < 22.5 || normalized >= 337.5) return 'facing forward';
+    if (normalized < 67.5) return 'facing right';
+    if (normalized < 112.5) return 'facing away';
+    if (normalized < 157.5) return 'facing back-right';
+    if (normalized < 202.5) return 'facing backward';
+    if (normalized < 247.5) return 'facing back-left';
+    if (normalized < 292.5) return 'facing away';
+    return 'facing left';
   }
   
   updateRelativeSizeMetadata(

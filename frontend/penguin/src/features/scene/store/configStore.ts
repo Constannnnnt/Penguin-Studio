@@ -32,6 +32,7 @@ const DEFAULT_CONFIG: PenguinConfig = {
   short_description: '',
   objects: [],
   background_setting: '',
+  aspect_ratio: '1:1',
   lighting: {
     conditions: 'natural' as LightingCondition,
     direction: {
@@ -61,6 +62,7 @@ const DEFAULT_CONFIG: PenguinConfig = {
 
 const DEFAULT_SCENE_CONFIG: SceneConfiguration = {
   background_setting: '',
+  aspect_ratio: '1:1',
   photographic_characteristics: {
     camera_angle: 'eye-level',
     lens_focal_length: 'standard',
@@ -152,15 +154,29 @@ export const useConfigStore = create<ConfigState>()(
         /**
          * Updates a configuration value using dot-notation path
          * Supports nested paths like "lighting.conditions"
+         * Also tracks image-level edits (style_medium, artistic_style)
          */
         updateConfig: (path: string, value: unknown) =>
-          set((state) => ({
-            config: setNestedProperty(
+          set((state) => {
+            // Track image-level edits
+            const oldValue = getNestedProperty(
               state.config as unknown as Record<string, unknown>,
-              path,
-              value
-            ) as unknown as PenguinConfig,
-          })),
+              path
+            );
+            
+            // Track edits for image-level properties
+            if (path === 'style_medium' || path === 'artistic_style') {
+              editTracker.trackEdit(path, oldValue, value);
+            }
+
+            return {
+              config: setNestedProperty(
+                state.config as unknown as Record<string, unknown>,
+                path,
+                value
+              ) as unknown as PenguinConfig,
+            };
+          }),
 
         /**
          * Updates scene configuration using dot-notation path
@@ -236,16 +252,24 @@ export const useConfigStore = create<ConfigState>()(
 
         /**
          * Updates a specific field of an object by index
+         * Also tracks object edits for modification prompt generation
          */
         updateObject: (index: number, field: string, value: unknown) =>
-          set((state) => ({
-            config: {
-              ...state.config,
-              objects: state.config.objects.map((obj, i) =>
-                i === index ? { ...obj, [field]: value } : obj
-              ),
-            },
-          })),
+          set((state) => {
+            // Track object edit
+            const oldValue = state.config.objects[index]?.[field as keyof SceneObject];
+            const objectLabel = state.config.objects[index]?.description || undefined;
+            editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
+
+            return {
+              config: {
+                ...state.config,
+                objects: state.config.objects.map((obj, i) =>
+                  i === index ? { ...obj, [field]: value } : obj
+                ),
+              },
+            };
+          }),
 
         /**
          * Sets the currently selected object index
@@ -271,6 +295,7 @@ export const useConfigStore = create<ConfigState>()(
           set((state) => ({
             sceneConfig: {
               background_setting: parsedData.background_setting,
+              aspect_ratio: state.sceneConfig.aspect_ratio,
               photographic_characteristics: {
                 camera_angle: parsedData.photographic_characteristics.camera_angle.value,
                 lens_focal_length: parsedData.photographic_characteristics.lens_focal_length.value,
