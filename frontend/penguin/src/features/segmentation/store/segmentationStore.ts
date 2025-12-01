@@ -161,23 +161,29 @@ const normalizeResults = (results: SegmentationResponse, metadata?: StructedProm
   return {
     ...results,
     original_image_url: toAbsoluteUrl(results.original_image_url),
-    masks: results.masks.map((mask: any) => ({
-      ...mask,
-      objectId: mask.object_id,
-      mask_url: toAbsoluteUrl(mask.mask_url),
-      promptTier: mask.prompt_tier,
-      promptText: mask.prompt_text,
-      objectMetadata: mask.object_metadata ? {
-        description: mask.object_metadata.description,
-        location: mask.object_metadata.location,
-        relationship: mask.object_metadata.relationship,
-        relative_size: mask.object_metadata.relative_size,
-        shape_and_color: mask.object_metadata.shape_and_color,
-        texture: mask.object_metadata.texture,
-        appearance_details: mask.object_metadata.appearance_details,
-        orientation: mask.object_metadata.orientation,
-      } : undefined,
-    })),
+    masks: results.masks.map((mask: any) => {
+      // Handle both snake_case (from API) and camelCase (already converted) object metadata
+      const rawMetadata = mask.object_metadata || mask.objectMetadata;
+      const objectMetadata = rawMetadata ? {
+        description: rawMetadata.description,
+        location: rawMetadata.location,
+        relationship: rawMetadata.relationship,
+        relative_size: rawMetadata.relative_size,
+        shape_and_color: rawMetadata.shape_and_color,
+        texture: rawMetadata.texture,
+        appearance_details: rawMetadata.appearance_details,
+        orientation: rawMetadata.orientation,
+      } : undefined;
+
+      return {
+        ...mask,
+        objectId: mask.object_id || mask.objectId,
+        mask_url: toAbsoluteUrl(mask.mask_url),
+        promptTier: mask.prompt_tier || mask.promptTier,
+        promptText: mask.prompt_text || mask.promptText,
+        objectMetadata,
+      };
+    }),
     ...(meta ? { metadata: meta } : {}),
   };
 };
@@ -503,6 +509,7 @@ export const useSegmentationStore = create<SegmentationState>()(
               result_id: data.result_id || generationId,
               original_image_url: data.original_image_url,
               masks: data.masks || [],
+              processing_time_ms: data.processing_time_ms || 0,
               timestamp: data.timestamp || new Date().toISOString(),
             };
 

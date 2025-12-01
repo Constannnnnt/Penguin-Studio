@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { env } from '@/shared/lib/env';
-import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
+import { useSegmentationStore, type SegmentationResponse } from '@/features/segmentation/store/segmentationStore';
 import { apiClient } from '@/core/services/api';
 import { useConfigStore } from '@/features/scene/store/configStore';
 
@@ -25,6 +25,7 @@ export interface FileSystemState {
   currentSeed: number | null;
   promptVersions: string[];
   isLoadingGeneration: boolean;
+  originalStructuredPrompt: Record<string, unknown> | null;
 
   loadFileTree: () => Promise<void>;
   selectFile: (node: FileNode) => void;
@@ -48,6 +49,7 @@ export const useFileSystemStore = create<FileSystemState>()(
       selectedFile: null,
       selectedFileUrl: null,
       expandedFolders: new Set<string>(['/']),
+      originalStructuredPrompt: null,
       currentGenerationId: null,
       currentSeed: null,
       promptVersions: [],
@@ -161,25 +163,22 @@ export const useFileSystemStore = create<FileSystemState>()(
                 
                 return {
                   mask_id: mask.mask_id,
-                  object_id: mask.object_id,
                   label: mask.label || `Object ${index + 1}`,
                   confidence: mask.confidence ?? 1.0,
                   bounding_box: hasRichData 
-                    ? mask.bounding_box 
+                    ? mask.bounding_box! 
                     : { x1: 0, y1: 0, x2: 100, y2: 100 },
                   area_pixels: mask.area_pixels ?? 0,
                   area_percentage: mask.area_percentage ?? 0,
                   centroid: mask.centroid ?? [50, 50] as [number, number],
                   mask_url: maskUrl,
-                  prompt_tier: mask.prompt_tier,
-                  prompt_text: mask.prompt_text,
-                  object_metadata: mask.object_metadata,
+                  promptText: mask.prompt_text,
+                  objectMetadata: mask.object_metadata,
                 };
               }),
               processing_time_ms: 0,
               timestamp: new Date().toISOString(),
-              metadata: response.structured_prompt,
-            };
+            } as SegmentationResponse;
 
             segmentationStore.setResults(segmentationResults);
           } else {
@@ -201,6 +200,8 @@ export const useFileSystemStore = create<FileSystemState>()(
             currentSeed: seed ?? null,
             promptVersions: response.prompt_versions,
             isLoadingGeneration: false,
+            // Store original structured prompt for refinement
+            originalStructuredPrompt: response.structured_prompt || null,
           });
 
           console.log(`[FileSystem] Loaded generation ${generationId}: ${response.masks.length} masks, seed=${seed}`);

@@ -133,11 +133,10 @@ export type AestheticStyle =
 
 export type CompositionType =
   | 'centered'
-  | 'rule of thirds'
-  | 'symmetrical'
+  | 'rule-of-thirds'
   | 'diagonal'
-  | 'leading lines'
-  | 'frame within frame';
+  | 'symmetrical'
+  | 'asymmetrical';
 
 export type ColorScheme =
   | 'vibrant'
@@ -150,12 +149,10 @@ export type ColorScheme =
 
 export type MoodType =
   | 'neutral'
-  | 'joyful'
+  | 'cheerful'
   | 'dramatic'
-  | 'calm'
-  | 'mysterious'
-  | 'energetic'
-  | 'melancholic';
+  | 'serene'
+  | 'mysterious';
 
 export type ArtisticStyle =
   | 'realistic'
@@ -283,6 +280,23 @@ export interface LoadGenerationMask {
   mask_id: string;
   mask_url: string;
   label: string;
+  confidence?: number;
+  bounding_box?: { x1: number; y1: number; x2: number; y2: number };
+  area_pixels?: number;
+  area_percentage?: number;
+  centroid?: [number, number];
+  prompt_tier?: 'CORE' | 'CORE_VISUAL' | 'CORE_VISUAL_SPATIAL';
+  prompt_text?: string;
+  object_metadata?: {
+    description?: string;
+    location?: string;
+    relationship?: string;
+    relative_size?: string;
+    shape_and_color?: string;
+    texture?: string;
+    appearance_details?: string;
+    orientation?: string;
+  };
 }
 
 export interface LoadGenerationResponse {
