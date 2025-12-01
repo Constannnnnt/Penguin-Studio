@@ -14,6 +14,7 @@ import type {
   StyleMedium,
   ArtisticStyle,
 } from '@/core/types';
+import { editTracker } from '@/shared/lib/editTracker';
 
 // ============================================================================
 // Default Configuration
@@ -115,6 +116,18 @@ const setNestedProperty = (
   return newObj;
 };
 
+/**
+ * Gets a nested property value from an object using a dot-notation path
+ */
+const getNestedProperty = (obj: Record<string, unknown>, path: string): unknown => {
+  return path.split('.').reduce((current: unknown, key) => {
+    if (current && typeof current === 'object') {
+      return (current as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
+};
+
 // ============================================================================
 // Config Store
 // ============================================================================
@@ -151,15 +164,25 @@ export const useConfigStore = create<ConfigState>()(
 
         /**
          * Updates scene configuration using dot-notation path
+         * Also tracks the edit for modification prompt generation
          */
         updateSceneConfig: (path: string, value: unknown) =>
-          set((state) => ({
-            sceneConfig: setNestedProperty(
+          set((state) => {
+            // Track the edit
+            const oldValue = getNestedProperty(
               state.sceneConfig as unknown as Record<string, unknown>,
-              path,
-              value
-            ) as unknown as SceneConfiguration,
-          })),
+              path
+            );
+            editTracker.trackEdit(path, oldValue, value);
+
+            return {
+              sceneConfig: setNestedProperty(
+                state.sceneConfig as unknown as Record<string, unknown>,
+                path,
+                value
+              ) as unknown as SceneConfiguration,
+            };
+          }),
 
         /**
          * Replaces the entire configuration
@@ -271,6 +294,7 @@ export const useConfigStore = create<ConfigState>()(
 
         /**
          * Updates both config and sceneConfig from Bria's structured prompt response
+         * Also sets the baseline for edit tracking
          */
         updateConfigFromStructuredPrompt: (structuredPrompt: Record<string, unknown>) =>
           set((state) => {
@@ -279,6 +303,13 @@ export const useConfigStore = create<ConfigState>()(
             const aesthetics = (sp.aesthetics as Record<string, unknown>) || {};
             const photo = (sp.photographic_characteristics as Record<string, unknown>) || {};
             const rawObjects = sp.objects as Array<Record<string, unknown>> | undefined;
+
+            // Log the incoming short_description
+            console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);
+
+            // Clear previous edits and set new baseline for edit tracking
+            editTracker.clearEdits();
+            editTracker.setBaseline(sp);
 
             const newBackgroundSetting = (sp.background_setting as string) || state.config.background_setting;
             const newLightingConditions = (lighting.conditions as string) || state.config.lighting.conditions;

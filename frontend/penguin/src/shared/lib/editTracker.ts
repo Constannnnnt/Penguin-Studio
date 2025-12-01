@@ -1,0 +1,211 @@
+/**
+ * Edit Tracker - Tracks user edits and generates modification prompts
+ * 
+ * This module tracks changes made to the scene configuration and generates
+ * natural language descriptions of those changes for use with Bria's
+ * modification API.
+ */
+
+export interface EditRecord {
+  field: string;
+  category: 'lighting' | 'aesthetics' | 'camera' | 'object' | 'background' | 'style';
+  oldValue: unknown;
+  newValue: unknown;
+  timestamp: number;
+  description: string;
+}
+
+export interface EditTrackerState {
+  edits: EditRecord[];
+  baselineConfig: Record<string, unknown> | null;
+}
+
+const FIELD_DESCRIPTIONS: Record<string, (oldVal: unknown, newVal: unknown) => string> = {
+  'lighting.conditions': (_, newVal) => `change lighting to ${newVal}`,
+  'lighting.shadows': (oldVal, newVal) => {
+    const shadowLabels = ['no shadows', 'subtle shadows', 'soft shadows', 'moderate shadows', 'strong shadows', 'dramatic shadows'];
+    return `change shadows to ${shadowLabels[newVal as number] || newVal}`;
+  },
+  'lighting.direction': () => 'adjust light direction',
+  'aesthetics.composition': (_, newVal) => `use ${newVal} composition`,
+  'aesthetics.color_scheme': (_, newVal) => `change color scheme to ${newVal}`,
+  'aesthetics.mood_atmosphere': (_, newVal) => `set mood to ${newVal}`,
+  'aesthetics.style_medium': (_, newVal) => `change style to ${newVal}`,
+  'aesthetics.aesthetic_style': (_, newVal) => `make it more ${newVal}`,
+  'photographic_characteristics.camera_angle': (_, newVal) => `change camera angle to ${newVal}`,
+  'photographic_characteristics.lens_focal_length': (_, newVal) => `use ${newVal} lens`,
+  'photographic_characteristics.depth_of_field': (oldVal, newVal) => {
+    const old = oldVal as number;
+    const curr = newVal as number;
+    if (curr < old) return 'make depth of field shallower';
+    return 'make depth of field deeper';
+  },
+  'photographic_characteristics.focus': (oldVal, newVal) => {
+    const old = oldVal as number;
+    const curr = newVal as number;
+    if (curr > old) return 'sharpen the focus';
+    return 'soften the focus';
+  },
+  'background_setting': (_, newVal) => `change background to ${(newVal as string).substring(0, 50)}`,
+  'style_medium': (_, newVal) => `change medium to ${newVal}`,
+  'artistic_style': (_, newVal) => `make style more ${newVal}`,
+};
+
+/**
+ * Generate a description for an object edit
+ */
+const describeObjectEdit = (
+  objectIndex: number,
+  field: string,
+  oldValue: unknown,
+  newValue: unknown,
+  objectLabel?: string
+): string => {
+  const label = objectLabel || `object ${objectIndex + 1}`;
+  
+  switch (field) {
+    case 'description':
+      return `update ${label} description`;
+    case 'location':
+      return `move ${label} to ${newValue}`;
+    case 'relative_size':
+      return `change ${label} size to ${newValue}`;
+    case 'shape_and_color':
+      return `change ${label} appearance`;
+    case 'texture':
+      return `change ${label} texture`;
+    case 'orientation':
+      return `rotate ${label} to face ${newValue}`;
+    case 'pose':
+      return `change ${label} pose`;
+    case 'expression':
+      return `change ${label} expression to ${newValue}`;
+    case 'action':
+      return `make ${label} ${newValue}`;
+    default:
+      return `modify ${label}`;
+  }
+};
+
+/**
+ * Get nested value from object using dot notation path
+ */
+const getNestedValue = (obj: Record<string, unknown>, path: string): unknown => {
+  return path.split('.').reduce((current: unknown, key) => {
+    if (current && typeof current === 'object') {
+      return (current as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
+};
+
+/**
+ * Compare two values for equality (handles objects)
+ */
+const valuesEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (typeof a === 'object' && a !== null && b !== null) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return false;
+};
+
+/**
+ * Create an edit tracker instance
+ */
+export const createEditTracker = (): {
+  setBaseline: (config: Record<string, unknown>) => void;
+  trackEdit: (path: string, oldValue: unknown, newValue: unknown, objectIndex?: number, objectLabel?: string) => void;
+  getEdits: () => EditRecord[];
+  getModificationPrompt: () => string;
+  clearEdits: () => void;
+  hasEdits: () => boolean;
+} => {
+  const state: EditTrackerState = {
+    edits: [],
+    baselineConfig: null,
+  };
+
+  return {
+    setBaseline: (config: Record<string, unknown>) => {
+      state.baselineConfig = JSON.parse(JSON.stringify(config));
+      state.edits = [];
+    },
+
+    trackEdit: (path: string, oldValue: unknown, newValue: unknown, objectIndex?: number, objectLabel?: string) => {
+      if (valuesEqual(oldValue, newValue)) return;
+
+      let description: string;
+      let category: EditRecord['category'];
+
+      // Determine category and description
+      if (path.startsWith('objects[')) {
+        category = 'object';
+        const field = path.split('.').pop() || '';
+        description = describeObjectEdit(objectIndex ?? 0, field, oldValue, newValue, objectLabel);
+      } else if (path.startsWith('lighting')) {
+        category = 'lighting';
+        description = FIELD_DESCRIPTIONS[path]?.(oldValue, newValue) || `change ${path}`;
+      } else if (path.startsWith('aesthetics')) {
+        category = 'aesthetics';
+        description = FIELD_DESCRIPTIONS[path]?.(oldValue, newValue) || `change ${path}`;
+      } else if (path.startsWith('photographic')) {
+        category = 'camera';
+        description = FIELD_DESCRIPTIONS[path]?.(oldValue, newValue) || `change ${path}`;
+      } else if (path.includes('background')) {
+        category = 'background';
+        description = FIELD_DESCRIPTIONS[path]?.(oldValue, newValue) || `change background`;
+      } else {
+        category = 'style';
+        description = FIELD_DESCRIPTIONS[path]?.(oldValue, newValue) || `change ${path}`;
+      }
+
+      // Check if we already have an edit for this path, update it
+      const existingIndex = state.edits.findIndex(e => e.field === path);
+      if (existingIndex >= 0) {
+        state.edits[existingIndex] = {
+          ...state.edits[existingIndex],
+          newValue,
+          timestamp: Date.now(),
+          description,
+        };
+      } else {
+        state.edits.push({
+          field: path,
+          category,
+          oldValue,
+          newValue,
+          timestamp: Date.now(),
+          description,
+        });
+      }
+    },
+
+    getEdits: () => [...state.edits],
+
+    getModificationPrompt: () => {
+      if (state.edits.length === 0) return '';
+      
+      // Group edits by category for better readability
+      const descriptions = state.edits.map(e => e.description);
+      
+      // Join with commas and 'and' for the last item
+      if (descriptions.length === 1) {
+        return descriptions[0];
+      }
+      
+      const last = descriptions.pop();
+      return `${descriptions.join(', ')} and ${last}`;
+    },
+
+    clearEdits: () => {
+      state.edits = [];
+    },
+
+    hasEdits: () => state.edits.length > 0,
+  };
+};
+
+// Singleton instance for global edit tracking
+export const editTracker = createEditTracker();
