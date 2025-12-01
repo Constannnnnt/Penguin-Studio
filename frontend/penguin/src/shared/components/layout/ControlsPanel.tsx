@@ -173,7 +173,7 @@ export const ControlsPanel: React.FC = () => {
         position="right"
         actions={
           <div className="flex gap-2">
-            <Button
+            {/* <Button
               size="sm"
               variant="outline"
               onClick={handleExportScene}
@@ -182,7 +182,7 @@ export const ControlsPanel: React.FC = () => {
             >
               <Download className="h-4 w-4 mr-2" />
               {isExporting ? 'Exporting...' : 'Export'}
-            </Button>
+            </Button> */}
             <Button
               size="sm"
               variant="secondary"

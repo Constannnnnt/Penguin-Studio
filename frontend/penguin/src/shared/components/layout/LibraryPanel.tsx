@@ -3,7 +3,7 @@ import { useFileSystemStore } from '@/core/store/fileSystemStore';
 import { PanelHeader } from './PanelHeader';
 import { FileTree } from './FileTree';
 import { FileTreeSkeleton } from './FileTreeSkeleton';
-import { UploadForSegmentationButton } from '@/features/segmentation/components/UploadForSegmentationButton';
+// import { UploadForSegmentationButton } from '@/features/segmentation/components/UploadForSegmentationButton';
 
 export const LibraryPanel: React.FC = () => {
   const { rootDirectory, selectedFile, expandedFolders, selectFile, toggleFolder, loadFileTree } = useFileSystemStore();
@@ -43,9 +43,9 @@ export const LibraryPanel: React.FC = () => {
           </div>
         )}
       </div>
-        <div className="pt-3 ml-2 mr-2 mb-4 border-t border-border">
+      {/* <div className="pt-3 ml-2 mr-2 mb-4 border-t border-border">
         <UploadForSegmentationButton />
-      </div>
+      </div> */}
     </aside>
   );
 };
