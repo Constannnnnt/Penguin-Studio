@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Auto README Generator",
+  "description": "Automatically generates a comprehensive README.md in the root directory when project files are modified. The README includes: 1) High-level features overview, 2) Installation guide (package managers, dependencies, third-party tools), 3) Core features description, 4) Usage instructions, 5) System design hierarchy, and 6) Apache 2.0 License. The root README stays clean and concise with basic setup commands, while detailed documentation is placed in the docs folder. Avoids emojis and AI tone, keeping wording concise, short and simple.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the current project structure and generate a comprehensive README.md in the root directory. The README should include:\n\n1. High-level features overview - Brief description of what the project does with main functionality and capabilities\n2. Installation guide - git clone with git modules, install Package managers (uv, pnpm) if needed, dependencies, third-party tools (SAM3), pay attention to the installation order: uv sync backend, uv pip install sam3\n3. Usage instructions - Basic setup commands and how to run the project\n4. System design hierarchy - Architecture overview showing backend (FastAPI, Python), frontend (React, TypeScript), and third-party integrations\n5. Apache 2.0 License section\n\nKeep the root README clean and concise with basic setup commands. Place detailed documentation in the docs folder. Avoid using emojis and AI tone. Keep wording concise, short and simple. Use direct, technical language without conversational phrases."
+  }
+}
