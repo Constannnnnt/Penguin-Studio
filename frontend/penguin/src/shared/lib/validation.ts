@@ -90,7 +90,8 @@ export const validateConfig = (config: PenguinConfig): ValidationResult => {
     errors.push('Lighting direction is required');
   }
 
-  if (!config.lighting?.shadows) {
+  // shadows can be 0, so check for undefined/null explicitly
+  if (config.lighting?.shadows === undefined || config.lighting?.shadows === null) {
     errors.push('Shadow quality is required');
   }
 
@@ -116,11 +117,15 @@ export const validateConfig = (config: PenguinConfig): ValidationResult => {
     errors.push('Lens focal length is required');
   }
 
-  if (!config.photographic_characteristics?.depth_of_field) {
+  // depth_of_field can be 0, so check for undefined/null explicitly
+  if (config.photographic_characteristics?.depth_of_field === undefined || 
+      config.photographic_characteristics?.depth_of_field === null) {
     errors.push('Depth of field is required');
   }
 
-  if (!config.photographic_characteristics?.focus) {
+  // focus can be 0, so check for undefined/null explicitly
+  if (config.photographic_characteristics?.focus === undefined || 
+      config.photographic_characteristics?.focus === null) {
     errors.push('Focus type is required');
   }
 
@@ -379,7 +384,21 @@ export const validateJSONMetadata = (
 };
 
 /**
+ * Helper to check if a value is a valid number or can be converted to one
+ */
+const isValidNumericValue = (value: unknown): boolean => {
+  if (typeof value === 'number' && !isNaN(value)) return true;
+  if (typeof value === 'string') {
+    const num = Number(value);
+    return !isNaN(num);
+  }
+  return false;
+};
+
+/**
  * Validates scene configuration
+ * Note: This validation is lenient for parsed data from backend which may have
+ * descriptive strings instead of numeric values. The semantic parser handles conversion.
  */
 export const validateSceneConfig = (
   config: unknown
@@ -408,12 +427,13 @@ export const validateSceneConfig = (
     }
   }
 
-  // Validate photographic_characteristics
+  // Validate photographic_characteristics - only validate if values are numeric
+  // String values from backend are handled by semantic parser
   if (configObj.photographic_characteristics && typeof configObj.photographic_characteristics === 'object') {
     const photoChar = configObj.photographic_characteristics as Record<string, unknown>;
     
-    // Validate depth_of_field
-    if (photoChar.depth_of_field !== undefined) {
+    // Only validate depth_of_field if it's a numeric value
+    if (photoChar.depth_of_field !== undefined && isValidNumericValue(photoChar.depth_of_field)) {
       const dofValidation = validateSliderValue(
         Number(photoChar.depth_of_field),
         { min: 0, max: 100, fieldName: 'Depth of field' }
@@ -423,8 +443,8 @@ export const validateSceneConfig = (
       }
     }
 
-    // Validate focus
-    if (photoChar.focus !== undefined) {
+    // Only validate focus if it's a numeric value
+    if (photoChar.focus !== undefined && isValidNumericValue(photoChar.focus)) {
       const focusValidation = validateSliderValue(
         Number(photoChar.focus),
         { min: 0, max: 100, fieldName: 'Focus' }
@@ -435,12 +455,12 @@ export const validateSceneConfig = (
     }
   }
 
-  // Validate lighting
+  // Validate lighting - only validate numeric values
   if (configObj.lighting && typeof configObj.lighting === 'object') {
     const lighting = configObj.lighting as Record<string, unknown>;
     
-    // Validate shadows
-    if (lighting.shadows !== undefined) {
+    // Only validate shadows if it's a numeric value
+    if (lighting.shadows !== undefined && isValidNumericValue(lighting.shadows)) {
       const shadowValidation = validateSliderValue(
         Number(lighting.shadows),
         { min: 0, max: 5, fieldName: 'Shadow intensity' }
@@ -450,7 +470,7 @@ export const validateSceneConfig = (
       }
     }
 
-    // Validate direction
+    // Validate direction only if it has numeric values
     if (lighting.direction && typeof lighting.direction === 'object') {
       const direction = lighting.direction as Record<string, unknown>;
       if (typeof direction.x === 'number' && typeof direction.y === 'number' &&

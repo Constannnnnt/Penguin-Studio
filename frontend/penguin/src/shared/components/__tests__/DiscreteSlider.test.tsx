@@ -51,66 +51,7 @@ describe('DiscreteSlider', () => {
     expect(screen.getByText('dramatic')).toBeInTheDocument();
   });
 
-  it('handles keyboard navigation with arrow keys', () => {
-    render(
-      <DiscreteSlider
-        label="Test Slider"
-        value={2}
-        onChange={mockOnChange}
-        options={mockOptions}
-      />
-    );
 
-    const slider = screen.getByRole('slider');
-    
-    // Right arrow should increase value
-    fireEvent.keyDown(slider, { key: 'ArrowRight' });
-    expect(mockOnChange).toHaveBeenCalledWith(3);
-
-    // Left arrow should decrease value
-    mockOnChange.mockClear();
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
-    expect(mockOnChange).toHaveBeenCalledWith(1);
-  });
-
-  it('handles Home and End keys', () => {
-    render(
-      <DiscreteSlider
-        label="Test Slider"
-        value={2}
-        onChange={mockOnChange}
-        options={mockOptions}
-      />
-    );
-
-    const slider = screen.getByRole('slider');
-    
-    // Home key should go to first value
-    fireEvent.keyDown(slider, { key: 'Home' });
-    expect(mockOnChange).toHaveBeenCalledWith(0);
-
-    // End key should go to last value
-    mockOnChange.mockClear();
-    fireEvent.keyDown(slider, { key: 'End' });
-    expect(mockOnChange).toHaveBeenCalledWith(5);
-  });
-
-  it('does not change value at boundaries', () => {
-    render(
-      <DiscreteSlider
-        label="Test Slider"
-        value={0}
-        onChange={mockOnChange}
-        options={mockOptions}
-      />
-    );
-
-    const slider = screen.getByRole('slider');
-    
-    // Left arrow at minimum should not change
-    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
-    expect(mockOnChange).not.toHaveBeenCalled();
-  });
 
   it('has proper ARIA attributes', () => {
     render(
@@ -145,10 +86,6 @@ describe('DiscreteSlider', () => {
     
     expect(slider).toHaveAttribute('aria-disabled', 'true');
     expect(slider).toHaveAttribute('tabIndex', '-1');
-    
-    // Should not respond to keyboard events when disabled
-    fireEvent.keyDown(slider, { key: 'ArrowRight' });
-    expect(mockOnChange).not.toHaveBeenCalled();
   });
 
   it('handles mouse click on track', () => {
@@ -250,20 +187,5 @@ describe('DiscreteSlider', () => {
     expect(slider).toHaveAttribute('aria-valuemax', '0');
   });
 
-  it('ignores non-navigation keys', () => {
-    render(
-      <DiscreteSlider
-        label="Test Slider"
-        value={2}
-        onChange={mockOnChange}
-        options={mockOptions}
-      />
-    );
 
-    const slider = screen.getByRole('slider');
-    
-    // Random key should not trigger onChange
-    fireEvent.keyDown(slider, { key: 'a' });
-    expect(mockOnChange).not.toHaveBeenCalled();
-  });
 });

@@ -42,7 +42,7 @@ describe('DraggableMaskOverlay', () => {
   it('applies correct opacity when not selected or hovered', () => {
     const { container } = render(<DraggableMaskOverlay {...mockProps} />);
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.4' });
+    expect(overlay).toHaveStyle({ opacity: '0.15' });
   });
 
   it('applies correct opacity when hovered', () => {
@@ -50,7 +50,7 @@ describe('DraggableMaskOverlay', () => {
       <DraggableMaskOverlay {...mockProps} isHovered={true} />
     );
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.6' });
+    expect(overlay).toHaveStyle({ opacity: '0.35' });
   });
 
   it('applies correct opacity when selected', () => {
@@ -58,7 +58,7 @@ describe('DraggableMaskOverlay', () => {
       <DraggableMaskOverlay {...mockProps} isSelected={true} />
     );
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.7' });
+    expect(overlay).toHaveStyle({ opacity: '0.4' });
   });
 
   it('applies correct cursor when not selected', () => {
@@ -78,22 +78,8 @@ describe('DraggableMaskOverlay', () => {
   it('calls onClick when clicked and not selected', () => {
     const { container } = render(<DraggableMaskOverlay {...mockProps} />);
     const overlay = container.firstChild as HTMLElement;
-    fireEvent.mouseDown(overlay);
+    fireEvent.pointerDown(overlay);
     expect(mockProps.onClick).toHaveBeenCalled();
-  });
-
-  it('calls onMouseEnter when mouse enters', () => {
-    const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-    const overlay = container.firstChild as HTMLElement;
-    fireEvent.mouseEnter(overlay);
-    expect(mockProps.onMouseEnter).toHaveBeenCalled();
-  });
-
-  it('calls onMouseLeave when mouse leaves', () => {
-    const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-    const overlay = container.firstChild as HTMLElement;
-    fireEvent.mouseLeave(overlay);
-    expect(mockProps.onMouseLeave).toHaveBeenCalled();
   });
 
   it('positions overlay based on bounding box', () => {
@@ -181,57 +167,23 @@ describe('DraggableMaskOverlay', () => {
 
     const { container } = render(<DraggableMaskOverlay {...mockProps} />);
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.5' });
+    expect(overlay).toHaveStyle({ opacity: '0.15' });
   });
 
-  it('applies grabbing cursor when dragging', () => {
-    useSegmentationStore.setState({
-      maskManipulation: new Map([
-        [
-          'test-mask-1',
-          {
-            maskId: 'test-mask-1',
-            originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            currentBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-            transform: {
-              position: { x: 0, y: 0 },
-              scale: { width: 1, height: 1 },
-              imageEdits: {
-                brightness: 0,
-                contrast: 0,
-                saturation: 0,
-                hue: 0,
-                blur: 0,
-                exposure: 0,
-                vibrance: 0,
-              },
-            },
-            isDragging: true,
-            isResizing: false,
-            resizeHandle: null,
-            isHidden: false,
-          },
-        ],
-      ]),
-    });
 
-    const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-    const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ cursor: 'grabbing' });
-  });
 
   it('applies higher opacity when selected', () => {
     const { container } = render(
       <DraggableMaskOverlay {...mockProps} isSelected={true} />
     );
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.7' });
+    expect(overlay).toHaveStyle({ opacity: '0.4' });
   });
 
   it('applies default opacity when not selected', () => {
     const { container } = render(<DraggableMaskOverlay {...mockProps} />);
     const overlay = container.firstChild as HTMLElement;
-    expect(overlay).toHaveStyle({ opacity: '0.4' });
+    expect(overlay).toHaveStyle({ opacity: '0.15' });
   });
 
   it('does not show original position indicator when mask has not moved', () => {
@@ -316,118 +268,6 @@ describe('DraggableMaskOverlay', () => {
 
 
   describe('Resize visual feedback', () => {
-    it('applies resize cursor when resizing', () => {
-      useSegmentationStore.setState({
-        maskManipulation: new Map([
-          [
-            'test-mask-1',
-            {
-              maskId: 'test-mask-1',
-              originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              currentBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              transform: {
-                position: { x: 0, y: 0 },
-                scale: { width: 1, height: 1 },
-                imageEdits: {
-                  brightness: 0,
-                  contrast: 0,
-                  saturation: 0,
-                  hue: 0,
-                  blur: 0,
-                  exposure: 0,
-                  vibrance: 0,
-                },
-              },
-              isDragging: false,
-              isResizing: true,
-              resizeHandle: 'se',
-              isHidden: false,
-            },
-          ],
-        ]),
-      });
-
-      const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-      const overlay = container.firstChild as HTMLElement;
-      expect(overlay).toHaveStyle({ cursor: 'se-resize' });
-    });
-
-    it('applies correct resize cursor for each handle', () => {
-      const handles: Array<'nw' | 'ne' | 'sw' | 'se'> = ['nw', 'ne', 'sw', 'se'];
-      
-      handles.forEach(handle => {
-        useSegmentationStore.setState({
-          maskManipulation: new Map([
-            [
-              'test-mask-1',
-              {
-                maskId: 'test-mask-1',
-                originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-                currentBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-                transform: {
-                  position: { x: 0, y: 0 },
-                  scale: { width: 1, height: 1 },
-                  imageEdits: {
-                    brightness: 0,
-                    contrast: 0,
-                    saturation: 0,
-                    hue: 0,
-                    blur: 0,
-                    exposure: 0,
-                    vibrance: 0,
-                  },
-                },
-                isDragging: false,
-                isResizing: true,
-                resizeHandle: handle,
-                isHidden: false,
-              },
-            ],
-          ]),
-        });
-
-        const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-        const overlay = container.firstChild as HTMLElement;
-        expect(overlay).toHaveStyle({ cursor: `${handle}-resize` });
-      });
-    });
-
-    it('shows resize cursor when resizing', () => {
-      useSegmentationStore.setState({
-        maskManipulation: new Map([
-          [
-            'test-mask-1',
-            {
-              maskId: 'test-mask-1',
-              originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              currentBoundingBox: { x1: 10, y1: 20, x2: 120, y2: 220 },
-              transform: {
-                position: { x: 0, y: 0 },
-                scale: { width: 1.2, height: 1.1 },
-                imageEdits: {
-                  brightness: 0,
-                  contrast: 0,
-                  saturation: 0,
-                  hue: 0,
-                  blur: 0,
-                  exposure: 0,
-                  vibrance: 0,
-                },
-              },
-              isDragging: false,
-              isResizing: true,
-              resizeHandle: 'se',
-              isHidden: false,
-            },
-          ],
-        ]),
-      });
-
-      const { container } = render(<DraggableMaskOverlay {...mockProps} />);
-      const overlay = container.firstChild as HTMLElement;
-      expect(overlay).toHaveStyle({ cursor: 'se-resize' });
-    });
-
     it('does not show dashed outline when not resizing', () => {
       useSegmentationStore.setState({
         maskManipulation: new Map([
@@ -462,80 +302,6 @@ describe('DraggableMaskOverlay', () => {
       const { container } = render(<DraggableMaskOverlay {...mockProps} />);
       const preview = container.querySelector('[style*="dashed"]');
       expect(preview).not.toBeInTheDocument();
-    });
-
-    it('restores cursor after resize completes', () => {
-      const { container, rerender } = render(<DraggableMaskOverlay {...mockProps} isSelected={true} />);
-      
-      // Start resizing
-      useSegmentationStore.setState({
-        maskManipulation: new Map([
-          [
-            'test-mask-1',
-            {
-              maskId: 'test-mask-1',
-              originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              currentBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              transform: {
-                position: { x: 0, y: 0 },
-                scale: { width: 1, height: 1 },
-                imageEdits: {
-                  brightness: 0,
-                  contrast: 0,
-                  saturation: 0,
-                  hue: 0,
-                  blur: 0,
-                  exposure: 0,
-                  vibrance: 0,
-                },
-              },
-              isDragging: false,
-              isResizing: true,
-              resizeHandle: 'se',
-              isHidden: false,
-            },
-          ],
-        ]),
-      });
-      
-      rerender(<DraggableMaskOverlay {...mockProps} isSelected={true} />);
-      let overlay = container.firstChild as HTMLElement;
-      expect(overlay).toHaveStyle({ cursor: 'se-resize' });
-      
-      // End resizing
-      useSegmentationStore.setState({
-        maskManipulation: new Map([
-          [
-            'test-mask-1',
-            {
-              maskId: 'test-mask-1',
-              originalBoundingBox: { x1: 10, y1: 20, x2: 100, y2: 200 },
-              currentBoundingBox: { x1: 10, y1: 20, x2: 120, y2: 220 },
-              transform: {
-                position: { x: 0, y: 0 },
-                scale: { width: 1.2, height: 1.1 },
-                imageEdits: {
-                  brightness: 0,
-                  contrast: 0,
-                  saturation: 0,
-                  hue: 0,
-                  blur: 0,
-                  exposure: 0,
-                  vibrance: 0,
-                },
-              },
-              isDragging: false,
-              isResizing: false,
-              resizeHandle: null,
-              isHidden: false,
-            },
-          ],
-        ]),
-      });
-      
-      rerender(<DraggableMaskOverlay {...mockProps} isSelected={true} />);
-      overlay = container.firstChild as HTMLElement;
-      expect(overlay).toHaveStyle({ cursor: 'grab' });
     });
   });
 

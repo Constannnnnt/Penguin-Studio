@@ -1,5 +1,6 @@
 import { useImageEditStore } from '@/features/imageEdit/store/imageEditStore';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
+import { resetColorSchemeAndAdjustments } from '@/features/scene/lib/colorSchemeIntegration';
 import { Label } from '@/shared/components/ui/label';
 import { Slider } from '@/shared/components/ui/slider';
 import { Button } from '@/shared/components/ui/button';
@@ -67,7 +68,6 @@ export const ImageControlsTab: React.FC = () => {
     setVibrance: setGlobalVibrance,
     setVignette,
     setGrain,
-    resetImageEdits,
   } = useImageEditStore();
 
   const { selectedMaskId, maskManipulation, applyImageEditToMask, results } = useSegmentationStore();
@@ -158,8 +158,8 @@ export const ImageControlsTab: React.FC = () => {
       const { resetMaskTransform } = useSegmentationStore.getState();
       resetMaskTransform(selectedMaskId);
     } else {
-      // Reset global image edits
-      resetImageEdits();
+      // Reset global image edits and color scheme
+      resetColorSchemeAndAdjustments();
     }
   };
 

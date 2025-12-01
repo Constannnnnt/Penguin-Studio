@@ -1,4 +1,5 @@
 import type { MaskMetadata } from '@/features/segmentation/store/segmentationStore';
+import { MetadataSection } from './MetadataSection';
 
 interface ObjectDetailsTabProps {
   mask: MaskMetadata;
@@ -7,6 +8,11 @@ interface ObjectDetailsTabProps {
 export const ObjectDetailsTab: React.FC<ObjectDetailsTabProps> = ({ mask }) => {
   return (
     <div className="space-y-4">
+      {/* Object Metadata Section - shows description, visual properties, spatial context */}
+      <MetadataSection mask={mask} />
+
+      <hr className="border-border" />
+
       <div>
         <h3 className="text-sm font-semibold mb-1 text-foreground">Label</h3>
         <p className="text-sm text-muted-foreground">{mask.label}</p>

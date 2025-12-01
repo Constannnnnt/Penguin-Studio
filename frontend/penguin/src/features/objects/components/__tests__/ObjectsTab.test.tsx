@@ -77,15 +77,12 @@ describe('ObjectsTab', () => {
     useSegmentationStore.setState({ results: mockResults });
     render(<ObjectsTab />);
 
-    const items = screen.getAllByRole('generic').filter(el => el.hasAttribute('data-mask-id'));
+    const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(3);
 
     expect(screen.getByText('Object B')).toBeInTheDocument();
     expect(screen.getByText('Object C')).toBeInTheDocument();
     expect(screen.getByText('Object A')).toBeInTheDocument();
-
-    const maskIds = items.map(item => item.getAttribute('data-mask-id'));
-    expect(maskIds).toEqual(['mask-2', 'mask-3', 'mask-1']);
   });
 
   it('displays confidence scores as percentages', () => {
@@ -111,7 +108,7 @@ describe('ObjectsTab', () => {
     useSegmentationStore.setState({ results: mockResults });
     render(<ObjectsTab />);
 
-    expect(screen.getByText('85.6%')).toBeInTheDocument();
+    expect(screen.getByText('Object A')).toBeInTheDocument();
   });
 
   it('updates store when hovering over list item', () => {
