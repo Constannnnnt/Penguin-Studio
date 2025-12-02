@@ -345,6 +345,7 @@ export interface LoadGenerationMask {
   centroid?: [number, number];
   prompt_tier?: "CORE" | "CORE_VISUAL" | "CORE_VISUAL_SPATIAL";
   prompt_text?: string;
+  prompt_object?: string;
   object_metadata?: {
     description?: string;
     location?: string;

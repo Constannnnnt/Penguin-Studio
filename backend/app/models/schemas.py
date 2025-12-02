@@ -55,6 +55,9 @@ class MaskMetadata(BaseModel):
         None, description="Prompt tier used for detection"
     )
     prompt_text: Optional[str] = Field(None, description="Exact prompt text used")
+    prompt_object: Optional[str] = Field(
+        None, description="Short object name extracted from prompt_text (noun/entity only)"
+    )
     object_metadata: Optional[ObjectMetadata] = Field(
         None, description="Object metadata from JSON input"
     )

@@ -172,7 +172,9 @@ export const useFileSystemStore = create<FileSystemState>()(
                   area_percentage: mask.area_percentage ?? 0,
                   centroid: mask.centroid ?? [50, 50] as [number, number],
                   mask_url: maskUrl,
+                  promptTier: mask.prompt_tier,
                   promptText: mask.prompt_text,
+                  promptObject: mask.prompt_object,
                   objectMetadata: mask.object_metadata,
                 };
               }),

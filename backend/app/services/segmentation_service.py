@@ -287,6 +287,7 @@ class SegmentationService:
                 
                 prompt_tier = None
                 prompt_text = None
+                prompt_object = None
                 object_id = None
                 if i < len(prompt_info):
                     info = prompt_info[i]
@@ -295,6 +296,8 @@ class SegmentationService:
                         prompt_tier = tier_value.upper()
                     prompt_text = info.get("text")
                     object_id = info.get("object_id")
+                    # Extract short object name from prompt_text
+                    prompt_object = self._extract_prompt_object(prompt_text)
                 
                 object_metadata = self._match_object_metadata(
                     label, prompt_text, objects_metadata, i
@@ -316,6 +319,7 @@ class SegmentationService:
                         mask_url=mask_urls[i],
                         prompt_tier=prompt_tier,
                         prompt_text=prompt_text,
+                        prompt_object=prompt_object,
                         object_metadata=object_metadata,
                     )
                     masks_metadata.append(mask_metadata)
@@ -536,6 +540,7 @@ class SegmentationService:
                     "mask_url": m.mask_url,
                     "prompt_tier": m.prompt_tier,
                     "prompt_text": m.prompt_text,
+                    "prompt_object": m.prompt_object,
                     "object_metadata": (
                         m.object_metadata.model_dump() if m.object_metadata else None
                     ),
@@ -548,6 +553,123 @@ class SegmentationService:
         meta_path = output_dir / "segmentation_meta.json"
         meta_path.write_text(json.dumps(segmentation_meta, indent=2))
         logger.debug(f"Saved segmentation metadata to {meta_path}")
+
+    @staticmethod
+    def _extract_prompt_object(prompt_text: Optional[str]) -> Optional[str]:
+        """
+        Extract the main noun/entity from prompt_text.
+        
+        Strategy:
+        1. Look for common concrete nouns (objects you can see)
+        2. In English noun phrases, the head noun is typically the last noun
+        3. Skip modifiers, adjectives, and abstract words
+        
+        Examples:
+        - "A modern public transport bus" -> "bus"
+        - "a red apple on a table" -> "apple"
+        - "the golden retriever dog" -> "dog"
+        - "small wooden chair" -> "chair"
+        - "person wearing a hat" -> "person"
+        """
+        if not prompt_text:
+            return None
+        
+        text = prompt_text.strip().lower()
+        if not text:
+            return None
+        
+        # Remove common articles and determiners at the start
+        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any "]
+        for article in articles:
+            if text.startswith(article):
+                text = text[len(article):]
+                break
+        
+        # Split by common phrase separators to get the main subject phrase
+        # (before "on", "in", "with", "wearing", etc.)
+        separators = [" on ", " in ", " with ", " wearing ", " holding ", " near ", " by ", " at ", " painted ", ", "]
+        main_phrase = text
+        for sep in separators:
+            if sep in text:
+                main_phrase = text.split(sep)[0]
+                break
+        
+        # Split into words
+        words = main_phrase.split()
+        if not words:
+            return None
+        
+        # Common concrete nouns (objects that can be visually identified)
+        concrete_nouns = {
+            # Vehicles
+            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane", "boat", "ship",
+            # Animals
+            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear", "elephant",
+            "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin", "duck", "chicken",
+            # People
+            "person", "man", "woman", "child", "boy", "girl", "baby", "people", "crowd",
+            # Furniture
+            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet", "drawer",
+            # Food
+            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread", "fruit", "vegetable",
+            # Objects
+            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone", "computer",
+            "laptop", "camera", "clock", "watch", "key", "door", "window", "wall", "floor", "ceiling",
+            # Nature
+            "tree", "flower", "plant", "grass", "rock", "stone", "mountain", "river", "lake", "ocean", "beach",
+            # Buildings
+            "house", "building", "tower", "bridge", "road", "street", "path",
+            # Clothing
+            "hat", "shirt", "dress", "pants", "shoes", "jacket", "coat",
+        }
+        
+        # Words that are typically modifiers, not the main noun
+        modifiers = {
+            # Adjectives
+            "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
+            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver", "orange", "pink", "purple",
+            "old", "new", "young", "ancient", "modern", "vintage", "classic", "contemporary",
+            "wooden", "metal", "plastic", "glass", "stone", "leather", "fabric", "cotton", "silk",
+            "beautiful", "ugly", "pretty", "handsome", "cute", "elegant", "fancy",
+            "happy", "sad", "angry", "calm", "peaceful", "cheerful",
+            "bright", "dark", "light", "dim", "shiny", "matte", "glossy",
+            "soft", "hard", "smooth", "rough", "fuzzy", "fluffy",
+            "wet", "dry", "hot", "cold", "warm", "cool", "frozen",
+            "clean", "dirty", "fresh", "stale",
+            "full", "empty", "open", "closed",
+            "fast", "slow", "quick",
+            "loud", "quiet", "silent",
+            "heavy", "lightweight",
+            "expensive", "cheap",
+            "simple", "complex", "plain", "fancy",
+            "round", "square", "rectangular", "circular", "oval",
+            "striped", "spotted", "patterned", "solid",
+            "subtle", "bold", "vibrant", "muted", "pastel",
+            # Common non-noun words in descriptions
+            "public", "private", "commercial", "residential", "industrial",
+            "transport", "transportation",
+            "style", "type", "kind", "sort",
+            "looking", "facing", "standing", "sitting", "lying",
+        }
+        
+        # First pass: look for known concrete nouns (prefer last one found - head noun)
+        found_noun = None
+        for word in words:
+            clean_word = word.strip(".,!?;:'\"")
+            if clean_word in concrete_nouns:
+                found_noun = clean_word
+        
+        if found_noun:
+            return found_noun
+        
+        # Second pass: find the last non-modifier word (likely the head noun)
+        for word in reversed(words):
+            clean_word = word.strip(".,!?;:'\"")
+            if clean_word and clean_word not in modifiers and len(clean_word) > 2:
+                return clean_word
+        
+        # Fallback: return the last word
+        return words[-1].strip(".,!?;:'\"") if words else None
 
     @staticmethod
     def _get_image_dims(image: Image.Image) -> tuple[int, int]:
