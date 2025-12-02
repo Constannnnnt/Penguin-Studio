@@ -124,9 +124,9 @@ export const useFileSystemStore = create<FileSystemState>()(
           // 1. Update config from structured prompt (objects, scene data)
           if (response.structured_prompt && Object.keys(response.structured_prompt).length > 0) {
             const sp = response.structured_prompt;
-            console.log('[LoadGeneration] Structured prompt:', sp);
-            console.log('[LoadGeneration] Objects:', sp.objects);
-            console.log('[LoadGeneration] Background:', sp.background_setting);
+            // console.log('[LoadGeneration] Structured prompt:', sp);
+            // console.log('[LoadGeneration] Objects:', sp.objects);
+            // console.log('[LoadGeneration] Background:', sp.background_setting);
             
             // First update raw config (includes objects)
             configStore.updateConfigFromStructuredPrompt(sp);
@@ -206,7 +206,7 @@ export const useFileSystemStore = create<FileSystemState>()(
             originalStructuredPrompt: response.structured_prompt || null,
           });
 
-          console.log(`[FileSystem] Loaded generation ${generationId}: ${response.masks.length} masks, seed=${seed}`);
+          // console.log(`[FileSystem] Loaded generation ${generationId}: ${response.masks.length} masks, seed=${seed}`);
 
         } catch (error) {
           console.error('[FileSystem] Failed to load generation:', error);

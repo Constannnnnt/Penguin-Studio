@@ -343,7 +343,7 @@ export const useConfigStore = create<ConfigState>()(
             const rawObjects = sp.objects as Array<Record<string, unknown>> | undefined;
 
             // Log the incoming short_description
-            console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);
+            // console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);
 
             // Clear previous edits and set new baseline for edit tracking
             editTracker.clearEdits();

@@ -389,7 +389,7 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            console.log('[Segmentation] Upload successful:', results.result_id);
+            // console.log('[Segmentation] Upload successful:', results.result_id);
 
             const { useFileSystemStore } = await import('@/core/store/fileSystemStore');
             await useFileSystemStore.getState().addSegmentedImage(
@@ -472,7 +472,7 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            console.log('[Segmentation] Example segmentation successful:', resultsWithMetadata.result_id);
+            // console.log('[Segmentation] Example segmentation successful:', resultsWithMetadata.result_id);
 
             const { useFileSystemStore } = await import('@/core/store/fileSystemStore');
             await useFileSystemStore.getState().addSegmentedImage(
@@ -557,7 +557,7 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            console.log('[Segmentation] Generation segmentation successful:', generationId);
+            // console.log('[Segmentation] Generation segmentation successful:', generationId);
 
           } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
@@ -635,7 +635,7 @@ export const useSegmentationStore = create<SegmentationState>()(
       retryLastOperation: async () => {
         const { lastOperation } = get();
         if (lastOperation) {
-          console.log('[Segmentation] Retrying last operation');
+          // console.log('[Segmentation] Retrying last operation');
           await lastOperation();
         } else {
           console.warn('[Segmentation] No operation to retry');
@@ -1242,7 +1242,7 @@ export const useSegmentationStore = create<SegmentationState>()(
         const state = get();
         const mask = state.results?.masks.find(m => m.mask_id === maskId);
         const currentFlipH = state.maskManipulation.get(maskId)?.transform.flipHorizontal ?? false;
-        console.log('[Store] flipMaskHorizontal called for', maskId, 'current:', currentFlipH, 'new:', !currentFlipH);
+        // console.log('[Store] flipMaskHorizontal called for', maskId, 'current:', currentFlipH, 'new:', !currentFlipH);
         
         set((state) => {
           const newManipulation = new Map(state.maskManipulation);

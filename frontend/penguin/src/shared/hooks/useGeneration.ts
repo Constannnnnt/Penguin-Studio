@@ -43,7 +43,7 @@ export const useGeneration = () => {
           // Also update the main config with raw structured prompt data
           configStore.updateConfigFromStructuredPrompt(structuredPromptData);
           
-          console.log('[Generation] Config updated from structured prompt');
+          // console.log('[Generation] Config updated from structured prompt');
         } catch (parseErr) {
           console.warn('[Generation] Failed to parse structured prompt:', parseErr);
           // Fallback: just update raw config

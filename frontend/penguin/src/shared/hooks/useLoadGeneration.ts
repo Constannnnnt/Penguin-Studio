@@ -3,7 +3,7 @@ import { apiClient } from '@/core/services/api';
 import type { LoadGenerationResponse } from '@/core/types';
 import { showError, showSuccess } from '@/shared/lib/errorHandling';
 import { useConfigStore } from '@/features/scene/store/configStore';
-import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
+import { useSegmentationStore, type StructedPrompt } from '@/features/segmentation/store/segmentationStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -62,7 +62,7 @@ export const useLoadGeneration = () => {
               ? mask.mask_url 
               : `${API_BASE_URL}${mask.mask_url}`;
             
-            console.log(`[LoadGeneration] Mask ${index} URL:`, maskUrl);
+            // console.log(`[LoadGeneration] Mask ${index} URL:`, maskUrl);
             
             return {
               mask_id: mask.mask_id,
@@ -73,14 +73,24 @@ export const useLoadGeneration = () => {
               area_percentage: mask.area_percentage ?? 0,
               centroid: mask.centroid ?? [50, 50] as [number, number],
               mask_url: maskUrl,
-              prompt_tier: (mask as Record<string, unknown>).prompt_tier as string | undefined,
-              prompt_text: mask.prompt_text,
-              object_metadata: mask.object_metadata,
+              promptTier: mask.prompt_tier,
+              promptText: mask.prompt_text,
+              promptObject: mask.prompt_object,
+              objectMetadata: mask.object_metadata ? {
+                description: mask.object_metadata.description ?? '',
+                location: mask.object_metadata.location ?? '',
+                relationship: mask.object_metadata.relationship ?? '',
+                relative_size: mask.object_metadata.relative_size ?? '',
+                shape_and_color: mask.object_metadata.shape_and_color ?? '',
+                texture: mask.object_metadata.texture ?? '',
+                appearance_details: mask.object_metadata.appearance_details ?? '',
+                orientation: mask.object_metadata.orientation ?? '',
+              } : undefined,
             };
           }),
           processing_time_ms: 0,
           timestamp: new Date().toISOString(),
-          metadata: response.structured_prompt,
+          metadata: response.structured_prompt as unknown as StructedPrompt,
         };
 
         segmentationStore.setResults(segmentationResults);

@@ -171,7 +171,7 @@ export const createEditTracker = (): {
   };
 
   const notifyListeners = (): void => {
-    console.log('[EditTracker] Notifying listeners, count:', state.listeners.size, 'edits:', state.edits.length);
+    // console.log('[EditTracker] Notifying listeners, count:', state.listeners.size, 'edits:', state.edits.length);
     state.listeners.forEach(listener => listener());
   };
 

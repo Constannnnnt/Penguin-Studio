@@ -139,7 +139,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
         if (editPrompt) {
           const separator = base.trim() ? ', ' : '';
           const combinedPrompt = base.trim() + separator + editPrompt;
-          console.log('[EditTracker] Setting combined prompt:', combinedPrompt);
+          // console.log('[EditTracker] Setting combined prompt:', combinedPrompt);
           setLocalPrompt(combinedPrompt);
         } else {
           // No edits, restore base prompt
@@ -233,8 +233,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     // In edit mode, use the user's prompt (which may be the auto-generated one or their edits)
     const modificationPrompt = localPromptRef.current;
     
-    console.log('[Refine] Modification prompt:', modificationPrompt);
-    console.log('[Refine] Tracked edits:', editTracker.getEdits());
+    // console.log('[Refine] Modification prompt:', modificationPrompt);
+    // console.log('[Refine] Tracked edits:', editTracker.getEdits());
     
     // Refine uses:
     // - Current config (with user modifications)
