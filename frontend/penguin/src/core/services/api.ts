@@ -46,7 +46,7 @@ import {
 // API Client Configuration
 // ============================================================================
 
-const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const DEFAULT_TIMEOUT = 120000; // 120 seconds
 
 // ============================================================================
 // API Client Class

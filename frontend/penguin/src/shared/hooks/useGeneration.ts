@@ -93,9 +93,10 @@ export const useGeneration = () => {
 
   /**
    * Poll for generation completion
+   * Timeout: 90 seconds (45 attempts * 2 second interval)
    */
   const pollGeneration = async (id: string): Promise<void> => {
-    const maxAttempts = 30;
+    const maxAttempts = 45;
     const interval = 2000;
 
     for (let i = 0; i < maxAttempts; i++) {
