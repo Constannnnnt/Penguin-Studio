@@ -21,28 +21,44 @@ export const BackgroundSection: React.FC = () => {
   const [localValue, setLocalValue] = React.useState(backgroundSetting);
   const [customWidth, setCustomWidth] = useState('1');
   const [customHeight, setCustomHeight] = useState('1');
-  const isInitialMount = useRef(true);
+  
+  // Track if we're updating from local change (to prevent sync loop)
+  const isLocalChangeRef = useRef(false);
+  const lastStoreValueRef = useRef(backgroundSetting);
 
   const debouncedUpdate = useDebouncedCallback(
     (value: string) => {
+      isLocalChangeRef.current = true;
       updateSceneConfig('background_setting', value);
+      // Reset flag after a short delay to allow store update to propagate
+      setTimeout(() => {
+        isLocalChangeRef.current = false;
+      }, 100);
     },
     500,
     [updateSceneConfig]
   );
 
+  // Sync local value from store when backgroundSetting changes externally
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
+    // Skip if this change came from our own local update
+    if (isLocalChangeRef.current) {
+      lastStoreValueRef.current = backgroundSetting;
+      return;
+    }
+    
+    // Only sync if the store value actually changed (external update)
+    if (backgroundSetting !== lastStoreValueRef.current) {
+      lastStoreValueRef.current = backgroundSetting;
       setLocalValue(backgroundSetting);
     }
   }, [backgroundSetting]);
 
-  useEffect(() => {
-    if (!isInitialMount.current && localValue !== backgroundSetting) {
-      debouncedUpdate(localValue);
-    }
-  }, [localValue, backgroundSetting, debouncedUpdate]);
+  // Debounce local changes to store
+  const handleLocalChange = (value: string): void => {
+    setLocalValue(value);
+    debouncedUpdate(value);
+  };
 
   // Check if current ratio is a preset or custom
   const isCustomSelected = useMemo(() => {
@@ -63,6 +79,7 @@ export const BackgroundSection: React.FC = () => {
   }, [isCustomSelected, aspectRatio]);
 
   const handleAspectRatioChange = (value: string): void => {
+    // Track the aspect ratio change with the actual value
     updateSceneConfig('aspect_ratio', value);
   };
 
@@ -109,7 +126,7 @@ export const BackgroundSection: React.FC = () => {
         <Textarea
           id="background-setting"
           value={localValue}
-          onChange={(e) => setLocalValue(e.target.value)}
+          onChange={(e) => handleLocalChange(e.target.value)}
           placeholder="Describe the background environment..."
           rows={10}
           className="mt-3 resize-none"
