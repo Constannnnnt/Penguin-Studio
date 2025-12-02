@@ -35,11 +35,13 @@ export const ObjectsTab: React.FC = () => {
   // Use virtualization for large lists
   const useVirtualization = sortedMasks.length > VIRTUALIZATION_THRESHOLD;
 
-  if (useVirtualization) {
-    // For large lists, we could implement virtualization here
-    // For now, we'll use the standard approach with optimized rendering
-    console.log(`[ObjectsTab] Large list detected (${sortedMasks.length} items), consider implementing virtualization`);
-  }
+  // TODO
+
+  // if (useVirtualization) {
+  //   // For large lists, we could implement virtualization here
+  //   // For now, we'll use the standard approach with optimized rendering
+  //   console.log(`[ObjectsTab] Large list detected (${sortedMasks.length} items), consider implementing virtualization`);
+  // }
 
   return (
     <div 

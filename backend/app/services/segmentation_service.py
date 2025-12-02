@@ -296,12 +296,15 @@ class SegmentationService:
                         prompt_tier = tier_value.upper()
                     prompt_text = info.get("text")
                     object_id = info.get("object_id")
-                    # Extract short object name from prompt_text
-                    prompt_object = self._extract_prompt_object(prompt_text)
                 
+                # Match object metadata first (needed for prompt_object extraction)
                 object_metadata = self._match_object_metadata(
                     label, prompt_text, objects_metadata, i
                 )
+                
+                # Extract short object name, using object_metadata if available
+                raw_obj_metadata = objects_metadata[i] if i < len(objects_metadata) else None
+                prompt_object = self._extract_prompt_object(prompt_text, raw_obj_metadata)
 
                 # Clamp coordinates to non-negative to satisfy schema validation
                 bbox = self._clamp_box(box, image_width, image_height)
@@ -397,11 +400,20 @@ class SegmentationService:
         
         return None
 
+    # Minimum confidence threshold for accepting detections
+    MIN_CONFIDENCE_THRESHOLD = 0.4
+
     def _run_tiered_detection(
         self, image: Image.Image, prompt_sets: List[PromptPlanSet]
     ) -> tuple[DetectionResult, List[Dict[str, Any]]]:
         """
-        Attempt detection per object across tiers until we get hits, then merge.
+        Attempt detection per object using confidence-based tier selection.
+        
+        Strategy:
+        - Try all tiers for each object
+        - Pick the tier with highest confidence detection above threshold
+        - If no tier exceeds threshold, use best available or skip
+        
         Returns detection result and prompt information for each mask.
         """
         per_object_results: List[DetectionResult] = []
@@ -409,25 +421,61 @@ class SegmentationService:
         fallback_size = self._get_image_dims(image)
 
         for obj_idx, prompt_set in enumerate(prompt_sets):
+            best_result: Optional[DetectionResult] = None
+            best_plan: Optional[Any] = None
+            best_score: float = 0.0
+
+            # Try all tiers and pick the best one
             for plan in prompt_set.plans:
                 result = self.sam3_model.detect(image, [plan.text])
-                if result.boxes_xyxy.shape[0] > 0:
-                    relabeled = self._relabel_detection(result, plan.label)
+                
+                if result.boxes_xyxy.shape[0] == 0:
+                    continue
+                
+                # Get max confidence score for this detection
+                max_score = float(result.scores.max().item()) if result.scores.numel() > 0 else 0.0
+                
+                # Update best if this is better
+                if max_score > best_score:
+                    best_score = max_score
+                    best_result = result
+                    best_plan = plan
+                    
+                    # Early exit if we found a high-confidence detection
+                    if best_score >= 0.85:
+                        logger.debug(
+                            f"Early exit: high confidence {best_score:.2f} "
+                            f"for label={plan.label} tier={plan.tier.value}"
+                        )
+                        break
+
+            # Use best result if it meets threshold
+            if best_result is not None and best_plan is not None:
+                if best_score >= self.MIN_CONFIDENCE_THRESHOLD:
+                    relabeled = self._relabel_detection(best_result, best_plan.label)
                     per_object_results.append(relabeled)
                     
                     for _ in range(relabeled.boxes_xyxy.shape[0]):
                         prompt_info.append({
-                            "tier": plan.tier.value,
-                            "text": plan.text,
-                            "label": plan.label,
+                            "tier": best_plan.tier.value,
+                            "text": best_plan.text,
+                            "label": best_plan.label,
                             "object_id": f"object_{obj_idx}",
                         })
                     
                     logger.debug(
-                        f"Detected {relabeled.boxes_xyxy.shape[0]} boxes "
-                        f"for label={plan.label} using tier={plan.tier.value}"
+                        f"Selected tier={best_plan.tier.value} with confidence={best_score:.2f} "
+                        f"for label={best_plan.label} ({relabeled.boxes_xyxy.shape[0]} boxes)"
                     )
-                    break
+                else:
+                    logger.warning(
+                        f"Best detection for object_{obj_idx} ({best_plan.label}) "
+                        f"has low confidence {best_score:.2f} < {self.MIN_CONFIDENCE_THRESHOLD}, skipping"
+                    )
+            else:
+                logger.warning(
+                    f"No detection found for object_{obj_idx} ({prompt_set.label}) across all tiers"
+                )
 
         combined_result = self._combine_detection_results(per_object_results, fallback_size)
         return combined_result, prompt_info
@@ -555,121 +603,196 @@ class SegmentationService:
         logger.debug(f"Saved segmentation metadata to {meta_path}")
 
     @staticmethod
-    def _extract_prompt_object(prompt_text: Optional[str]) -> Optional[str]:
+    def _extract_prompt_object(prompt_text: Optional[str], object_metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
-        Extract the main noun/entity from prompt_text.
+        Extract a SHORT noun/entity from prompt_text or object_metadata.
+        
+        Used for refinement edit prompts where brevity is critical.
+        Target: 1-2 words like "demon", "woman", "rose petals", "sunglasses"
         
         Strategy:
-        1. Look for common concrete nouns (objects you can see)
-        2. In English noun phrases, the head noun is typically the last noun
-        3. Skip modifiers, adjectives, and abstract words
+        1. First scan the ENTIRE text for concrete nouns (don't split early)
+        2. If found, return the noun (prefer last occurrence = head noun)
+        3. If not found, use heuristics to find likely nouns
         
         Examples:
-        - "A modern public transport bus" -> "bus"
-        - "a red apple on a table" -> "apple"
-        - "the golden retriever dog" -> "dog"
-        - "small wooden chair" -> "chair"
-        - "person wearing a hat" -> "person"
+        - "A young woman with an East Asian appearance" -> "woman"
+        - "Delicate, soft pink rose petals, freshly fallen" -> "petals"
+        - "A male demon, muscular and imposing" -> "demon"
+        - "Sleek, modern black sunglasses" -> "sunglasses"
         """
-        if not prompt_text:
+        # Get text to parse - prefer object_metadata description
+        text_to_parse = None
+        if object_metadata and isinstance(object_metadata, dict):
+            desc = object_metadata.get("description", "")
+            if desc and isinstance(desc, str):
+                # Use first sentence only (split by period)
+                text_to_parse = desc.split(".")[0].strip()
+        
+        # Fall back to prompt_text
+        if not text_to_parse:
+            text_to_parse = prompt_text
+        
+        if not text_to_parse:
             return None
         
-        text = prompt_text.strip().lower()
+        text = text_to_parse.strip().lower()
         if not text:
             return None
         
-        # Remove common articles and determiners at the start
-        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any "]
+        # Comprehensive concrete nouns list
+        concrete_nouns = {
+            # People
+            "person", "man", "woman", "child", "boy", "girl", "baby", "people", "crowd",
+            "soldier", "doctor", "teacher", "chef", "artist", "musician", "dancer",
+            "lady", "gentleman", "teenager", "adult", "elder", "figure", "character",
+            # Fantasy/Characters
+            "demon", "angel", "dragon", "wizard", "knight", "warrior", "monster", "creature",
+            "giant", "dwarf", "elf", "fairy", "ghost", "vampire", "zombie", "robot", "alien",
+            "witch", "sorcerer", "mage", "hero", "villain", "god", "goddess", "spirit",
+            # Animals
+            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear", 
+            "elephant", "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin", 
+            "duck", "chicken", "eagle", "owl", "snake", "frog", "turtle", "dolphin", "whale",
+            "butterfly", "bee", "spider", "ant", "dragon", "phoenix",
+            # Body parts
+            "face", "head", "hand", "hands", "arm", "arms", "leg", "legs", "eye", "eyes",
+            "wings", "wing", "tail", "horn", "horns", "hair", "finger", "fingers",
+            # Plants/Nature
+            "flower", "flowers", "rose", "petal", "petals", "leaf", "leaves", "tree", "trees",
+            "plant", "plants", "grass", "bush", "vine", "blossom", "bloom", "bud",
+            "rock", "stone", "mountain", "river", "lake", "ocean", "beach", "forest", 
+            "cloud", "clouds", "sun", "moon", "star", "stars", "sky",
+            # Vehicles
+            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane", 
+            "boat", "ship", "helicopter", "spacecraft", "rocket", "submarine", "vehicle",
+            # Furniture
+            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet", 
+            "drawer", "bench", "stool", "throne", "seat",
+            # Food/Drink
+            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread", 
+            "fruit", "vegetable", "meat", "cheese", "wine", "beer", "water", "coffee",
+            # Weapons/Tools
+            "sword", "axe", "knife", "gun", "bow", "arrow", "shield", "spear", "hammer",
+            "staff", "wand", "blade", "dagger", "weapon",
+            # Accessories/Clothing
+            "sunglasses", "glasses", "hat", "helmet", "crown", "ring", "necklace", "bracelet",
+            "watch", "earring", "earrings", "mask", "cape", "cloak", "jewelry",
+            "shirt", "dress", "pants", "shoes", "jacket", "coat", "robe", "armor", "gown",
+            # Objects
+            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone", 
+            "computer", "laptop", "camera", "clock", "key", "door", "window", "mirror",
+            "candle", "torch", "flag", "banner", "sign", "poster", "picture", "frame",
+            "gem", "gemstone", "jewel", "crystal", "orb", "sphere", "cube",
+            # Buildings/Structures
+            "house", "building", "tower", "bridge", "road", "street", "path", "castle", 
+            "temple", "church", "palace", "wall", "gate", "arch", "column", "pillar",
+            # Abstract but visible
+            "light", "shadow", "glow", "aura", "flame", "fire", "smoke", "mist", "fog",
+        }
+        
+        # Words that are definitely modifiers (adjectives, adverbs)
+        modifiers = {
+            # Size
+            "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
+            "massive", "miniature", "giant", "little",
+            # Colors
+            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver", 
+            "orange", "pink", "purple", "crimson", "scarlet", "dark", "light", "bright",
+            "colorful", "pale", "vivid", "vibrant", "muted", "pastel",
+            # Age/Time
+            "old", "new", "young", "ancient", "modern", "vintage", "classic", "contemporary",
+            "fresh", "aged", "eternal",
+            # Material
+            "wooden", "metal", "plastic", "glass", "stone", "leather", "fabric", "silk",
+            "cotton", "velvet", "satin", "lace",
+            # Appearance
+            "beautiful", "ugly", "pretty", "handsome", "cute", "elegant", "fancy", "majestic",
+            "delicate", "rough", "smooth", "sleek", "shiny", "glossy", "matte", "dull",
+            "soft", "hard", "fuzzy", "fluffy", "sharp", "angular", "round", "curved",
+            # Emotion/State
+            "happy", "sad", "angry", "calm", "peaceful", "cheerful", "fierce", "menacing",
+            "serene", "gentle", "wild", "tame",
+            # Physical attributes
+            "male", "female", "muscular", "imposing", "powerful", "formidable", "slender",
+            "thin", "thick", "fat", "lean", "athletic",
+            # Other adjectives
+            "public", "private", "commercial", "reflective", "leathery", "scaly",
+            "fallen", "floating", "flying", "standing", "sitting", "lying", "running",
+            "organic", "irregular", "natural", "artificial", "magical", "mystical",
+            "asian", "european", "african", "american", "eastern", "western",
+            # Adverbs/others to skip
+            "predominantly", "slightly", "somewhat", "very", "quite", "rather",
+            "freshly", "newly", "recently", "slowly", "quickly", "gently",
+        }
+        
+        # FIRST: Isolate the main subject phrase (before prepositions/subordinate clauses)
+        # Remove articles first
+        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any ", 
+                    "pair of ", "set of ", "group of ", "bunch of "]
+        clean_text = text
         for article in articles:
-            if text.startswith(article):
-                text = text[len(article):]
+            if clean_text.startswith(article):
+                clean_text = clean_text[len(article):]
                 break
         
-        # Split by common phrase separators to get the main subject phrase
-        # (before "on", "in", "with", "wearing", etc.)
-        separators = [" on ", " in ", " with ", " wearing ", " holding ", " near ", " by ", " at ", " painted ", ", "]
-        main_phrase = text
-        for sep in separators:
-            if sep in text:
-                main_phrase = text.split(sep)[0]
+        # Split by prepositions/subordinate clause markers to get main subject
+        # Order matters - try more specific patterns first
+        prep_separators = [
+            ", her ", ", his ", ", its ", ", their ",  # Possessive subordinate clauses
+            " with ", " on ", " in ", " at ", " by ", " near ", 
+            " wearing ", " holding ", " carrying ", " featuring ",
+        ]
+        main_phrase = clean_text
+        for sep in prep_separators:
+            if sep in clean_text:
+                main_phrase = clean_text.split(sep)[0]
                 break
         
-        # Split into words
-        words = main_phrase.split()
+        # Get words from main phrase (replace commas with spaces)
+        words = main_phrase.replace(",", " ").split()
+        if not words:
+            # Fallback to full text if main_phrase extraction failed
+            words = text.replace(",", " ").replace(".", " ").split()
+        
         if not words:
             return None
         
-        # Common concrete nouns (objects that can be visually identified)
-        concrete_nouns = {
-            # Vehicles
-            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane", "boat", "ship",
-            # Animals
-            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear", "elephant",
-            "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin", "duck", "chicken",
-            # People
-            "person", "man", "woman", "child", "boy", "girl", "baby", "people", "crowd",
-            # Furniture
-            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet", "drawer",
-            # Food
-            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread", "fruit", "vegetable",
-            # Objects
-            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone", "computer",
-            "laptop", "camera", "clock", "watch", "key", "door", "window", "wall", "floor", "ceiling",
-            # Nature
-            "tree", "flower", "plant", "grass", "rock", "stone", "mountain", "river", "lake", "ocean", "beach",
-            # Buildings
-            "house", "building", "tower", "bridge", "road", "street", "path",
-            # Clothing
-            "hat", "shirt", "dress", "pants", "shoes", "jacket", "coat",
-        }
-        
-        # Words that are typically modifiers, not the main noun
-        modifiers = {
-            # Adjectives
-            "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
-            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver", "orange", "pink", "purple",
-            "old", "new", "young", "ancient", "modern", "vintage", "classic", "contemporary",
-            "wooden", "metal", "plastic", "glass", "stone", "leather", "fabric", "cotton", "silk",
-            "beautiful", "ugly", "pretty", "handsome", "cute", "elegant", "fancy",
-            "happy", "sad", "angry", "calm", "peaceful", "cheerful",
-            "bright", "dark", "light", "dim", "shiny", "matte", "glossy",
-            "soft", "hard", "smooth", "rough", "fuzzy", "fluffy",
-            "wet", "dry", "hot", "cold", "warm", "cool", "frozen",
-            "clean", "dirty", "fresh", "stale",
-            "full", "empty", "open", "closed",
-            "fast", "slow", "quick",
-            "loud", "quiet", "silent",
-            "heavy", "lightweight",
-            "expensive", "cheap",
-            "simple", "complex", "plain", "fancy",
-            "round", "square", "rectangular", "circular", "oval",
-            "striped", "spotted", "patterned", "solid",
-            "subtle", "bold", "vibrant", "muted", "pastel",
-            # Common non-noun words in descriptions
-            "public", "private", "commercial", "residential", "industrial",
-            "transport", "transportation",
-            "style", "type", "kind", "sort",
-            "looking", "facing", "standing", "sitting", "lying",
-        }
-        
-        # First pass: look for known concrete nouns (prefer last one found - head noun)
+        # SECOND: Look for concrete nouns in the MAIN PHRASE only
         found_noun = None
         for word in words:
-            clean_word = word.strip(".,!?;:'\"")
+            clean_word = word.strip(".,!?;:'\"()[]")
             if clean_word in concrete_nouns:
                 found_noun = clean_word
+                # Don't break - prefer last noun (head noun in English NP)
         
         if found_noun:
             return found_noun
         
-        # Second pass: find the last non-modifier word (likely the head noun)
-        for word in reversed(words):
-            clean_word = word.strip(".,!?;:'\"")
-            if clean_word and clean_word not in modifiers and len(clean_word) > 2:
+        # THIRD: If no concrete noun found in main phrase, scan full text
+        all_words = text.replace(",", " ").replace(".", " ").split()
+        for word in all_words:
+            clean_word = word.strip(".,!?;:'\"()[]")
+            if clean_word in concrete_nouns:
+                # Return first concrete noun found in full text
                 return clean_word
         
-        # Fallback: return the last word
-        return words[-1].strip(".,!?;:'\"") if words else None
+        # FOURTH: Find last non-modifier word in main phrase (likely the head noun)
+        for word in reversed(words):
+            clean_word = word.strip(".,!?;:'\"()[]")
+            if clean_word and clean_word not in modifiers and len(clean_word) > 2:
+                # Skip words that look like adjectives (ending in common suffixes)
+                if not any(clean_word.endswith(suffix) for suffix in 
+                          ["ly", "ful", "less", "ous", "ive", "ing", "ed"]):
+                    return clean_word
+        
+        # FIFTH: Last resort - return last word of main phrase
+        if words:
+            last = words[-1].strip(".,!?;:'\"()[]")
+            if last and len(last) > 2:
+                return last
+        
+        return None
 
     @staticmethod
     def _get_image_dims(image: Image.Image) -> tuple[int, int]:

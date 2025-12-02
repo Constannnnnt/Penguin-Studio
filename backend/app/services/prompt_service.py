@@ -38,10 +38,11 @@ class PromptPipeline:
         self.field_parser = field_parser or FieldSpecBuilder()
         self.refiner = refiner or SemanticRefiner()
         self.prompt_builder = prompt_builder or PromptBuilder()
+        # Try most specific first, fall back to simpler prompts
+        # CORE_VISUAL_SPATIAL removed - spatial info doesn't help visual segmentation
         self.tier_order: Sequence[PromptTier] = tier_order or (
-            PromptTier.CORE,
             PromptTier.CORE_VISUAL,
-            PromptTier.CORE_VISUAL_SPATIAL,
+            PromptTier.CORE,
         )
 
     def build_from_objects(self, objects: List[Dict[str, Any]]) -> List[PromptPlanSet]:
