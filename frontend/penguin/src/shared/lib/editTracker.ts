@@ -78,10 +78,12 @@ const FIELD_DESCRIPTIONS: Record<string, (oldVal: unknown, newVal: unknown) => s
   'background_setting': (_, newVal) => `change background to ${(newVal as string).substring(0, 50)}`,
   'style_medium': (_, newVal) => `change overall style to ${newVal}`,
   'artistic_style': (_, newVal) => `make overall aesthetic more ${newVal}`,
+  'aspect_ratio': (_, newVal) => `change aspect ratio to ${newVal}`,
 };
 
 /**
  * Generate a description for an object edit
+ * Uses the object's description (core) as the label for better prompt clarity
  */
 const describeObjectEdit = (
   objectIndex: number,
@@ -90,19 +92,25 @@ const describeObjectEdit = (
   newValue: unknown,
   objectLabel?: string
 ): string => {
-  const label = objectLabel || `object ${objectIndex + 1}`;
+  // Use the object's description as the label, falling back to generic label
+  const label = objectLabel && objectLabel.trim() ? objectLabel : `object ${objectIndex + 1}`;
   
   switch (field) {
     case 'description':
-      return `update ${label} description`;
+      // When description changes, describe what it changed to
+      return `change ${label} to ${newValue}`;
     case 'location':
       return `move ${label} to ${newValue}`;
     case 'relative_size':
       return `change ${label} size to ${newValue}`;
     case 'shape_and_color':
-      return `change ${label} appearance`;
+      return `change ${label} appearance to ${newValue}`;
     case 'texture':
-      return `change ${label} texture`;
+      return `change ${label} texture to ${newValue}`;
+    case 'appearance_details':
+      return `change ${label} appearance details to ${newValue}`;
+    case 'relationship':
+      return `change ${label} relationship to ${newValue}`;
     case 'orientation':
       return `rotate ${label} to face ${newValue}`;
     case 'rotation':
@@ -110,7 +118,7 @@ const describeObjectEdit = (
     case 'flip':
       return `flip ${label} ${newValue === 'flipped horizontally' ? 'horizontally (mirror)' : newValue === 'flipped vertically' ? 'vertically (upside down)' : ''}`;
     case 'pose':
-      return `change ${label} pose`;
+      return `change ${label} pose to ${newValue}`;
     case 'expression':
       return `change ${label} expression to ${newValue}`;
     case 'action':
@@ -163,6 +171,7 @@ export const createEditTracker = (): {
   };
 
   const notifyListeners = (): void => {
+    console.log('[EditTracker] Notifying listeners, count:', state.listeners.size, 'edits:', state.edits.length);
     state.listeners.forEach(listener => listener());
   };
 

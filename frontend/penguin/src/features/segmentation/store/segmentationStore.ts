@@ -24,6 +24,7 @@ export interface MaskMetadata {
   mask_url: string;
   promptTier?: 'CORE' | 'CORE_VISUAL' | 'CORE_VISUAL_SPATIAL';
   promptText?: string;
+  promptObject?: string; // Short object name extracted from promptText
   objectMetadata?: {
     description: string;
     location: string;
@@ -196,6 +197,7 @@ const normalizeResults = (results: SegmentationResponse, metadata?: StructedProm
         mask_url: toAbsoluteUrl(mask.mask_url),
         promptTier: mask.prompt_tier || mask.promptTier,
         promptText: mask.prompt_text || mask.promptText,
+        promptObject: mask.prompt_object || mask.promptObject,
         objectMetadata,
       };
     }),
@@ -1056,11 +1058,26 @@ export const useSegmentationStore = create<SegmentationState>()(
         };
         
         // Track edits for the edit prompt
+        // Use promptObject (short noun) as the label - do NOT fall back to long description
         import('@/shared/lib/editTracker').then(({ editTracker }) => {
-          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          // Prefer promptObject (short noun), fall back to generic label
+          const promptObj = mask.promptObject?.trim();
+          // Use promptObject or generic "object N" - never use long description
+          const objectLabel = promptObj || `object ${maskIndex + 1}`;
+          
+          // Track description changes
+          if (metadata.description !== undefined && metadata.description !== oldMetadata?.description) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].description`,
+              oldMetadata?.description,
+              metadata.description,
+              maskIndex,
+              objectLabel
+            );
+          }
           
           // Track location changes
-          if (metadata.location && metadata.location !== oldMetadata?.location) {
+          if (metadata.location !== undefined && metadata.location !== oldMetadata?.location) {
             editTracker.trackEdit(
               `objects[${maskIndex}].location`,
               oldMetadata?.location,
@@ -1071,7 +1088,7 @@ export const useSegmentationStore = create<SegmentationState>()(
           }
           
           // Track size changes
-          if (metadata.relative_size && metadata.relative_size !== oldMetadata?.relative_size) {
+          if (metadata.relative_size !== undefined && metadata.relative_size !== oldMetadata?.relative_size) {
             editTracker.trackEdit(
               `objects[${maskIndex}].relative_size`,
               oldMetadata?.relative_size,
@@ -1082,11 +1099,55 @@ export const useSegmentationStore = create<SegmentationState>()(
           }
           
           // Track orientation changes
-          if (metadata.orientation && metadata.orientation !== oldMetadata?.orientation) {
+          if (metadata.orientation !== undefined && metadata.orientation !== oldMetadata?.orientation) {
             editTracker.trackEdit(
               `objects[${maskIndex}].orientation`,
               oldMetadata?.orientation,
               metadata.orientation,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track shape_and_color changes
+          if (metadata.shape_and_color !== undefined && metadata.shape_and_color !== oldMetadata?.shape_and_color) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].shape_and_color`,
+              oldMetadata?.shape_and_color,
+              metadata.shape_and_color,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track texture changes
+          if (metadata.texture !== undefined && metadata.texture !== oldMetadata?.texture) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].texture`,
+              oldMetadata?.texture,
+              metadata.texture,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track appearance_details changes
+          if (metadata.appearance_details !== undefined && metadata.appearance_details !== oldMetadata?.appearance_details) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].appearance_details`,
+              oldMetadata?.appearance_details,
+              metadata.appearance_details,
+              maskIndex,
+              objectLabel
+            );
+          }
+          
+          // Track relationship changes
+          if (metadata.relationship !== undefined && metadata.relationship !== oldMetadata?.relationship) {
+            editTracker.trackEdit(
+              `objects[${maskIndex}].relationship`,
+              oldMetadata?.relationship,
+              metadata.relationship,
               maskIndex,
               objectLabel
             );
@@ -1203,7 +1264,9 @@ export const useSegmentationStore = create<SegmentationState>()(
         if (mask) {
           announceManipulation('flipped horizontally', mask.label);
           const maskIndex = state.results?.masks.findIndex(m => m.mask_id === maskId) ?? 0;
-          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          // Use promptObject (short noun) as the label - do NOT fall back to long description
+          const promptObj = mask.promptObject?.trim();
+          const objectLabel = promptObj || `object ${maskIndex + 1}`;
           import('@/shared/lib/editTracker').then(({ editTracker }) => {
             const manipState = get().maskManipulation.get(maskId);
             const isFlipped = manipState?.transform.flipHorizontal ?? false;
@@ -1242,7 +1305,9 @@ export const useSegmentationStore = create<SegmentationState>()(
         if (mask) {
           announceManipulation('flipped vertically', mask.label);
           const maskIndex = state.results?.masks.findIndex(m => m.mask_id === maskId) ?? 0;
-          const objectLabel = mask.label || mask.objectMetadata?.description || `object ${maskIndex + 1}`;
+          // Use promptObject (short noun) as the label - do NOT fall back to long description
+          const promptObj = mask.promptObject?.trim();
+          const objectLabel = promptObj || `object ${maskIndex + 1}`;
           import('@/shared/lib/editTracker').then(({ editTracker }) => {
             const manipState = get().maskManipulation.get(maskId);
             const isFlipped = manipState?.transform.flipVertical ?? false;

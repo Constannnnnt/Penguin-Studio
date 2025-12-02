@@ -258,8 +258,21 @@ export const useConfigStore = create<ConfigState>()(
           set((state) => {
             // Track object edit
             const oldValue = state.config.objects[index]?.[field as keyof SceneObject];
-            const objectLabel = state.config.objects[index]?.description || undefined;
-            editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
+            
+            // Try to get promptObject from segmentation store for better edit labels
+            // Import dynamically to avoid circular dependency
+            import('@/features/segmentation/store/segmentationStore').then(({ useSegmentationStore }) => {
+              const segState = useSegmentationStore.getState();
+              const mask = segState.results?.masks[index];
+              // Use promptObject (short noun) - do NOT fall back to long description
+              const promptObj = mask?.promptObject?.trim();
+              const objectLabel = promptObj || `object ${index + 1}`;
+              editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
+            }).catch(() => {
+              // Fallback if import fails - use generic label
+              const objectLabel = `object ${index + 1}`;
+              editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
+            });
 
             return {
               config: {
