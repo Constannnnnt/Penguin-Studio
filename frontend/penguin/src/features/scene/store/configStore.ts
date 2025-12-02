@@ -180,6 +180,7 @@ export const useConfigStore = create<ConfigState>()(
 
         /**
          * Updates scene configuration using dot-notation path
+         * Also syncs the change to config for use in refine API
          * Also tracks the edit for modification prompt generation
          */
         updateSceneConfig: (path: string, value: unknown) =>
@@ -191,12 +192,47 @@ export const useConfigStore = create<ConfigState>()(
             );
             editTracker.trackEdit(path, oldValue, value);
 
-            return {
-              sceneConfig: setNestedProperty(
-                state.sceneConfig as unknown as Record<string, unknown>,
+            // Update sceneConfig
+            const newSceneConfig = setNestedProperty(
+              state.sceneConfig as unknown as Record<string, unknown>,
+              path,
+              value
+            ) as unknown as SceneConfiguration;
+
+            // Sync to config for refine API
+            // Map sceneConfig paths to config paths (they mostly match)
+            let newConfig = { ...state.config };
+            
+            // Direct mappings (same path in both)
+            if (path === 'background_setting' || 
+                path === 'aspect_ratio' ||
+                path.startsWith('lighting.') ||
+                path.startsWith('photographic_characteristics.')) {
+              newConfig = setNestedProperty(
+                newConfig as unknown as Record<string, unknown>,
                 path,
                 value
-              ) as unknown as SceneConfiguration,
+              ) as unknown as PenguinConfig;
+            }
+            
+            // Aesthetics mappings - sync to both nested and top-level
+            if (path === 'aesthetics.style_medium') {
+              newConfig.style_medium = value as StyleMedium;
+              newConfig.aesthetics = { ...newConfig.aesthetics, style_medium: value as string };
+            } else if (path === 'aesthetics.aesthetic_style') {
+              newConfig.artistic_style = value as ArtisticStyle;
+              newConfig.aesthetics = { ...newConfig.aesthetics, aesthetic_style: value as string };
+            } else if (path === 'aesthetics.composition') {
+              newConfig.aesthetics = { ...newConfig.aesthetics, composition: value as CompositionType };
+            } else if (path === 'aesthetics.color_scheme') {
+              newConfig.aesthetics = { ...newConfig.aesthetics, color_scheme: value as ColorScheme };
+            } else if (path === 'aesthetics.mood_atmosphere') {
+              newConfig.aesthetics = { ...newConfig.aesthetics, mood_atmosphere: value as MoodType };
+            }
+
+            return {
+              sceneConfig: newSceneConfig,
+              config: newConfig,
             };
           }),
 
