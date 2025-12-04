@@ -4,6 +4,10 @@ Penguin Studio is an image generation and editing platform that combines text-to
 
 My design rationales, methodology, system implementations (on chat interfaces, generative AI and user interactions for image generations) are documented in this [doc](./docs/design.md).
 
+<p style="text-align: center; width: 80%">
+  <img src="./assets/preview.png" alt="Preview">
+</p>
+
 ## Installation
 
 ### Prerequisites
@@ -61,7 +65,7 @@ uv venv
 .\.venv\Scripts\activate.ps1
 
 # Linux/Mac
-source .venv/scripts/sctivate
+source .venv/bin/activate
 
 uv sync
 popd
@@ -76,6 +80,12 @@ pushd backend
 # Configure environment
 cp .env.example .env
 # Edit .env and set BRIA_API_KEY
+
+# install the spaCy models
+uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz
+# Optional: huggingface setup, if needed, the token permission can be set to READ
+hf auth login
+# Request SAM3 access
 
 # Download SAM3 checkpoint (first run only)
 uv run python -m app.setup_model
@@ -101,7 +111,7 @@ cp .env.example .env.development
 
 ### Basic Usage
 
-An example `BRIA_API_KEY` can be found in this [doc](https://docs.google.com/document/d/1QORGujAlqa3KP8iebhJTsZFAO1IaC0WvmAoVlqnxnDk/edit?usp=sharing). Please copy this key and paste it in a new `.env` file in the `backend` folder. Note that this key has limited credits for generation actions (with 1~3 edits and short prompts), please use it with caution. You are adviced to use your own key for BRIA service, which serves Free tier users. 
+An example `BRIA_API_KEY` can be found in this [doc](https://docs.google.com/document/d/1QORGujAlqa3KP8iebhJTsZFAO1IaC0WvmAoVlqnxnDk/edit?usp=sharing). Please copy this key and paste it in a new `.env` file in the `backend` folder. Note that this key has limited credits for generation actions (with 1~3 edits and short prompts), please use it with caution. If your prompt is too long, considering shorten it. You are adviced to use your own key for BRIA service, which serves Free tier users.
 
 ```bash
 # open one terminal, start the backend
@@ -115,7 +125,7 @@ pnpm dev
 
 ### Features and System Design
 
-A quick demo video can be found [youtube](), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/system-design.md).
+A quick demo video can be found on [youtube](https://youtu.be/7kMxRzNmQ48), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/system-design.md).
 
 Interactive API docs available at:
 
