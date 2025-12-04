@@ -1,3 +1,3 @@
-[submodule "third_party/sam3"]
-	path = third_party/sam3
+[submodule "thirdparty/sam3"]
+	path = thirdparty/sam3
 	url = https://github.com/facebookresearch/sam3.git

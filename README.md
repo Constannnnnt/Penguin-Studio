@@ -18,7 +18,7 @@ The system is developed and tested on Windows 11 with RTX 3070 with 8GB VRAM.
 ### Clone Repository
 
 ```bash
-git clone --recurse-submodules https://github.com/your-org/penguin-studio.git
+git clone --recurse-submodules https://github.com/Constannnnnt/penguin-studio.git
 cd penguin-studio
 ```
 
