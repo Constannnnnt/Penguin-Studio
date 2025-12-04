@@ -2,7 +2,7 @@
 
 Penguin Studio is an image generation and editing platform that combines text-to-image synthesis with automatic object detection and semantic scene configuration. It reduces the need for repeated prompting, removes the overhead of managing multiple generation paths, and enables direct editing of both the full scene and individual objects for HDR-quality results. The platform uses the Bria FIBO model with structured prompts, supports seed-consistent refinement, and provides automatic object detection and segmentation for layered object editing. Users can adjust lighting, camera angles, and scene aesthetics through graphical, semantic controls.
 
-My design rationales, methodology, system implementations (on chat interfaces, generative AI and user interfactions for image generations) are documented in this [doc]() and a clean write-up on Kiro of how human and agents colloborate for better development experience is documented this [doc]().
+My design rationales, methodology, system implementations (on chat interfaces, generative AI and user interactions for image generations) are documented in this [doc](./docs/design.md).
 
 ## Installation
 
@@ -102,7 +102,7 @@ pnpm dev
 
 ### Features and System Design
 
-A quick demo video can be found [](), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/System.md).
+A quick demo video can be found [](), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/system-design.md).
 
 Interactive API docs available at:
 
@@ -119,4 +119,4 @@ Unless required by applicable law or agreed to in writing, software distributed 
 
 ### Third-Party Components
 
-This project includes SAM3 (Segment Anything Model 3) as a git submodule, licensed under Apache License 2.0.
+This project includes [SAM3](https://github.com/facebookresearch/sam3) (SAM 3: Segment Anything with Concepts) as a git submodule, licensed under SAM License.
