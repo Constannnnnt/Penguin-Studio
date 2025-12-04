@@ -80,6 +80,9 @@ export const useGeneration = () => {
       }
       if (response.structured_prompt) {
         setStructuredPrompt(response.structured_prompt);
+        // Store original structured prompt for refinement (critical for immediate refine after generate)
+        const fileSystemStore = useFileSystemStore.getState();
+        fileSystemStore.setOriginalStructuredPrompt(response.structured_prompt);
       }
 
       // Run post-generation pipeline

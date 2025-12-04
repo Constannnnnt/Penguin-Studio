@@ -33,6 +33,7 @@ export interface FileSystemState {
   toggleFolder: (path: string) => void;
   refreshFileTree: () => Promise<void>;
   addSegmentedImage: (resultId: string, imageUrl: string, timestamp: string) => Promise<void>;
+  setOriginalStructuredPrompt: (prompt: Record<string, unknown> | null) => void;
 }
 
 const DEFAULT_ROOT_DIRECTORY: FileNode = {
@@ -238,6 +239,10 @@ export const useFileSystemStore = create<FileSystemState>()(
           newExpandedFolders.add(`/results/${resultId}`);
           return { expandedFolders: newExpandedFolders };
         });
+      },
+
+      setOriginalStructuredPrompt: (prompt: Record<string, unknown> | null) => {
+        set({ originalStructuredPrompt: prompt });
       },
     }),
     {
