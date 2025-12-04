@@ -42,7 +42,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const metadataInputRef = useRef<HTMLInputElement>(null);
 
-  const { generateImage, refineImage, setSeed, clearGeneration, isLoading, generatedImage, error } = useGeneration();
+  const { generateImage, refineImage, setSeed, clearGeneratedImage, isLoading, generatedImage, error } = useGeneration();
   const currentSeed = useFileSystemStore((state) => state.currentSeed);
   const originalStructuredPrompt = useFileSystemStore((state) => state.originalStructuredPrompt);
   const [libraryImage, setLibraryImage] = useState<string | null>(null);
@@ -343,12 +343,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     if (selectedFileUrl && /\.(png|jpe?g)$/i.test(selectedFileUrl)) {
       setLibraryImage(selectedFileUrl);
       setViewMode('original');
-      // Clear any previous generated image so library image shows
-      clearGeneration();
+      // Clear any previous generated image so library image shows (preserves seed)
+      clearGeneratedImage();
     } else {
       setLibraryImage(null);
     }
-  }, [selectedFileUrl, clearGeneration]);
+  }, [selectedFileUrl, clearGeneratedImage]);
 
   // Set seed when loading a generation from library
   useEffect(() => {

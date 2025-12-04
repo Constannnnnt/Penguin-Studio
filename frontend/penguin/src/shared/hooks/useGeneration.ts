@@ -224,11 +224,20 @@ export const useGeneration = () => {
     lastSeedRef.current = null;
   }, []);
 
+  /**
+   * Clear only the generated image (preserves seed for refinement)
+   * Used when switching to library view
+   */
+  const clearGeneratedImage = useCallback((): void => {
+    setGeneratedImage(null);
+  }, []);
+
   return {
     generateImage,
     refineImage,
     setSeed,
     clearGeneration,
+    clearGeneratedImage,
     isLoading,
     generatedImage,
     structuredPrompt,
