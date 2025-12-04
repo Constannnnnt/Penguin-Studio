@@ -210,19 +210,19 @@ export const useGeneration = () => {
   /**
    * Set seed from loaded generation
    */
-  const setSeed = (seed: number): void => {
+  const setSeed = useCallback((seed: number): void => {
     lastSeedRef.current = seed;
-  };
+  }, []);
 
   /**
    * Clear the generated image and error state
    */
-  const clearGeneration = (): void => {
+  const clearGeneration = useCallback((): void => {
     setGeneratedImage(null);
     setStructuredPrompt(null);
     setError(null);
     lastSeedRef.current = null;
-  };
+  }, []);
 
   return {
     generateImage,
