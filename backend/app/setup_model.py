@@ -6,6 +6,7 @@ import torch
 from sam3 import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
+
 from app.detection.sam3_detector import Sam3Detector
 
 def load_sam3(device: str, confidence_threshold: float = 0.5) -> Sam3Processor:
@@ -29,6 +30,8 @@ def setup_models(device: str | None = None) -> Sam3Detector:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     sam3_processor = load_sam3(device=device, confidence_threshold=0.5)
+
+    print("Download SAM3 model successfully")
     return Sam3Detector(processor=sam3_processor)
 
 if __name__ == "__main__":

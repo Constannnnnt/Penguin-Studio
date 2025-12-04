@@ -10,10 +10,12 @@ My design rationales, methodology, system implementations (on chat interfaces, g
 
 - Python 3.11+
 - Node.js 18+
-- CUDA-capable GPU (recommended)
+- CUDA-capable GPU (above 8GB VRAM recommended)
 - Bria API key
+- HuggingFace account
+- Granted access to sam3 at [huggingface](https://huggingface.co/facebook/sam3)
 
-The system is developed and tested on Windows 11 with RTX 3070 with 8GB VRAM.
+The system was developed and tested on Windows 11 with RTX 3070 with 8GB VRAM. The setup had been verified on WSL (Ubuntu 24.04).
 
 ### Clone Repository
 
@@ -49,9 +51,18 @@ npm install -g pnpm
 ### Backend Setup
 
 ```bash
+cd Penguin-Studio
 # Install Python dependencies
 pushd backend
 uv venv
+
+# Activate the virtual environment
+# Windows
+.\.venv\Scripts\activate.ps1
+
+# Linux/Mac
+source .venv/scripts/sctivate
+
 uv sync
 popd
 
@@ -67,7 +78,9 @@ cp .env.example .env
 # Edit .env and set BRIA_API_KEY
 
 # Download SAM3 checkpoint (first run only)
-uv run python app/setup_model.py
+uv run python -m app.setup_model
+
+popd
 ```
 
 ### Frontend Setup
@@ -102,7 +115,7 @@ pnpm dev
 
 ### Features and System Design
 
-A quick demo video can be found [](), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/system-design.md).
+A quick demo video can be found [youtube](), which demonstrates the interactions and workflow for image generation and refinement in this system. A detailed description of features and system designs are documented in this [doc](./docs/system-design.md).
 
 Interactive API docs available at:
 
