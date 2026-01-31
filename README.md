@@ -111,7 +111,7 @@ cp .env.example .env.development
 
 ### Basic Usage
 
-An example `BRIA_API_KEY` can be found in this [doc](https://docs.google.com/document/d/1QORGujAlqa3KP8iebhJTsZFAO1IaC0WvmAoVlqnxnDk/edit?usp=sharing). Please copy this key and paste it in a new `.env` file in the `backend` folder. Note that this key has limited credits for generation actions (with 1~3 edits and short prompts), please use it with caution. If your prompt is too long, considering shorten it. You are adviced to use your own key for BRIA service, which serves Free tier users.
+Create your own [BRIA](https://bria.ai) `BRIA_API_KEY` and paste it in a new `.env` file in the `backend` folder.
 
 ```bash
 # open one terminal, start the backend
