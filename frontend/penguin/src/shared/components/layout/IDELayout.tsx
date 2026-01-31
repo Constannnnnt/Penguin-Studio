@@ -7,6 +7,7 @@ import { useKeyboardShortcuts } from '@/shared/hooks/useKeyboardShortcuts';
 import { useObjectManipulationKeyboard } from '@/features/objects/hooks/useObjectManipulationKeyboard';
 import { Header } from './Header';
 import { CollapsiblePanel } from './CollapsiblePanel';
+import { AgentChatInterface } from '@/features/agentic/components/AgentChatInterface';
 
 export const IDELayout: React.FC = () => {
   const {
@@ -18,6 +19,7 @@ export const IDELayout: React.FC = () => {
     setControlsPanelWidth,
     libraryPanelCollapsed,
     ControlsPanelCollapsed,
+    activeMode,
   } = useLayoutStore();
 
   const workspacePanelRef = useRef<WorkspacePanelRef>(null);
@@ -64,10 +66,10 @@ export const IDELayout: React.FC = () => {
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
       <div className="border-b border-border bg-background/80 px-4 py-1 shadow-sm backdrop-blur">
         <Header
-          // onToggleLibrary={toggleLibraryPanel}
-          // onToggleControls={toggleControlsPanel}
-          // libraryCollapsed={libraryPanelCollapsed}
-          // controlsCollapsed={ControlsPanelCollapsed}
+        // onToggleLibrary={toggleLibraryPanel}
+        // onToggleControls={toggleControlsPanel}
+        // libraryCollapsed={libraryPanelCollapsed}
+        // controlsCollapsed={ControlsPanelCollapsed}
         />
       </div>
 
@@ -87,13 +89,13 @@ export const IDELayout: React.FC = () => {
 
         <CollapsiblePanel
           side="right"
-          title="Controls"
+          title={activeMode === 'edit' ? 'Controls' : 'Penguin Chat'}
           width={ControlsPanelWidth}
           collapsed={ControlsPanelCollapsed}
           onToggle={toggleControlsPanel}
           onResize={handleControlsResize}
         >
-          <ControlsPanel />
+          {activeMode === 'edit' ? <ControlsPanel /> : <AgentChatInterface />}
         </CollapsiblePanel>
       </div>
     </div>

@@ -1,7 +1,5 @@
-// import { Sparkles, SidebarOpen, SlidersHorizontal } from 'lucide-react';
-import { ThemeToggle } from '@/shared/components/ThemeToggle';
-// import { Button } from '@/shared/components/ui/button';
 import PenguinSVG from '@/assets/penguin';
+import { ThemeToggle } from '@/shared/components/ThemeToggle';
 
 interface HeaderProps {
   onToggleLibrary?: () => void;
@@ -10,22 +8,12 @@ interface HeaderProps {
   controlsCollapsed?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  // onToggleLibrary = () => {},
-  // onToggleAdvancedControls = () => {},
-  // libraryCollapsed = false,
-  // controlsCollapsed = false,
-}) => {
+export const Header: React.FC<HeaderProps> = () => {
   return (
-    <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" role="banner">
-      <div className="flex items-center gap-2">
-        {/* <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" /> */}
-        <div className="flex items-center gap-2">
-          <PenguinSVG/>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Penguin Studio</p>
-        </div>
+    <header className="flex h-14 items-center justify-between px-4 border-b border-border bg-background/80 backdrop-blur shadow-sm" role="banner">
+      <div className="flex items-center gap-3">
+        <PenguinSVG />
+        <p className="text-xs uppercase font-bold tracking-[0.2em] text-foreground/80">Penguin Studio</p>
       </div>
 
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -61,6 +49,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         <ThemeToggle />
       </div>
-    </header>
+    </header >
   );
 };

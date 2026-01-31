@@ -299,6 +299,22 @@ export interface SceneConfiguration {
   photographic_characteristics: PhotographicConfig;
   lighting: LightingConfig;
   aesthetics: AestheticsConfig;
+  seed?: number;
+}
+
+export interface PlanStep {
+  tool_name: string;
+  tool_input: Record<string, any>;
+  step_description: string;
+}
+
+export interface AgentMessage {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  plan?: PlanStep[];
+  timestamp: Date;
+  status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed';
 }
 
 // ============================================================================
@@ -396,6 +412,7 @@ export interface ConfigState {
   // State
   config: PenguinConfig;
   sceneConfig: SceneConfiguration;
+  rawStructuredPrompt: Record<string, unknown> | null;
   selectedObject: number | null;
   activePanel: PanelType;
   isEnhancedMode: boolean;
