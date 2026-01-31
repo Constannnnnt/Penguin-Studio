@@ -143,6 +143,7 @@ export const useConfigStore = create<ConfigState>()(
         // ====================================================================
         config: DEFAULT_CONFIG,
         sceneConfig: DEFAULT_SCENE_CONFIG,
+        rawStructuredPrompt: null,
         selectedObject: null,
         activePanel: 'scene',
         isEnhancedMode: false,
@@ -412,6 +413,7 @@ export const useConfigStore = create<ConfigState>()(
               : state.config.objects;
 
             return {
+              rawStructuredPrompt: sp,
               config: {
                 ...state.config,
                 short_description: (sp.short_description as string) || state.config.short_description,
@@ -440,6 +442,7 @@ export const useConfigStore = create<ConfigState>()(
               sceneConfig: {
                 ...state.sceneConfig,
                 background_setting: newBackgroundSetting,
+                seed: (sp.seed as number) || state.sceneConfig.seed,
                 lighting: {
                   ...state.sceneConfig.lighting,
                   conditions: newLightingConditions,

@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Sparkles, Download } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useLayoutStore } from '@/core/store/layoutStore';
 import { useConfigStore } from '@/features/scene/store/configStore';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { useFileSystemStore } from '@/core/store/fileSystemStore';
 import { PanelHeader } from './PanelHeader';
+import { ModeToggle } from './ModeToggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components/ui/tabs';
 import { Button } from '@/shared/components/ui/button';
 import { ImageControlsTab } from '@/features/imageEdit/components/ImageControlsTab';
@@ -13,9 +14,7 @@ import { SceneTab } from '@/features/scene/components/SceneTab';
 import { cn } from '@/shared/lib/utils';
 import { env } from '@/shared/lib/env';
 
-import { semanticGenerationService } from '@/core/services/semanticGeneration';
-import { generateSemanticJSONFilename } from '@/core/services/semanticGeneration/fileSaver';
-import { notifySaveSuccess, notifySaveError, notifyGenerationStarted } from '@/core/services/semanticGeneration/notifier';
+
 
 export const ControlsPanel: React.FC = () => {
   const { activeControlsTab, setActiveControlsTab, workspaceHandlers } = useLayoutStore();
@@ -24,7 +23,6 @@ export const ControlsPanel: React.FC = () => {
   const refreshFileTree = useFileSystemStore((state) => state.refreshFileTree);
 
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
   const metadataPayload = useMemo(() => {
     const baseMetadata = segmentationResults?.metadata;
@@ -121,7 +119,7 @@ export const ControlsPanel: React.FC = () => {
 
   const handleRefineAndSave = useCallback(async () => {
     setIsSavingMetadata(true);
-    
+
     try {
       await handleSaveMetadata();
       workspaceHandlers?.handleRefine?.();
@@ -130,68 +128,28 @@ export const ControlsPanel: React.FC = () => {
     }
   }, [handleSaveMetadata, workspaceHandlers]);
 
-  const handleExportScene = useCallback(async () => {
-    setIsExporting(true);
-    notifyGenerationStarted();
-
-    try {
-      // Generate semantic JSON from current state
-      const semanticJSON = semanticGenerationService.generateSemanticJSON();
-
-      // Validate the generated JSON
-      const validationResult = semanticGenerationService.validate(semanticJSON);
-      if (!validationResult.valid) {
-        notifySaveError(`Validation failed: ${validationResult.errors.map(e => e.message).join(', ')}`);
-        return;
-      }
-
-      // Generate filename based on timestamp
-      const filename = generateSemanticJSONFilename('scene');
-
-      // Save to file (triggers browser download)
-      const saveResult = await semanticGenerationService.saveToFile(semanticJSON, filename);
-
-      if (saveResult.success) {
-        notifySaveSuccess(saveResult);
-      } else {
-        notifySaveError(saveResult);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to export scene';
-      notifySaveError(errorMessage);
-    } finally {
-      setIsExporting(false);
-    }
-  }, []);
 
   const SceneTabContent = SceneTab;
-  
+
   return (
     <aside className="flex h-full flex-col" aria-label="Controls panel">
       <PanelHeader
         title="Edit"
         position="right"
         actions={
-          <div className="flex gap-2">
-            {/* <Button
-              size="sm"
-              variant="outline"
-              onClick={handleExportScene}
-              disabled={isExporting || !segmentationResults}
-              title="Export scene as semantic JSON"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {isExporting ? 'Exporting...' : 'Export'}
-            </Button> */}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleRefineAndSave}
-              disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              {isSavingMetadata ? 'Saving...' : 'Refine'}
-            </Button>
+          <div className="flex items-center gap-4">
+            <ModeToggle />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleRefineAndSave}
+                disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isSavingMetadata ? 'Saving...' : 'Refine'}
+              </Button>
+            </div>
           </div>
         }
       />
