@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
 export type ControlsTab = 'image' | 'scene' | 'objects';
+export type LayoutMode = 'edit' | 'chat';
 
 export interface LayoutState {
   libraryPanelCollapsed: boolean;
@@ -9,6 +10,7 @@ export interface LayoutState {
   libraryPanelWidth: number;
   ControlsPanelWidth: number;
   activeControlsTab: ControlsTab;
+  activeMode: LayoutMode;
   workspaceHandlers?: {
     handleGenerate?: () => void;
     handleRefine?: () => void;
@@ -19,6 +21,7 @@ export interface LayoutState {
   setLibraryPanelWidth: (width: number) => void;
   setControlsPanelWidth: (width: number) => void;
   setActiveControlsTab: (tab: ControlsTab) => void;
+  setActiveMode: (mode: LayoutMode) => void;
   setWorkspaceHandlers: (handlers?: { handleGenerate?: () => void; handleRefine?: () => void }) => void;
 }
 
@@ -28,6 +31,7 @@ interface PersistedLayoutState {
   libraryPanelWidth: number;
   ControlsPanelWidth: number;
   activeControlsTab: ControlsTab;
+  activeMode: LayoutMode;
 }
 
 const DEFAULT_LIBRARY_PANEL_WIDTH = 280;
@@ -44,6 +48,7 @@ const sanitizePersistedState = (state?: Partial<PersistedLayoutState>): Persiste
     libraryPanelWidth: state?.libraryPanelWidth ?? DEFAULT_LIBRARY_PANEL_WIDTH,
     ControlsPanelWidth: state?.ControlsPanelWidth ?? DEFAULT__CONTROLS_PANEL_WIDTH,
     activeControlsTab: activeTab && validTabs.includes(activeTab) ? activeTab : 'scene',
+    activeMode: state?.activeMode ?? 'edit',
   };
 };
 
@@ -89,6 +94,7 @@ export const useLayoutStore = create<LayoutState>()(
         libraryPanelWidth: DEFAULT_LIBRARY_PANEL_WIDTH,
         ControlsPanelWidth: DEFAULT__CONTROLS_PANEL_WIDTH,
         activeControlsTab: 'scene',
+        activeMode: 'edit',
         workspaceHandlers: undefined,
 
         toggleLibraryPanel: () =>
@@ -110,6 +116,9 @@ export const useLayoutStore = create<LayoutState>()(
         setActiveControlsTab: (tab: ControlsTab) =>
           set({ activeControlsTab: tab }),
 
+        setActiveMode: (mode: LayoutMode) =>
+          set({ activeMode: mode }),
+
         setWorkspaceHandlers: (handlers) =>
           set({ workspaceHandlers: handlers }),
       }),
@@ -125,6 +134,7 @@ export const useLayoutStore = create<LayoutState>()(
           libraryPanelWidth: state.libraryPanelWidth,
           ControlsPanelWidth: state.ControlsPanelWidth,
           activeControlsTab: state.activeControlsTab,
+          activeMode: state.activeMode,
         }),
       }
     ),

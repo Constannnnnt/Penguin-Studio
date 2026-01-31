@@ -18,7 +18,7 @@ setup_logging()
 
 class CORSStaticFiles(StaticFiles):
     """StaticFiles with CORS headers for cross-origin access."""
-    
+
     async def __call__(self, scope, receive, send) -> None:
         # Handle OPTIONS preflight requests
         if scope["type"] == "http" and scope["method"] == "OPTIONS":
@@ -32,7 +32,7 @@ class CORSStaticFiles(StaticFiles):
             )
             await response(scope, receive, send)
             return
-        
+
         # Wrap send to add CORS headers to response
         async def send_with_cors(message):
             if message["type"] == "http.response.start":
@@ -42,7 +42,7 @@ class CORSStaticFiles(StaticFiles):
                 headers.append((b"access-control-allow-headers", b"*"))
                 message["headers"] = headers
             await send(message)
-        
+
         await super().__call__(scope, receive, send_with_cors)
 
 
@@ -50,14 +50,14 @@ class CORSStaticFiles(StaticFiles):
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager for startup and shutdown events.
-    
+
     Handles:
     - Loading model on startup
     - Starting periodic cleanup task
     - Cleanup on shutdown
     """
     logger.info("Starting Segmentation Service...")
-    
+
     try:
         sam3_model = get_sam3_model()
         await sam3_model.load()
@@ -65,19 +65,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.exception(f"Failed to load SAM3 model: {e}")
         raise
-    
+
     cleanup_task = asyncio.create_task(_periodic_cleanup())
     logger.info("Started periodic cleanup task")
-    
+
     yield
-    
+
     logger.info("Shutting down Segmentation Service...")
     cleanup_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
         logger.info("Cleanup task cancelled")
-    
+
     await cleanup_dependencies()
     logger.info("Shutdown complete")
 
@@ -85,15 +85,17 @@ async def lifespan(app: FastAPI):
 async def _periodic_cleanup() -> None:
     """Periodic task to cleanup old result files."""
     file_service = get_file_service()
-    
+
     while True:
         try:
             await asyncio.sleep(3600)
-            
+
             logger.info("Running periodic cleanup...")
             deleted_count = await file_service.cleanup_old_results()
-            logger.info(f"Periodic cleanup completed: deleted {deleted_count} directories")
-            
+            logger.info(
+                f"Periodic cleanup completed: deleted {deleted_count} directories"
+            )
+
         except asyncio.CancelledError:
             logger.info("Periodic cleanup task cancelled")
             raise
@@ -104,7 +106,7 @@ async def _periodic_cleanup() -> None:
 def create_app() -> FastAPI:
     """
     Create and configure FastAPI application.
-    
+
     Returns:
         Configured FastAPI application instance
     """
@@ -113,10 +115,10 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
-    
-    app.add_middleware(RequestLoggingMiddleware)
-    logger.info("Request logging middleware registered")
-    
+
+    # app.add_middleware(RequestLoggingMiddleware)
+    # logger.info("Request logging middleware registered")
+
     # CORS middleware for API routes
     app.add_middleware(
         CORSMiddleware,
@@ -127,19 +129,23 @@ def create_app() -> FastAPI:
         expose_headers=["*"],
     )
     logger.info(f"CORS configured with origins: {settings.cors_origins}")
-    
+
     register_error_handlers(app)
-    
+
     app.include_router(segmentation.router)
     app.include_router(websocket.router)
     app.include_router(scene_parsing.router)
     app.include_router(generation.router)
     logger.info("API routers registered")
-    
+
     settings.outputs_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/outputs", CORSStaticFiles(directory=str(settings.outputs_dir)), name="outputs")
-    logger.info(f"Static files mounted at /outputs -> {settings.outputs_dir} (with CORS)")
-    
+    app.mount(
+        "/outputs", CORSStaticFiles(directory=str(settings.outputs_dir)), name="outputs"
+    )
+    logger.info(
+        f"Static files mounted at /outputs -> {settings.outputs_dir} (with CORS)"
+    )
+
     return app
 
 
@@ -149,7 +155,7 @@ app = create_app()
 def main():
     """Run the application with uvicorn."""
     import uvicorn
-    
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,

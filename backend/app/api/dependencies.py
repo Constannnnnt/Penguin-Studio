@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -7,11 +7,13 @@ from app.models.sam3_model import SAM3Model
 from app.services.file_service import FileService
 from app.services.segmentation_service import SegmentationService
 from app.services.websocket_manager import WebSocketManager
+from app.agentic.orchestrator import PenguinOrchestrator
 
 _sam3_model: SAM3Model | None = None
 _file_service: FileService | None = None
 _segmentation_service: SegmentationService | None = None
 _ws_manager: WebSocketManager | None = None
+_orchestrator: PenguinOrchestrator | None = None
 
 
 def get_sam3_model() -> SAM3Model:
@@ -58,20 +60,31 @@ def get_ws_manager() -> WebSocketManager:
     return _ws_manager
 
 
+def get_orchestrator() -> PenguinOrchestrator:
+    """Dependency to get agentic orchestrator instance."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = PenguinOrchestrator(
+            segmentation_service=get_segmentation_service()
+        )
+    return _orchestrator
+
+
 async def cleanup_dependencies() -> None:
     """Cleanup all singleton dependencies on shutdown."""
-    global _sam3_model, _file_service, _segmentation_service, _ws_manager
-    
+    global _sam3_model, _file_service, _segmentation_service, _ws_manager, _orchestrator
+
     logger.info("Cleaning up dependencies...")
-    
+
     if _ws_manager is not None:
         for client_id in list(_ws_manager.active_connections.keys()):
             await _ws_manager.disconnect(client_id)
         logger.info("WebSocket connections closed")
-    
+
     _sam3_model = None
     _file_service = None
     _segmentation_service = None
     _ws_manager = None
-    
+    _orchestrator = None
+
     logger.info("Dependencies cleanup completed")
