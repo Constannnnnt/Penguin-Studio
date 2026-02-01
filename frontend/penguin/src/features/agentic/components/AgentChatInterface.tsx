@@ -48,10 +48,10 @@ export const AgentChatInterface: React.FC = () => {
                                 {msg.role === 'user' ? <User className="h-4 w-4 text-primary" /> : <Bot className="h-4 w-4 text-muted-foreground" />}
                             </div>
 
-                            <div className={`flex flex-col gap-3 max-w-[85%] ${msg.role === 'user' ? 'items-end' : ''}`}>
-                                <div className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed shadow-sm ${msg.role === 'user'
-                                    ? 'bg-primary text-primary-foreground rounded-tr-none'
-                                    : 'bg-card border border-border/50 text-card-foreground rounded-tl-none'
+                            <div className={`flex flex-col gap-2.5 max-w-[85%] ${msg.role === 'user' ? 'items-end' : ''}`}>
+                                <div className={`px-4 py-3 text-[14px] leading-relaxed shadow-sm transition-all ${msg.role === 'user'
+                                    ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-none font-medium'
+                                    : 'industrial-panel rounded-2xl rounded-tl-none text-foreground/90'
                                     }`}>
                                     {msg.content}
                                 </div>
@@ -65,14 +65,17 @@ export const AgentChatInterface: React.FC = () => {
                                     />
                                 )}
 
-                                <div className="flex items-center gap-2 px-2 text-[10px] font-mono font-medium text-muted-foreground opacity-50">
-                                    <span>
+                                <div className="flex items-center gap-2 px-2 text-[9px] font-mono font-bold uppercase tracking-wider text-muted-foreground/60">
+                                    <span className="opacity-80">
                                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                     {msg.status === 'awaiting_input' && (
-                                        <span className="rounded bg-muted/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                            Awaiting Input
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
+                                            <span className="text-primary font-black">
+                                                Awaiting Input
+                                            </span>
+                                        </div>
                                     )}
                                 </div>
                             </div>

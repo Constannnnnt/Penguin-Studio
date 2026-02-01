@@ -47,8 +47,8 @@ export const CollapsibleAestheticOption: React.FC<CollapsibleAestheticOptionProp
 
   useEffect(() => {
     if (previousExpandedRef.current !== isExpanded) {
-      const message = isExpanded 
-        ? `${label} section expanded` 
+      const message = isExpanded
+        ? `${label} section expanded`
         : `${label} section collapsed`;
       announceToScreenReader(message, 'polite');
       previousExpandedRef.current = isExpanded;
@@ -63,63 +63,69 @@ export const CollapsibleAestheticOption: React.FC<CollapsibleAestheticOptionProp
   };
 
   return (
-    <div className="space-y-2">
-      <button
-        ref={buttonRef}
-        id={`${sectionId}-button`}
-        type="button"
-        onClick={onToggle}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          'w-full flex items-center justify-between rounded-md',
-          'p-2 xs:p-3 min-h-[44px]',
-          'bg-background hover:bg-accent/50 active:bg-accent/70',
-          'transition-all duration-300 ease-out motion-reduce:transition-none',
-          'hover:shadow-sm motion-reduce:hover:shadow-none',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          'touch-manipulation',
-          'group'
-        )}
-        aria-expanded={isExpanded}
-        aria-controls={`${sectionId}-content`}
-        aria-label={`${label} section, currently ${currentLabel}. Press Enter or Space to ${isExpanded ? 'collapse' : 'expand'}.`}
-      >
-        <div className="flex items-center gap-2 xs:gap-3 flex-1 text-left min-w-0">
-          <span className="text-xs xs:text-sm font-medium truncate">{label}</span>
-          <span className="text-xs xs:text-sm text-muted-foreground transition-colors duration-200 motion-reduce:transition-none truncate">
-            {currentLabel}
-          </span>
-        </div>
-        <ChevronDown
+    <div className="space-y-4">
+      <div className="industrial-panel p-1">
+        <button
+          ref={buttonRef}
+          id={`${sectionId}-button`}
+          type="button"
+          onClick={onToggle}
+          onKeyDown={handleKeyDown}
           className={cn(
-            'h-4 w-4 text-muted-foreground',
-            'transition-transform duration-300 ease-out motion-reduce:transition-none',
-            isExpanded && 'rotate-180'
+            'w-full flex items-center justify-between rounded-sm',
+            'p-3 min-h-[48px]',
+            'bg-background/40 hover:bg-primary/5 active:bg-primary/10',
+            'transition-all duration-300 ease-out group',
+            'border border-transparent hover:border-primary/20',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+            'touch-manipulation'
           )}
-          aria-hidden="true"
-        />
-      </button>
+          aria-expanded={isExpanded}
+          aria-controls={`${sectionId}-content`}
+          aria-label={`${label} section, currently ${currentValue}. Press Enter or Space to ${isExpanded ? 'collapse' : 'expand'}.`}
+        >
+          <div className="flex flex-col items-start gap-1 text-left min-w-0 flex-1">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 font-heading group-hover:text-primary transition-colors">
+              {label}
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors font-mono">
+              {currentLabel}
+            </span>
+          </div>
 
-      <div
-        ref={contentRef}
-        id={`${sectionId}-content`}
-        role="region"
-        aria-labelledby={`${sectionId}-button`}
-        className={cn(
-          'overflow-hidden',
-          'transition-all duration-300 ease-out motion-reduce:transition-none',
-          isExpanded ? 'max-h-[600px] xs:max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-        )}
-        style={{
-          transitionProperty: 'max-height, opacity',
-        }}
-      >
-        <div className={cn(
-          'pt-1 xs:pt-2',
-          'transition-transform duration-300 ease-out motion-reduce:transition-none',
-          isExpanded ? 'translate-y-0' : '-translate-y-2 motion-reduce:translate-y-0'
-        )}>
-          {children}
+          <div className={cn(
+            "flex items-center justify-center w-6 h-6 rounded border border-primary/10 bg-primary/5 transition-all duration-300",
+            isExpanded ? "border-primary/40 bg-primary/10" : "group-hover:border-primary/30"
+          )}>
+            <ChevronDown
+              className={cn(
+                'h-3 w-3 text-primary/60',
+                'transition-transform duration-300 ease-out',
+                isExpanded && 'rotate-180 text-primary'
+              )}
+              aria-hidden="true"
+            />
+          </div>
+        </button>
+
+        <div
+          ref={contentRef}
+          id={`${sectionId}-content`}
+          role="region"
+          aria-labelledby={`${sectionId}-button`}
+          className={cn(
+            'overflow-hidden',
+            'transition-all duration-300 ease-in-out',
+            isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+          )}
+        >
+          <div className={cn(
+            'p-3 border-t border-primary/10',
+            'transition-all duration-300 ease-out',
+            isExpanded ? 'translate-y-0' : '-translate-y-2'
+          )}>
+            {children}
+          </div>
         </div>
       </div>
     </div>
