@@ -5,8 +5,15 @@ import { useOptimizedImage } from '@/shared/hooks/useOptimizedImage';
 import { useImageEditStore } from '@/features/imageEdit/store/imageEditStore';
 import { combineTransforms } from '@/shared/lib/imageTransform';
 import { DraggableMaskOverlay } from './DraggableMaskOverlay';
+import { MaskTooltip } from './MaskTooltip';
 import { getMaskColor } from '@/shared/lib/maskUtils';
 
+type MaskHitCache = {
+  url: string;
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
 
 export const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -72,11 +79,29 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
     () => (activeMaskId ? masks.find(m => m.mask_id === activeMaskId) || null : null),
     [masks, activeMaskId]
   );
+  const hoveredMask = React.useMemo(
+    () => (hoveredMaskId ? masks.find(m => m.mask_id === hoveredMaskId) || null : null),
+    [masks, hoveredMaskId]
+  );
+  const masksBySpecificity = React.useMemo(
+    () => [...masks].sort((a, b) => {
+      const areaDiff = a.area_pixels - b.area_pixels;
+      if (areaDiff !== 0) return areaDiff;
+      const confA = typeof a.confidence === 'number' ? a.confidence : 0;
+      const confB = typeof b.confidence === 'number' ? b.confidence : 0;
+      return confB - confA;
+    }),
+    [masks]
+  );
   const masksLookup = React.useMemo(() => {
     const map = new Map<string, MaskMetadata>();
     masks.forEach(m => map.set(m.mask_id, m));
     return map;
   }, [masks]);
+  const isManipulating = React.useMemo(
+    () => Array.from(maskManipulation.values()).some((state) => state.isDragging || state.isResizing || state.isRotating),
+    [maskManipulation]
+  );
 
   // Select global edits with stable snapshots to avoid sync-store warnings
   const brightness = useImageEditStore((state) => state.brightness);
@@ -218,14 +243,264 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
     onMaskClick?.(maskId);
   }, [onMaskClick]);
 
+  const suppressBackgroundClickRef = React.useRef(false);
+
   const handleBackgroundClick = React.useCallback((e: React.MouseEvent) => {
     if (!onBackgroundDeselect) return;
+    if (suppressBackgroundClickRef.current) {
+      suppressBackgroundClickRef.current = false;
+      return;
+    }
     if (e.target === containerRef.current || e.target === overlayRef.current) {
       onBackgroundDeselect();
     }
   }, [onBackgroundDeselect]);
 
   const hasLayout = layout.width > 0 && layout.height > 0 && imageSize.width > 0 && imageSize.height > 0;
+
+  const maskHitCacheRef = React.useRef<Map<string, MaskHitCache>>(new Map());
+  const hoverRafRef = React.useRef<number | null>(null);
+  const lastHoverMaskRef = React.useRef<string | null>(null);
+  const [hoverPosition, setHoverPosition] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const cache = maskHitCacheRef.current;
+    const activeIds = new Set(masks.map((mask) => mask.mask_id));
+
+    for (const key of cache.keys()) {
+      if (!activeIds.has(key)) {
+        cache.delete(key);
+      }
+    }
+
+    const loadMask = (mask: MaskMetadata): Promise<void> =>
+      new Promise((resolve) => {
+        const existing = cache.get(mask.mask_id);
+        if (existing && existing.url === mask.mask_url) {
+          resolve();
+          return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          if (cancelled) {
+            resolve();
+            return;
+          }
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width || 1;
+            canvas.height = img.height || 1;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve();
+              return;
+            }
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            cache.set(mask.mask_id, {
+              url: mask.mask_url,
+              width: canvas.width,
+              height: canvas.height,
+              data: imageData.data,
+            });
+          } catch {
+            // If CORS blocks pixel reads, fall back to bbox-only hit testing.
+          }
+          resolve();
+        };
+        img.onerror = () => {
+          resolve();
+        };
+        img.src = mask.mask_url;
+      });
+
+    Promise.all(masks.map((mask) => loadMask(mask))).catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [masks]);
+
+  const getMaskHit = React.useCallback(
+    (xDisplay: number, yDisplay: number): string | null => {
+      if (!hasLayout || !Number.isFinite(xDisplay) || !Number.isFinite(yDisplay)) {
+        return null;
+      }
+
+      const cache = maskHitCacheRef.current;
+      const scale = layout.scale || 1;
+      const threshold = 8;
+
+      for (const mask of masksBySpecificity) {
+        const manipState = maskManipulation.get(mask.mask_id);
+        if (manipState?.isHidden) continue;
+
+        const bbox = manipState?.currentBoundingBox || mask.bounding_box;
+        const displayBBox = {
+          x1: bbox.x1 * scale,
+          y1: bbox.y1 * scale,
+          x2: bbox.x2 * scale,
+          y2: bbox.y2 * scale,
+        };
+
+        const rotation = manipState?.transform.rotation ?? 0;
+        const inBBox =
+          xDisplay >= displayBBox.x1 &&
+          xDisplay <= displayBBox.x2 &&
+          yDisplay >= displayBBox.y1 &&
+          yDisplay <= displayBBox.y2;
+
+        if (rotation === 0 && !inBBox) {
+          continue;
+        }
+
+        let px = xDisplay;
+        let py = yDisplay;
+
+        const cx = (displayBBox.x1 + displayBBox.x2) / 2;
+        const cy = (displayBBox.y1 + displayBBox.y2) / 2;
+
+        if (rotation !== 0) {
+          const radians = (-rotation * Math.PI) / 180;
+          const cos = Math.cos(radians);
+          const sin = Math.sin(radians);
+          const dx = px - cx;
+          const dy = py - cy;
+          px = cx + dx * cos - dy * sin;
+          py = cy + dx * sin + dy * cos;
+        }
+
+        const flipH = manipState?.transform.flipHorizontal ?? false;
+        const flipV = manipState?.transform.flipVertical ?? false;
+        if (flipH || flipV) {
+          px = cx + (px - cx) * (flipH ? -1 : 1);
+          py = cy + (py - cy) * (flipV ? -1 : 1);
+        }
+
+        const translateX = (manipState?.transform.position.x ?? 0) * scale;
+        const translateY = (manipState?.transform.position.y ?? 0) * scale;
+        const scaleX = manipState?.transform.scale.width ?? 1;
+        const scaleY = manipState?.transform.scale.height ?? 1;
+
+        if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY) || scaleX === 0 || scaleY === 0) {
+          continue;
+        }
+
+        px = (px - translateX) / scaleX;
+        py = (py - translateY) / scaleY;
+
+        const xOrig = px / scale;
+        const yOrig = py / scale;
+
+        const entry = cache.get(mask.mask_id);
+        if (!entry) {
+          if (!inBBox) {
+            continue;
+          }
+          return mask.mask_id;
+        }
+
+        const sampleX = Math.floor((xOrig / Math.max(1, imageSize.width)) * entry.width);
+        const sampleY = Math.floor((yOrig / Math.max(1, imageSize.height)) * entry.height);
+        if (
+          sampleX < 0 ||
+          sampleY < 0 ||
+          sampleX >= entry.width ||
+          sampleY >= entry.height
+        ) {
+          continue;
+        }
+
+        const alphaIndex = (sampleY * entry.width + sampleX) * 4 + 3;
+        const alpha = entry.data[alphaIndex];
+        if (alpha > threshold) {
+          return mask.mask_id;
+        }
+      }
+
+      return null;
+    },
+    [hasLayout, imageSize.width, imageSize.height, layout.scale, maskManipulation, masksBySpecificity]
+  );
+
+  const handleOverlayPointerMove = React.useCallback(
+    (e: React.PointerEvent) => {
+      if (!hasLayout || isManipulating) return;
+      if (!overlayRef.current) return;
+
+      const rect = overlayRef.current.getBoundingClientRect();
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      const xDisplay = clientX - rect.left;
+      const yDisplay = clientY - rect.top;
+
+      if (hoverRafRef.current !== null) {
+        cancelAnimationFrame(hoverRafRef.current);
+      }
+
+      hoverRafRef.current = requestAnimationFrame(() => {
+        hoverRafRef.current = null;
+        const hit = getMaskHit(xDisplay, yDisplay);
+        if (hit !== lastHoverMaskRef.current) {
+          lastHoverMaskRef.current = hit;
+          handleHover(hit);
+        }
+        if (hit) {
+          setHoverPosition({ x: clientX, y: clientY });
+        }
+      });
+    },
+    [getMaskHit, handleHover, hasLayout, isManipulating]
+  );
+
+  const handleOverlayPointerLeave = React.useCallback(() => {
+    if (hoverRafRef.current !== null) {
+      cancelAnimationFrame(hoverRafRef.current);
+      hoverRafRef.current = null;
+    }
+    lastHoverMaskRef.current = null;
+    handleHover(null);
+  }, [handleHover]);
+
+  const handleOverlayPointerDownCapture = React.useCallback(
+    (e: React.PointerEvent) => {
+      if (!hasLayout || isManipulating) return;
+      if (!overlayRef.current) return;
+      const target = e.target as Element | null;
+      if (target?.closest('[data-mask-interactive="true"]')) {
+        return;
+      }
+
+      const rect = overlayRef.current.getBoundingClientRect();
+      const xDisplay = e.clientX - rect.left;
+      const yDisplay = e.clientY - rect.top;
+      const hit = getMaskHit(xDisplay, yDisplay);
+
+      if (hit) {
+        suppressBackgroundClickRef.current = true;
+        window.setTimeout(() => {
+          suppressBackgroundClickRef.current = false;
+        }, 200);
+        if (hit !== activeMaskId) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleClick(hit);
+          handleHover(hit);
+          setHoverPosition({ x: e.clientX, y: e.clientY });
+        }
+        return;
+      }
+
+      if (onBackgroundDeselect) {
+        onBackgroundDeselect();
+      }
+      handleHover(null);
+    },
+    [activeMaskId, getMaskHit, handleClick, handleHover, hasLayout, isManipulating, onBackgroundDeselect]
+  );
 
   return (
     <div
@@ -256,6 +531,9 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
             width: `${layout.width}px`,
             height: `${layout.height}px`,
           }}
+          onPointerMoveCapture={handleOverlayPointerMove}
+          onPointerLeave={handleOverlayPointerLeave}
+          onPointerDownCapture={handleOverlayPointerDownCapture}
         >
           {/* Render masks with integrated visual overlay inside DraggableMaskOverlay */}
           {/* Render masks with integrated visual overlay inside DraggableMaskOverlay */}
@@ -275,21 +553,44 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
                 mask={mask}
                 isSelected={!!isSelected}
                 isHovered={!!isHovered}
+                isHitTarget={hoveredMaskId === mask.mask_id}
                 imageSize={imageSize}
                 onClick={(e) => {
                   e.preventDefault();
                   handleClick(mask.mask_id);
                 }}
-                onMouseEnter={() => handleHover(mask.mask_id)}
-                onMouseLeave={() => handleHover(null)}
+                onMouseEnter={() => undefined}
+                onMouseLeave={() => undefined}
                 imageContainerRef={overlayRef as React.RefObject<HTMLElement>}
                 displayScale={layout.scale}
                 maskColor={color}
                 containerSize={{ width: layout.width, height: layout.height }}
+                disableTooltip
               />
             );
           })}
         </div>
+      )}
+
+      {hoveredMask && (
+        <MaskTooltip
+          mask={hoveredMask}
+          visible={!!hoveredMaskId}
+          position={hoverPosition}
+          imageContainerRef={overlayRef}
+          boundingBox={
+            (() => {
+              const manipState = maskManipulation.get(hoveredMask.mask_id);
+              const bbox = manipState?.currentBoundingBox || hoveredMask.bounding_box;
+              return {
+                x1: bbox.x1 * layout.scale,
+                y1: bbox.y1 * layout.scale,
+                x2: bbox.x2 * layout.scale,
+                y2: bbox.y2 * layout.scale,
+              };
+            })()
+          }
+        />
       )}
 
       {hasLayout && optimizedImageSrc && showPreview && (

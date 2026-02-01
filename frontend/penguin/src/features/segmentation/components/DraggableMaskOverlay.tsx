@@ -8,6 +8,7 @@ interface DraggableMaskOverlayProps {
   mask: MaskMetadata;
   isSelected: boolean;
   isHovered: boolean;
+  isHitTarget?: boolean;
   imageSize: { width: number; height: number };
   onClick: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
@@ -26,6 +27,10 @@ interface DraggableMaskOverlayProps {
    * Container dimensions for mask rendering (display pixels)
    */
   containerSize?: { width: number; height: number };
+  /**
+   * Disable internal hover tooltip handling (use external hit testing instead)
+   */
+  disableTooltip?: boolean;
 }
 
 type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
@@ -34,6 +39,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   mask,
   isSelected,
   isHovered,
+  isHitTarget = false,
   imageSize,
   onClick,
   onMouseEnter,
@@ -42,6 +48,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   displayScale = 1,
   maskColor,
   containerSize,
+  disableTooltip = false,
 }) => {
   const {
     maskManipulation,
@@ -51,7 +58,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     startResizeMask,
     updateMaskSize,
     endResizeMask,
-    isAnyMaskDragging,
     toggleRotationMode,
     startRotateMask,
     updateMaskRotation,
@@ -149,11 +155,13 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }
   }, [isSelected, isRotationMode, mask.mask_id, flipMaskHorizontal, flipMaskVertical, toggleRotationMode]);
 
+  const canInteract = isSelected || isHitTarget;
+
   const handlePointerDown = (e: React.PointerEvent): void => {
     e.stopPropagation();
-    if (!isSelected) {
+    if (!canInteract) return;
+    if (!isSelected && isHitTarget) {
       onClick(e);
-      return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
     
@@ -401,11 +409,13 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }
   }, []);
 
+  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || rotatingRef.current || manipState?.isDragging || manipState?.isResizing || manipState?.isRotating;
   // Use refs for manipulation state checks to avoid re-renders
   const isGloballyManipulatingRef = React.useRef(false);
-  isGloballyManipulatingRef.current = !!(isAnyMaskDragging || manipState?.isDragging || manipState?.isResizing);
+  isGloballyManipulatingRef.current = isCurrentlyManipulating;
 
   const handleMouseEnterWithTooltip = React.useCallback((e: React.PointerEvent): void => {
+    if (disableTooltip) return;
     // Don't trigger hover effects if any mask is being manipulated
     if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
     onMouseEnter();
@@ -421,6 +431,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   const lastTooltipUpdateRef = React.useRef(0);
   
   const handleMouseMoveTooltip = React.useCallback((e: React.PointerEvent): void => {
+    if (disableTooltip) return;
     // Skip if manipulating or tooltip not visible
     if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
     
@@ -433,6 +444,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   }, []);
 
   const handleMouseLeaveWithTooltip = React.useCallback((): void => {
+    if (disableTooltip) return;
     // Don't trigger leave effects if any mask is being manipulated
     if (draggingRef.current || resizingRef.current || isGloballyManipulatingRef.current) return;
     onMouseLeave();
@@ -442,9 +454,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }, 150);
   }, [onMouseLeave]);
 
-  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || rotatingRef.current || manipState?.isDragging || manipState?.isResizing || manipState?.isRotating;
-  // Disable pointer events on other masks while any mask is being dragged (prevents jumpiness)
-  const shouldDisablePointerEvents = isAnyMaskDragging && !isCurrentlyManipulating && !isSelected;
+  const shouldDisablePointerEvents = !canInteract;
 
   // Determine cursor based on mode
   const getCursor = (): string => {
@@ -493,6 +503,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     // Apply rotation around center of bounding box
     transform: containerTransform,
     transformOrigin: 'center center',
+    zIndex: isSelected ? 3 : isHitTarget ? 2 : 1,
   };
 
   const handlePositions: { handle: ResizeHandle; style: React.CSSProperties; cursor: string }[] = [
@@ -561,6 +572,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
       <div
         ref={containerRef}
         style={style}
+        data-mask-interactive="true"
         onPointerDown={handlePointerDown}
         onDoubleClick={handleDoubleClick}
         onPointerEnter={handleMouseEnterWithTooltip}
@@ -595,6 +607,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
             className="absolute w-3 h-3 bg-blue-500 border-2 border-white rounded-full hover:scale-125 transition-transform"
             style={{ ...hStyle, cursor }}
             onPointerDown={(e) => handleResizeStart(e, handle)}
+            data-mask-interactive="true"
             role="button"
             aria-label={`Resize handle ${handle}`}
             tabIndex={-1}
@@ -619,6 +632,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
               className="absolute -bottom-12 left-1/2 -translate-x-1/2 flex gap-1 bg-black/80 backdrop-blur-sm rounded-lg p-1 shadow-xl border border-white/20"
               style={{ pointerEvents: 'auto' }}
               onPointerDown={(e) => e.stopPropagation()}
+              data-mask-interactive="true"
             >
               <button
                 type="button"
@@ -633,6 +647,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
                   // console.log('[MaskOverlay] Flip H clicked for', mask.mask_id);
                   flipMaskHorizontal(mask.mask_id); 
                 }}
+                data-mask-interactive="true"
                 title="Flip Horizontal (H key)"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -654,6 +669,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
                   // console.log('[MaskOverlay] Flip V clicked for', mask.mask_id);
                   flipMaskVertical(mask.mask_id); 
                 }}
+                data-mask-interactive="true"
                 title="Flip Vertical (V key)"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -667,13 +683,15 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         )}
       </div>
 
-      <MaskTooltip
-        mask={mask}
-        visible={tooltipVisible}
-        position={tooltipPosition}
-        imageContainerRef={imageContainerRef}
-        boundingBox={displayBBox}
-      />
+      {!disableTooltip && (
+        <MaskTooltip
+          mask={mask}
+          visible={tooltipVisible}
+          position={tooltipPosition}
+          imageContainerRef={imageContainerRef}
+          boundingBox={displayBBox}
+        />
+      )}
     </>
   );
 });
