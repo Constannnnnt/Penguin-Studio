@@ -134,6 +134,48 @@ const getNestedProperty = (obj: Record<string, unknown>, path: string): unknown 
 // Config Store
 // ============================================================================
 
+const sanitizePersistedConfig = (state?: Partial<ConfigState>): Partial<ConfigState> => {
+  if (!state) return {};
+  const safeText = (value: unknown, fallback: string = ''): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      const candidate =
+        (record.prompt as string) ||
+        (record.short_description as string) ||
+        (record.text as string) ||
+        (record.value as string) ||
+        (record.description as string);
+      if (typeof candidate === 'string') return candidate;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return fallback;
+  };
+
+  const config = state.config ? { ...state.config } : undefined;
+  if (config) {
+    config.short_description = safeText(config.short_description, '');
+    config.background_setting = safeText(config.background_setting, '');
+    config.context = config.context ? safeText(config.context, '') : config.context;
+  }
+
+  const sceneConfig = state.sceneConfig ? { ...state.sceneConfig } : undefined;
+  if (sceneConfig) {
+    sceneConfig.background_setting = safeText(sceneConfig.background_setting, '');
+  }
+
+  return {
+    ...state,
+    config: config ?? state.config,
+    sceneConfig: sceneConfig ?? state.sceneConfig,
+  };
+};
+
 export const useConfigStore = create<ConfigState>()(
   devtools(
     persist(
@@ -378,6 +420,31 @@ export const useConfigStore = create<ConfigState>()(
             const aesthetics = (sp.aesthetics as Record<string, unknown>) || {};
             const photo = (sp.photographic_characteristics as Record<string, unknown>) || {};
             const rawObjects = sp.objects as Array<Record<string, unknown>> | undefined;
+            const coerceText = (value: unknown, fallback: string = ''): string => {
+              if (typeof value === 'string') return value;
+              if (typeof value === 'number' || typeof value === 'boolean') {
+                return String(value);
+              }
+              if (value && typeof value === 'object') {
+                const record = value as Record<string, unknown>;
+                const candidate =
+                  (record.prompt as string) ||
+                  (record.short_description as string) ||
+                  (record.text as string) ||
+                  (record.value as string) ||
+                  (record.description as string);
+                if (typeof candidate === 'string') return candidate;
+                try {
+                  return JSON.stringify(value);
+                } catch {
+                  return String(value);
+                }
+              }
+              return fallback;
+            };
+
+            const resolveText = (value: unknown, fallback: string): string =>
+              coerceText(value, coerceText(fallback, ''));
 
             // Log the incoming short_description
             // console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);
@@ -386,15 +453,44 @@ export const useConfigStore = create<ConfigState>()(
             editTracker.clearEdits();
             editTracker.setBaseline(sp);
 
-            const newBackgroundSetting = (sp.background_setting as string) || state.config.background_setting;
-            const newLightingConditions = (lighting.conditions as string) || state.config.lighting.conditions;
-            const newCameraAngle = (photo.camera_angle as string) || state.config.photographic_characteristics.camera_angle;
-            const newLensFocalLength = (photo.lens_focal_length as string) || state.config.photographic_characteristics.lens_focal_length;
-            const newStyleMedium = ((sp.style_medium as string) || state.config.style_medium) as StyleMedium;
-            const newAestheticStyle = ((sp.artistic_style as string) || state.config.artistic_style) as ArtisticStyle;
+            const newBackgroundSetting = resolveText(
+              sp.background_setting,
+              state.config.background_setting
+            );
+            const newLightingConditions = resolveText(
+              lighting.conditions,
+              state.config.lighting.conditions
+            );
+            const newCameraAngle = resolveText(
+              photo.camera_angle,
+              state.config.photographic_characteristics.camera_angle
+            );
+            const newLensFocalLength = resolveText(
+              photo.lens_focal_length,
+              state.config.photographic_characteristics.lens_focal_length
+            );
+            const newStyleMedium = resolveText(
+              sp.style_medium,
+              state.config.style_medium
+            ) as StyleMedium;
+            const newAestheticStyle = resolveText(
+              sp.artistic_style,
+              state.config.artistic_style
+            ) as ArtisticStyle;
             const newComposition = ((aesthetics.composition as string) || state.config.aesthetics.composition) as CompositionType;
             const newColorScheme = ((aesthetics.color_scheme as string) || state.config.aesthetics.color_scheme) as ColorScheme;
-            const newMoodAtmosphere = ((aesthetics.mood_atmosphere as string) || state.config.aesthetics.mood_atmosphere) as MoodType;
+            const newMoodAtmosphere = resolveText(
+              aesthetics.mood_atmosphere,
+              state.config.aesthetics.mood_atmosphere
+            ) as MoodType;
+            const newShortDescription = resolveText(
+              sp.short_description,
+              state.config.short_description
+            );
+            const newContext = resolveText(
+              sp.context,
+              state.config.context || ''
+            );
 
             // Only update objects if there are new ones, otherwise keep existing
             const newObjects = rawObjects && rawObjects.length > 0
@@ -416,11 +512,11 @@ export const useConfigStore = create<ConfigState>()(
               rawStructuredPrompt: sp,
               config: {
                 ...state.config,
-                short_description: (sp.short_description as string) || state.config.short_description,
+                short_description: newShortDescription,
                 background_setting: newBackgroundSetting,
                 style_medium: newStyleMedium,
                 artistic_style: newAestheticStyle,
-                context: (sp.context as string) || state.config.context,
+                context: newContext || state.config.context,
                 objects: newObjects,
                 lighting: {
                   ...state.config.lighting,
@@ -466,6 +562,8 @@ export const useConfigStore = create<ConfigState>()(
       }),
       {
         name: 'penguin-config-storage',
+        version: 1,
+        migrate: (persistedState: any) => sanitizePersistedConfig(persistedState),
       }
     ),
     {

@@ -172,6 +172,34 @@ class PenguinApiClient {
   }
 
   /**
+   * Normalize prompt-like input into a usable string
+   */
+  private normalizePromptText(input: unknown): string {
+    if (typeof input === "string") {
+      return input === "[object Object]" ? "" : input;
+    }
+    if (input === null || input === undefined) return "";
+    if (typeof input === "number" || typeof input === "boolean") {
+      return String(input);
+    }
+    if (typeof input === "object") {
+      const record = input as Record<string, unknown>;
+      const candidate =
+        (record.prompt as string) ||
+        (record.short_description as string) ||
+        (record.text as string) ||
+        (record.value as string);
+      if (typeof candidate === "string") return candidate;
+      try {
+        return JSON.stringify(input);
+      } catch {
+        return String(input);
+      }
+    }
+    return String(input);
+  }
+
+  /**
    * Transform PenguinConfig to backend StructuredPrompt format
    */
   private transformToStructuredPrompt(config: PenguinConfig): Record<string, unknown> {
@@ -223,7 +251,8 @@ class PenguinApiClient {
    * Generate image from text prompt only (simple text-to-image)
    */
   async generateImage(prompt: string, aspectRatio: string = "1:1"): Promise<GenerationResponse> {
-    const sanitizedPrompt = sanitizeInput(prompt);
+    const normalizedPrompt = this.normalizePromptText(prompt);
+    const sanitizedPrompt = sanitizeInput(normalizedPrompt);
     
     if (!sanitizedPrompt.trim()) {
       throw new ValidationError("Prompt is required", ["Please enter a text prompt"]);
@@ -314,8 +343,11 @@ class PenguinApiClient {
     };
 
     // Add modification prompt if provided
-    if (modificationPrompt && modificationPrompt.trim()) {
-      refineRequest.modification_prompt = modificationPrompt.trim();
+    if (modificationPrompt) {
+      const sanitizedModification = sanitizeInput(modificationPrompt).trim();
+      if (sanitizedModification) {
+        refineRequest.modification_prompt = sanitizedModification;
+      }
     }
 
     try {
