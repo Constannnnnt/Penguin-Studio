@@ -562,6 +562,7 @@ class LoadGenerationResponse(BaseModel):
     prompt_versions: List[str]
     masks: List[Dict[str, Any]]
     metadata: Optional[Dict[str, Any]] = None
+    seed: Optional[int] = None
 
 
 class SavePromptRequest(BaseModel):
@@ -643,6 +644,14 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text())
 
+    seed = None
+    if isinstance(metadata, dict):
+        seed = metadata.get("seed")
+        if seed is None:
+            params = metadata.get("parameters")
+            if isinstance(params, dict):
+                seed = params.get("seed")
+
     logger.info(f"Loaded generation {generation_id}: {len(masks)} masks, {len(prompt_versions)} prompt versions")
 
     return LoadGenerationResponse(
@@ -652,6 +661,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
         prompt_versions=prompt_versions,
         masks=masks,
         metadata=metadata,
+        seed=seed,
     )
 
 

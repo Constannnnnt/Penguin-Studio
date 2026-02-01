@@ -381,6 +381,7 @@ export interface LoadGenerationResponse {
   prompt_versions: string[];
   masks: LoadGenerationMask[];
   metadata?: Record<string, unknown>;
+  seed?: number;
 }
 
 export interface ValidationError {
