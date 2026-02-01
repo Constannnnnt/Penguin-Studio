@@ -1,5 +1,4 @@
 import React from 'react';
-import { Slider } from '@/shared/components/ui/slider';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -15,6 +14,8 @@ import {
 } from '@/core/types';
 import type { PlanStep } from '@/core/types';
 
+const EMPTY_MASKS: Array<{ mask_id?: string }> = [];
+
 interface InteractiveParameterEditorProps {
     steps: PlanStep[];
     onUpdateStep: (index: number, updatedInput: Record<string, any>) => void;
@@ -22,6 +23,37 @@ interface InteractiveParameterEditorProps {
     disabled?: boolean;
     status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed' | 'awaiting_input';
 }
+
+interface PlanSliderProps {
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    disabled?: boolean;
+    onValueChange: (value: number) => void;
+}
+
+const PlanSlider: React.FC<PlanSliderProps> = ({
+    value,
+    min,
+    max,
+    step,
+    disabled = false,
+    onValueChange
+}) => {
+    return (
+        <input
+            type="range"
+            value={value}
+            min={min}
+            max={max}
+            step={step}
+            disabled={disabled}
+            onChange={(e) => onValueChange(Number(e.target.value))}
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+        />
+    );
+};
 
 /**
  * InteractiveParameterEditor renders a list of proposed plan steps with editable parameters.
@@ -36,7 +68,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
 }) => {
     if (!steps || steps.length === 0) return null;
 
-    const masks = useSegmentationStore((state) => state.results?.masks || []);
+    const masks = useSegmentationStore((state) => state.results?.masks ?? EMPTY_MASKS);
     const defaultDirection = useConfigStore((state) => state.sceneConfig.lighting.direction);
 
     const isLocked = disabled || status === 'executing';
@@ -45,6 +77,9 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
     };
+
+    const clampNumber = (value: number, min: number, max: number): number =>
+        Math.min(max, Math.max(min, value));
 
     const coerceString = (value: unknown, fallback = ''): string => {
         if (typeof value === 'string') return value;
@@ -252,7 +287,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                 const conditions = coerceString(toolInput.conditions ?? '');
                 const matchedConditions = matchOption(conditions, LIGHTING_CONDITIONS_OPTIONS);
                 const showConditionCustom = !!matchedConditions.custom && matchedConditions.custom !== matchedConditions.selected;
-                const shadows = parseNumber(toolInput.shadows, 2);
+                const shadows = clampNumber(parseNumber(toolInput.shadows, 2), 0, 5);
                 const directionValue = parseLightingDirection(toolInput.direction, defaultDirection);
                 return (
                     <div className="space-y-4">
@@ -307,13 +342,13 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 Shadows
                             </Label>
                             <div className="px-1">
-                                <Slider
+                                <PlanSlider
                                     disabled={isLocked}
-                                    value={[shadows]}
+                                    value={shadows}
                                     min={0}
                                     max={5}
                                     step={1}
-                                    onValueChange={([val]) => updateStep(idx, toolInput, { shadows: val })}
+                                    onValueChange={(val) => updateStep(idx, toolInput, { shadows: val })}
                                 />
                             </div>
                         </div>
@@ -335,8 +370,8 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                 );
             }
             case 'update_photographic': {
-                const depth = parseNumber(toolInput.depth_of_field, 50);
-                const focus = parseNumber(toolInput.focus, 75);
+                const depth = clampNumber(parseNumber(toolInput.depth_of_field, 50), 0, 100);
+                const focus = clampNumber(parseNumber(toolInput.focus, 75), 0, 100);
                 const cameraAngle = coerceString(toolInput.camera_angle ?? '');
                 const matchedCamera = matchOption(cameraAngle, CAMERA_ANGLE_OPTIONS);
                 const showCameraCustom = !!matchedCamera.custom && matchedCamera.custom !== matchedCamera.selected;
@@ -393,13 +428,13 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 Depth of Field
                             </Label>
                             <div className="px-1">
-                                <Slider
+                                <PlanSlider
                                     disabled={isLocked}
-                                    value={[depth]}
+                                    value={depth}
                                     min={0}
                                     max={100}
                                     step={1}
-                                    onValueChange={([val]) => updateStep(idx, toolInput, { depth_of_field: val })}
+                                    onValueChange={(val) => updateStep(idx, toolInput, { depth_of_field: val })}
                                 />
                             </div>
                         </div>
@@ -409,13 +444,13 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 Focus
                             </Label>
                             <div className="px-1">
-                                <Slider
+                                <PlanSlider
                                     disabled={isLocked}
-                                    value={[focus]}
+                                    value={focus}
                                     min={0}
                                     max={100}
                                     step={1}
-                                    onValueChange={([val]) => updateStep(idx, toolInput, { focus: val })}
+                                    onValueChange={(val) => updateStep(idx, toolInput, { focus: val })}
                                 />
                             </div>
                         </div>
@@ -724,7 +759,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
             case 'adjust_object_image_edit': {
                 const maskId = coerceString(toolInput.mask_id ?? '');
                 const editType = coerceString(toolInput.edit_type ?? 'brightness');
-                const value = parseNumber(toolInput.value, 0);
+                const value = clampNumber(parseNumber(toolInput.value, 0), range.min, range.max);
                 const ranges: Record<string, { min: number; max: number }> = {
                     brightness: { min: -100, max: 100 },
                     contrast: { min: -100, max: 100 },
@@ -791,13 +826,13 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             Value
                         </Label>
                         <div className="px-1">
-                            <Slider
+                            <PlanSlider
                                 disabled={isLocked}
-                                value={[value]}
+                                value={value}
                                 min={range.min}
                                 max={range.max}
                                 step={1}
-                                onValueChange={([val]) => updateStep(idx, toolInput, { value: val })}
+                                onValueChange={(val) => updateStep(idx, toolInput, { value: val })}
                             />
                         </div>
 
@@ -824,20 +859,20 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                     set_global_sharpen: { min: 0, max: 100 },
                 };
                 const range = ranges[step.tool_name] || { min: -100, max: 100 };
-                const value = parseNumber(toolInput.value, 0);
+                const value = clampNumber(parseNumber(toolInput.value, 0), range.min, range.max);
                 return (
                     <div className="space-y-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
                             Value
                         </Label>
                         <div className="px-1">
-                            <Slider
+                            <PlanSlider
                                 disabled={isLocked}
-                                value={[value]}
+                                value={value}
                                 min={range.min}
                                 max={range.max}
                                 step={1}
-                                onValueChange={([val]) => updateStep(idx, toolInput, { value: val })}
+                                onValueChange={(val) => updateStep(idx, toolInput, { value: val })}
                             />
                         </div>
                         {renderGenericFields(idx, toolInput, ['value'])}

@@ -309,7 +309,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   }, [clampedValue]);
 
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn(compact ? 'space-y-2' : 'space-y-4', className)}>
       {/* Label */}
       {/* <Label
         id={labelId}
@@ -414,20 +414,24 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
       </div>
 
       {/* Position and Orientation Summary */}
-      <div className="text-sm text-muted-foreground space-y-1">
-        <div className="font-medium text-foreground">
-          {directionSummary}
+      <div className={cn('text-muted-foreground', compact ? 'text-[11px]' : 'text-sm', compact ? 'space-y-0.5' : 'space-y-1')}>
+        <div className={cn('font-medium text-foreground', compact ? 'text-[11px]' : '')}>
+          {compact
+            ? `x ${Math.round(clampedValue.x)} • y ${Math.round(clampedValue.y)} • rot ${Math.round(clampedValue.rotation)}° • tilt ${Math.round(clampedValue.tilt)}°`
+            : directionSummary}
         </div>
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div>Angle: {Math.round(clampedValue.rotation)}°</div>
-          <div>Depth: {Math.round(clampedValue.tilt)}</div>
-          <div>Horizontal: {Math.round(clampedValue.x)}%</div>
-          <div>Vertical: {Math.round(clampedValue.y)}%</div>
-        </div>
+        {!compact && (
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>Angle: {Math.round(clampedValue.rotation)}°</div>
+            <div>Depth: {Math.round(clampedValue.tilt)}</div>
+            <div>Horizontal: {Math.round(clampedValue.x)}%</div>
+            <div>Vertical: {Math.round(clampedValue.y)}%</div>
+          </div>
+        )}
       </div>
 
       {/* Instructions */}
-      {isFocused && 
+      {!compact && isFocused && 
       <div
         id={`${controlId}-instructions`}
         className="text-xs text-muted-foreground"
