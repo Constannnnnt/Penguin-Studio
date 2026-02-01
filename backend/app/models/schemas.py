@@ -104,7 +104,14 @@ class FileNode(BaseModel):
 class WebSocketMessage(BaseModel):
     """WebSocket message schema with type discriminators."""
 
-    type: Literal["progress", "result", "error", "connected"] = Field(
+    type: Literal[
+        "progress",
+        "result",
+        "error",
+        "connected",
+        "analysis",
+        "execution_complete",
+    ] = Field(
         ..., description="Message type"
     )
     data: Dict[str, Any] = Field(..., description="Message payload")

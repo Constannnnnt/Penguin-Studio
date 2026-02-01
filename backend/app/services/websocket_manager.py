@@ -3,9 +3,10 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 from loguru import logger
 
-from app.models.schemas import SegmentationResponse, WebSocketMessage
+from app.models.schemas import WebSocketMessage
 
 
 class WebSocketManager:
@@ -37,7 +38,9 @@ class WebSocketManager:
             )
 
         except Exception as e:
-            logger.exception(f"Failed to connect WebSocket for client_id={client_id}: {e}")
+            logger.exception(
+                f"Failed to connect WebSocket for client_id={client_id}: {e}"
+            )
             raise
 
     async def disconnect(self, client_id: str) -> None:
@@ -58,7 +61,9 @@ class WebSocketManager:
                 try:
                     await websocket.close()
                 except Exception as e:
-                    logger.warning(f"Error closing WebSocket for client_id={client_id}: {e}")
+                    logger.warning(
+                        f"Error closing WebSocket for client_id={client_id}: {e}"
+                    )
                 del self.active_connections[client_id]
 
             logger.info(
@@ -69,9 +74,7 @@ class WebSocketManager:
         except Exception as e:
             logger.exception(f"Error during disconnect for client_id={client_id}: {e}")
 
-    async def send_progress(
-        self, client_id: str, progress: int, message: str
-    ) -> None:
+    async def send_progress(self, client_id: str, progress: int, message: str) -> None:
         """Send progress update to client."""
         try:
             ws_message = WebSocketMessage(
@@ -83,25 +86,31 @@ class WebSocketManager:
             logger.debug(f"Sent progress to client_id={client_id}: {progress}%")
 
         except Exception as e:
-            logger.warning(
-                f"Failed to send progress to client_id={client_id}: {e}"
-            )
+            logger.warning(f"Failed to send progress to client_id={client_id}: {e}")
 
     async def send_result(
-        self, client_id: str, result: SegmentationResponse
+        self, client_id: str, result: Any, event_type: str = "result"
     ) -> None:
         """Send segmentation result to client."""
         try:
+            payload = jsonable_encoder(result)
             ws_message = WebSocketMessage(
-                type="result",
-                data=result.model_dump(),
+                type=event_type,
+                data=payload,
                 timestamp=datetime.utcnow(),
             )
             await self._send_message(client_id, ws_message)
-            logger.info(
-                f"Sent result to client_id={client_id}, "
-                f"result_id={result.result_id}"
+            result_id = (
+                payload.get("result_id") if isinstance(payload, dict) else None
             )
+            if result_id:
+                logger.info(
+                    f"Sent result to client_id={client_id}, result_id={result_id}"
+                )
+            else:
+                logger.info(
+                    f"Sent {event_type} to client_id={client_id}"
+                )
 
         except Exception as e:
             logger.exception(f"Failed to send result to client_id={client_id}: {e}")
@@ -122,24 +131,18 @@ class WebSocketManager:
                 f"Failed to send error message to client_id={client_id}: {e}"
             )
 
-    async def _send_message(
-        self, client_id: str, message: WebSocketMessage
-    ) -> None:
+    async def _send_message(self, client_id: str, message: WebSocketMessage) -> None:
         """Internal method to send message to specific client."""
         if client_id not in self.active_connections:
-            logger.warning(
-                f"Cannot send message: client_id={client_id} not connected"
-            )
+            logger.warning(f"Cannot send message: client_id={client_id} not connected")
             return
 
         websocket = self.active_connections[client_id]
 
         try:
-            await websocket.send_json(message.model_dump())
+            await websocket.send_json(jsonable_encoder(message))
         except Exception as e:
-            logger.exception(
-                f"Failed to send message to client_id={client_id}: {e}"
-            )
+            logger.exception(f"Failed to send message to client_id={client_id}: {e}")
             await self.disconnect(client_id)
 
     def register_task(self, client_id: str, task: asyncio.Task) -> None:

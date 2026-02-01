@@ -59,7 +59,15 @@ async def websocket_segment(
 
         while True:
             try:
-                data = await websocket.receive_text()
+                try:
+                    data = await websocket.receive_text()
+                except RuntimeError as e:
+                    if 'Need to call "accept" first' in str(e):
+                        logger.info(
+                            f"WebSocket client disconnected abruptly: client_id={client_id}"
+                        )
+                        break
+                    raise
                 message = json.loads(data)
 
                 action = message.get("action")
@@ -287,6 +295,7 @@ async def _process_websocket_agentic(
                         step.model_dump() for step in (session.analysis.plan or [])
                     ],
                 },
+                event_type="analysis",
             )
 
         elif sub_action == "execute":
@@ -324,6 +333,7 @@ async def _process_websocket_agentic(
                     "session_id": session.session_id,
                     "results": session.execution_results,
                 },
+                event_type="execution_complete",
             )
 
         else:
