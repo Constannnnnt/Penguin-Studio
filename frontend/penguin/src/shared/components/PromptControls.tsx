@@ -69,9 +69,9 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
 
   return (
     <TooltipProvider>
-      <div className="flex gap-2 items-start">
+      <div className="flex gap-3 items-end p-2 rounded-xl bg-card/40 border border-border/50 studio-blur animate-reveal">
         <div
-          className="flex-1 relative"
+          className="flex-1 relative group"
           style={{
             perspective: '1000px',
           }}
@@ -96,26 +96,28 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
                 }
               }}
               placeholder={placeholderText}
-              rows={3}
+              rows={2}
               aria-describedby="prompt-help"
               aria-required="true"
-              className="resize-none transition-all duration-150 focus:ring-2 text-sm"
+              className="resize-none border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2 px-1 placeholder:text-muted-foreground/50 transition-all duration-200"
             />
+            {/* Subtle focus line anim */}
+            <div className="absolute bottom-0 left-0 h-[1.5px] bg-primary scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300 origin-left w-full shadow-sm shadow-primary/30" />
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1.5 pb-0.5">
           {onModeChange && showGenerateAction && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={handleModeToggle}
                   disabled={isFlipping}
-                  className="relative h-7 w-12 rounded-full bg-muted transition-colors hover:bg-muted/80 disabled:opacity-50"
+                  className="relative h-7 w-12 rounded-full border border-border/50 bg-muted/30 transition-all hover:bg-muted/50 disabled:opacity-50"
                   aria-label="Toggle between Generate and Edit modes"
                 >
                   <div
-                    className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-primary transition-transform duration-200 flex items-center justify-center ${mode === 'edit' ? 'translate-x-5' : 'translate-x-0'
+                    className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-primary/90 studio-glow transition-all duration-300 flex items-center justify-center ${mode === 'edit' ? 'translate-x-5' : 'translate-x-0'
                       }`}
                   >
                     {mode === 'generate' ? (
@@ -126,50 +128,54 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
                   </div>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
+              <TooltipContent side="top">
+                <p className="text-xs font-medium">
                   {mode === 'generate'
-                    ? 'Switch to Edit mode to refine with modifications'
-                    : 'Switch to Generate mode for new images'}
+                    ? 'Switch to Edit mode'
+                    : 'Switch to Generate mode'}
                 </p>
               </TooltipContent>
             </Tooltip>
           )}
-          <div className='mt-2' />
+
+          <div className='w-px h-5 bg-border/40 mx-0.5' />
+
           {onAskAgent && showAgentAction && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   onClick={() => onAskAgent(prompt)}
                   disabled={askDisabled}
-                  size="sm"
-                  variant="secondary"
-                  className="rounded-full h-8 px-2 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+                  size="icon"
+                  variant="ghost"
+                  className="rounded-lg h-8 w-8 transition-all duration-200 hover:bg-primary/10 hover:text-primary active:scale-95"
                   aria-label="Ask Penguin Agent"
                 >
                   <MessageSquare className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">Ask Agent</p>
+              <TooltipContent side="top">
+                <p className="text-xs font-medium">Ask Agent</p>
               </TooltipContent>
             </Tooltip>
           )}
+
           {showGenerateAction && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   onClick={onGenerate}
                   disabled={isDisabled}
-                  size="sm"
-                  className="rounded-full h-8 px-2 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-                  aria-label={`${buttonLabel} image from configuration (${generateShortcut})`}
+                  size="icon"
+                  className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${!isDisabled ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90' : 'bg-muted/50 cursor-not-allowed opacity-50'
+                    }`}
+                  aria-label={`${buttonLabel} image`}
                 >
                   {buttonIcon}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">{buttonLabel} ({generateShortcut})</p>
+              <TooltipContent side="top">
+                <p className="text-xs font-semibold">{buttonLabel} <span className="text-[10px] opacity-70 font-normal ml-1">({generateShortcut})</span></p>
               </TooltipContent>
             </Tooltip>
           )}

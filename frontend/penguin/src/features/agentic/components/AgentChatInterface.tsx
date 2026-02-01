@@ -65,7 +65,7 @@ export const AgentChatInterface: React.FC = () => {
                                     />
                                 )}
 
-                                <div className="flex items-center gap-2 px-2 text-[10px] font-medium text-muted-foreground opacity-50">
+                                <div className="flex items-center gap-2 px-2 text-[10px] font-mono font-medium text-muted-foreground opacity-50">
                                     <span>
                                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
