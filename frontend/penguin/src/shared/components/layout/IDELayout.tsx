@@ -63,7 +63,7 @@ export const IDELayout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-background studio-root">
       <div className="border-b border-border bg-background/80 px-4 py-1 shadow-sm backdrop-blur">
         <Header
         // onToggleLibrary={toggleLibraryPanel}
