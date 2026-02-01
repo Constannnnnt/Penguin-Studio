@@ -14,6 +14,7 @@ export interface LayoutState {
   workspaceHandlers?: {
     handleGenerate?: (promptOverride?: string) => void;
     handleRefine?: (promptOverride?: string) => void;
+    handleRefineWithConfig?: (configOverride: unknown, promptOverride?: string, structuredOverride?: unknown) => void;
   };
 
   toggleLibraryPanel: () => void;
@@ -22,7 +23,11 @@ export interface LayoutState {
   setControlsPanelWidth: (width: number) => void;
   setActiveControlsTab: (tab: ControlsTab) => void;
   setActiveMode: (mode: LayoutMode) => void;
-  setWorkspaceHandlers: (handlers?: { handleGenerate?: (promptOverride?: string) => void; handleRefine?: (promptOverride?: string) => void }) => void;
+  setWorkspaceHandlers: (handlers?: {
+    handleGenerate?: (promptOverride?: string) => void;
+    handleRefine?: (promptOverride?: string) => void;
+    handleRefineWithConfig?: (configOverride: unknown, promptOverride?: string, structuredOverride?: unknown) => void;
+  }) => void;
 }
 
 interface PersistedLayoutState {
