@@ -24,6 +24,12 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   const flashlightRef = React.useRef<HTMLDivElement>(null);
   const containerRectRef = React.useRef<{ left: number; top: number; width: number; height: number } | null>(null);
 
+  // Refs for stable access in event handlers
+  const valueRef = React.useRef<LightingDirectionValue>(value);
+  const commitTimeoutRef = React.useRef<NodeJS.Timeout>();
+
+  const [localValue, setLocalValue] = React.useState<LightingDirectionValue>(value);
+
   const [isDragging, setIsDragging] = React.useState(false);
   const [isRotating, setIsRotating] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -33,8 +39,15 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     rotation: number;
     tilt: number;
   } | null>(null);
-  const rafRef = React.useRef<number | null>(null);
-  const pendingValueRef = React.useRef<LightingDirectionValue>(value);
+
+  // Sync local value with prop value when not dragging
+  // Moved this AFTER state declarations to avoid ReferenceError
+  React.useEffect(() => {
+    if (!isDragging && !isRotating) {
+      setLocalValue(value);
+      valueRef.current = value;
+    }
+  }, [value, isDragging, isRotating]);
 
   // Ensure values are within bounds
   const clampValue = React.useCallback((val: LightingDirectionValue): LightingDirectionValue => ({
@@ -44,22 +57,28 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     tilt: Math.max(-90, Math.min(90, val.tilt)),
   }), []);
 
-  const clampedValue = React.useMemo((): LightingDirectionValue => clampValue(value), [value, clampValue]);
+  const clampedValue = React.useMemo((): LightingDirectionValue => clampValue(localValue), [localValue, clampValue]);
 
-  // Schedule updates on the next animation frame for smoother UX
-  const scheduleUpdate = React.useCallback((next: LightingDirectionValue) => {
-    pendingValueRef.current = next;
-    if (rafRef.current !== null) return;
-    rafRef.current = window.requestAnimationFrame(() => {
-      rafRef.current = null;
-      onChange(pendingValueRef.current);
-    });
+  // Update valueRef whenever clampedValue changes
+  React.useEffect(() => {
+    valueRef.current = clampedValue;
+  }, [clampedValue]);
+
+  // Debounced commit for wheel/scroll
+  const scheduleCommit = React.useCallback((newValue: LightingDirectionValue) => {
+    if (commitTimeoutRef.current) {
+      clearTimeout(commitTimeoutRef.current);
+    }
+    commitTimeoutRef.current = setTimeout(() => {
+      onChange(newValue);
+    }, 200);
   }, [onChange]);
 
-  React.useEffect(() => () => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-    }
+  // Cleanup timeout
+  React.useEffect(() => {
+    return () => {
+      if (commitTimeoutRef.current) clearTimeout(commitTimeoutRef.current);
+    };
   }, []);
 
   /**
@@ -69,14 +88,17 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     const rect = containerRectRef.current ?? containerRef.current?.getBoundingClientRect();
     if (!rect) return { x: 50, y: 50 };
 
-    const { width, height, left, top } = rect;
-    containerRectRef.current = rect ? { left, top, width, height } : null;
+    // Update ref if it wasn't set (e.g. first move)
+    if (!containerRectRef.current) {
+      const { width, height, left, top } = rect;
+      containerRectRef.current = { left, top, width, height };
+    }
 
-    const localX = pixelX - (left ?? 0);
-    const localY = pixelY - (top ?? 0);
+    const localX = pixelX - rect.left;
+    const localY = pixelY - rect.top;
 
-    const percentX = Math.max(0, Math.min(100, (localX / width) * 100));
-    const percentY = Math.max(0, Math.min(100, (localY / height) * 100));
+    const percentX = Math.max(0, Math.min(100, (localX / rect.width) * 100));
+    const percentY = Math.max(0, Math.min(100, (localY / rect.height) * 100));
 
     return { x: percentX, y: percentY };
   }, []);
@@ -116,9 +138,8 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     const startY = event.clientY - rect.top;
 
     setIsDragging(true);
-    setDragStart({ x: startX, y: startY });
+    setDragStart({ x: startX, y: startY }); // Not actually used in calculation logic but keeps state valid
 
-    // Focus for keyboard navigation
     flashlightRef.current?.focus();
   }, [disabled]);
 
@@ -136,12 +157,13 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     const angle = getAngleFromCenter(event.clientX, event.clientY);
 
     setIsRotating(true);
+    // Use ref for current values to avoid dependency
     setRotationStart({
       angle,
-      rotation: clampedValue.rotation,
-      tilt: clampedValue.tilt,
+      rotation: valueRef.current.rotation,
+      tilt: valueRef.current.tilt,
     });
-  }, [disabled, getAngleFromCenter, clampedValue.rotation, clampedValue.tilt]);
+  }, [disabled, getAngleFromCenter]);
 
   /**
    * Handle mouse move during drag
@@ -149,15 +171,17 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   const handlePointerMove = React.useCallback((event: PointerEvent): void => {
     if (!containerRef.current) return;
 
-    if (isDragging && dragStart) {
-      containerRectRef.current = containerRectRef.current ?? containerRef.current.getBoundingClientRect();
-      const currentX = event.clientX;
-      const currentY = event.clientY;
+    if (isDragging) {
+      // Logic for dragging position
+      // We don't necessarily need dragStart.x/y if we just map mouse to % directly
+      // But we kept it in state.
+      // Re-capture rect if needed (e.g. if we want to support scroll? No, stick to cached)
+      // Actually, if we want robust dragging, using ClientX/Y with Cached Rect is standard for "sticky" handle.
 
-      const { x: percentX, y: percentY } = getPercentPosition(currentX, currentY);
+      const { x: percentX, y: percentY } = getPercentPosition(event.clientX, event.clientY);
 
-      scheduleUpdate(clampValue({
-        ...pendingValueRef.current,
+      setLocalValue(prev => clampValue({
+        ...prev,
         x: percentX,
         y: percentY,
       }));
@@ -165,10 +189,10 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
       const currentAngle = getAngleFromCenter(event.clientX, event.clientY);
       const angleDelta = currentAngle - rotationStart.angle;
 
-      // Update rotation
       const newRotation = ((rotationStart.rotation + angleDelta) % 360 + 360) % 360;
 
-      // Calculate tilt based on distance from center (simple approximation)
+      // Calculate tilt based on distance
+      let newTilt = valueRef.current.tilt; // Default to current
       if (flashlightRef.current) {
         const flashlightRect = flashlightRef.current.getBoundingClientRect();
         const centerX = flashlightRect.left + flashlightRect.width / 2;
@@ -179,44 +203,58 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
           Math.pow(event.clientY - centerY, 2)
         );
 
-        // Map distance to tilt (-90 to 90 degrees)
-        const maxDistance = 100; // pixels
+        const maxDistance = 100;
         const normalizedDistance = Math.min(distance / maxDistance, 1);
-        const newTilt = (normalizedDistance - 0.5) * 180; // -90 to 90
-
-        scheduleUpdate(clampValue({
-          ...pendingValueRef.current,
-          rotation: newRotation,
-          tilt: newTilt,
-        }));
+        newTilt = (normalizedDistance - 0.5) * 180;
       }
+
+      setLocalValue(prev => clampValue({
+        ...prev,
+        rotation: newRotation,
+        tilt: newTilt,
+      }));
     }
-  }, [isDragging, isRotating, dragStart, rotationStart, getPercentPosition, getAngleFromCenter, clampValue, scheduleUpdate]);
+  }, [isDragging, isRotating, rotationStart, getPercentPosition, getAngleFromCenter, clampValue]);
 
   /**
    * Handle mouse up to end drag/rotation
    */
   const handlePointerUp = React.useCallback((): void => {
+    if (isDragging || isRotating) {
+      // Commit the change using fresh ref
+      onChange(valueRef.current);
+    }
+
     setIsDragging(false);
     setIsRotating(false);
     setDragStart(null);
     setRotationStart(null);
-  }, []);
+    // Clear cached rect
+    containerRectRef.current = null;
+  }, [isDragging, isRotating, onChange]);
 
   /**
    * Handle touch events for mobile support
    */
-  // Wheel to push/pull light (maps to tilt and visual scale)
+  // Wheel to push/pull light (maps to tilt)
   const handleWheel = React.useCallback((event: WheelEvent) => {
     if (disabled) return;
     event.preventDefault();
-    const delta = Math.sign(event.deltaY) * -5; // up = forward, down = back
-    const nextTilt = Math.max(-70, Math.min(70, pendingValueRef.current.tilt + delta));
-    scheduleUpdate(clampValue({
-      ...pendingValueRef.current,
-      tilt: nextTilt,
-    }));
-  }, [disabled, scheduleUpdate, clampValue]);
+    const delta = Math.sign(event.deltaY) * -5;
+
+    setLocalValue(prev => {
+      const nextTilt = Math.max(-90, Math.min(90, prev.tilt + delta));
+      const newValue = clampValue({
+        ...prev,
+        tilt: nextTilt,
+      });
+      // Schedule commit only if value changed
+      if (newValue.tilt !== prev.tilt) {
+        scheduleCommit(newValue);
+      }
+      return newValue;
+    });
+  }, [disabled, scheduleCommit, clampValue]);
 
   /**
    * Handle keyboard navigation
@@ -224,32 +262,36 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent): void => {
     if (disabled) return;
 
-    let newValue = { ...clampedValue };
+    // Use current value from ref to avoid closure staleness if this handler isn't recreated often
+    // (though dependencies below ensure it is created when clampedValue changes? No, let's use functional update or ref)
+    // Actually, best to use functional update logic to be safe, BUT we need the RESULT to commit.
+    // So let's use valueRef.current as base.
+
+    let baseValue = valueRef.current;
+    let newValue = { ...baseValue };
     let handled = true;
-    const step = event.shiftKey ? 10 : 1; // Larger steps with Shift
+    const step = event.shiftKey ? 10 : 1;
 
     switch (event.key) {
       case 'ArrowRight':
-        newValue.x = Math.min(100, clampedValue.x + step);
+        newValue.x = Math.min(100, baseValue.x + step);
         break;
       case 'ArrowLeft':
-        newValue.x = Math.max(0, clampedValue.x - step);
+        newValue.x = Math.max(0, baseValue.x - step);
         break;
       case 'ArrowUp':
-        newValue.y = Math.max(0, clampedValue.y - step);
+        newValue.y = Math.max(0, baseValue.y - step);
         break;
       case 'ArrowDown':
-        newValue.y = Math.min(100, clampedValue.y + step);
+        newValue.y = Math.min(100, baseValue.y + step);
         break;
       case 'r':
       case 'R':
-        // Rotate clockwise/counterclockwise
-        newValue.rotation = ((clampedValue.rotation + (event.shiftKey ? -15 : 15)) % 360 + 360) % 360;
+        newValue.rotation = ((baseValue.rotation + (event.shiftKey ? -15 : 15)) % 360 + 360) % 360;
         break;
       case 't':
       case 'T':
-        // Adjust tilt
-        newValue.tilt = Math.max(-90, Math.min(90, clampedValue.tilt + (event.shiftKey ? -15 : 15)));
+        newValue.tilt = Math.max(-90, Math.min(90, baseValue.tilt + (event.shiftKey ? -15 : 15)));
         break;
       case 'Home':
         newValue = { x: 50, y: 50, rotation: 0, tilt: 0 };
@@ -260,9 +302,11 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
     if (handled) {
       event.preventDefault();
-      scheduleUpdate(clampValue(newValue));
+      const clamped = clampValue(newValue);
+      setLocalValue(clamped);
+      onChange(clamped); // Commit immediately for keys
     }
-  }, [clampedValue, scheduleUpdate, disabled, clampValue]);
+  }, [onChange, disabled, clampValue]);
 
   /**
    * Set up global mouse/touch event listeners during drag
@@ -400,8 +444,8 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
               className={cn(
                 'w-5 h-5 rounded-full border-2 flex items-center justify-center',
                 'shadow-md backdrop-blur-sm',
-                isRotating 
-                  ? 'bg-primary border-primary-foreground scale-125' 
+                isRotating
+                  ? 'bg-primary border-primary-foreground scale-125'
                   : 'bg-primary/80 border-primary-foreground/80 hover:bg-primary hover:scale-110',
                 'transition-all duration-100'
               )}
@@ -431,13 +475,13 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
       </div>
 
       {/* Instructions */}
-      {!compact && isFocused && 
-      <div
-        id={`${controlId}-instructions`}
-        className="text-xs text-muted-foreground"
-      >
-        Drag to move • Drag handle to rotate • Scroll to push/pull light
-      </div>}
+      {!compact && isFocused &&
+        <div
+          id={`${controlId}-instructions`}
+          className="text-xs text-muted-foreground"
+        >
+          Drag to move • Drag handle to rotate • Scroll to push/pull light
+        </div>}
 
     </div>
   );

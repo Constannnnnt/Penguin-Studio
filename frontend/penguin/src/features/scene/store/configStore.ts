@@ -444,7 +444,7 @@ export const useConfigStore = create<ConfigState>()(
             };
 
             const resolveText = (value: unknown, fallback: string): string =>
-              coerceText(value, coerceText(fallback, ''));
+                coerceText(value, coerceText(fallback, ''));
 
             // Log the incoming short_description
             // console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);

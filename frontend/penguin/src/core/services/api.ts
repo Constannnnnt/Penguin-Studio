@@ -653,8 +653,42 @@ class PenguinApiClient {
 
           const result = await response.json();
 
+          // Normalize the result to ensure it matches SemanticParsingResponse structure
+          // Backend might return flat values, but frontend expects ParsedValue wrappers
+          const normalizeValue = <T>(val: any, defaultVal?: T): ParsedValue<T> => {
+            if (val && typeof val === 'object' && 'value' in val) {
+              return val as ParsedValue<T>;
+            }
+            return { 
+              value: (val !== undefined ? val : defaultVal) as T, 
+              confidence: 1, 
+              isCustom: false 
+            };
+          };
+
+          const normalizedResult: SemanticParsingResponse = {
+            background_setting: typeof result.background_setting === 'string' 
+              ? result.background_setting 
+              : (result.background_setting?.value || ''),
+            photographic_characteristics: {
+              camera_angle: normalizeValue(result.photographic_characteristics?.camera_angle, 'eye-level'),
+              lens_focal_length: normalizeValue(result.photographic_characteristics?.lens_focal_length, 'standard'),
+              depth_of_field: normalizeValue(result.photographic_characteristics?.depth_of_field, 50),
+              focus: normalizeValue(result.photographic_characteristics?.focus, 75),
+            },
+            lighting: {
+              conditions: normalizeValue(result.lighting?.conditions, 'natural'),
+              direction: normalizeValue(result.lighting?.direction, { x: 50, y: 30, rotation: 0, tilt: 0 }),
+              shadows: normalizeValue(result.lighting?.shadows, 2),
+            },
+            aesthetics: {
+              style_medium: normalizeValue(result.aesthetics?.style_medium || result.style_medium, 'photograph'),
+              aesthetic_style: normalizeValue(result.aesthetics?.aesthetic_style || result.artistic_style, 'realistic'),
+            },
+          };
+
           // Validate the response structure
-          const configValidation = validateSceneConfig(result);
+          const configValidation = validateSceneConfig(normalizedResult);
           if (!configValidation.valid) {
             console.warn(
               "Invalid scene configuration from API:",
@@ -663,7 +697,7 @@ class PenguinApiClient {
             // Don't throw error, just log warning and return result
           }
 
-          return result;
+          return normalizedResult;
         } catch (error) {
           // Fallback to local parsing if server is unavailable or 404
           if (
