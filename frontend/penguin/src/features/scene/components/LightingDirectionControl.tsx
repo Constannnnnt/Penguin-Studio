@@ -8,6 +8,7 @@ export interface LightingDirectionControlProps {
   onChange: (value: LightingDirectionValue) => void;
   className?: string;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 export const LightingDirectionControl = React.memo<LightingDirectionControlProps>(({
@@ -15,6 +16,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   onChange,
   className,
   disabled = false,
+  compact = false,
 }) => {
   const controlId = React.useId();
   const labelId = `${controlId}-label`;
@@ -325,8 +327,8 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
           disabled && 'opacity-50 cursor-not-allowed'
         )}
         style={{
-          aspectRatio: '16 / 9',
-          minHeight: '200px',
+          aspectRatio: compact ? '4 / 3' : '16 / 9',
+          minHeight: compact ? '140px' : '200px',
         }}
         role="application"
         aria-labelledby={labelId}
@@ -346,7 +348,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
         <div
           ref={flashlightRef}
           className={cn(
-            'absolute w-10 h-10 cursor-grab will-change-transform',
+            compact ? 'absolute w-8 h-8 cursor-grab will-change-transform' : 'absolute w-10 h-10 cursor-grab will-change-transform',
             !isDragging && !isRotating && 'hover:scale-110',
             isFocused && 'ring-2 ring-ring ring-offset-2 ring-offset-background rounded-full',
             isDragging && 'cursor-grabbing',
@@ -379,7 +381,9 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
           {/* Rotation Handle - More visible pivot point */}
           <div
             className={cn(
-              'absolute -top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5',
+              compact
+                ? 'absolute -top-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5'
+                : 'absolute -top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5',
               'cursor-grab select-none',
               isRotating && 'cursor-grabbing'
             )}

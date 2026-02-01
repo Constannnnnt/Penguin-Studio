@@ -314,7 +314,7 @@ export interface AgentMessage {
   content: string;
   plan?: PlanStep[];
   timestamp: Date;
-  status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed';
+  status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed' | 'awaiting_input';
 }
 
 // ============================================================================
