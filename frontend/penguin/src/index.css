@@ -11,6 +11,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 /* ============================================================================
    CSS Variables - shadcn/ui Design Tokens
    ============================================================================ */
@@ -177,8 +179,9 @@
   --sidebar-accent-foreground: oklch(0.3791 0.1378 265.5222);
   --sidebar-border: oklch(0.9276 0.0058 264.5313);
   --sidebar-ring: oklch(0.6397 0.172 36.4421);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: 'Inter', ui-serif, serif;
+--font-sans: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: 'Archivo', var(--font-sans);
+  --font-serif: 'Space Grotesk', ui-serif, serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --radius: 0.75rem;
   --shadow-x: 0px;
@@ -237,8 +240,9 @@
   --sidebar-accent-foreground: oklch(0.8823 0.0571 254.1284);
   --sidebar-border: oklch(0.3843 0.0301 269.7337);
   --sidebar-ring: oklch(0.6397 0.172 36.4421);
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-serif: 'Inter', ui-serif, serif;
+--font-sans: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: 'Archivo', var(--font-sans);
+  --font-serif: 'Space Grotesk', ui-serif, serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --radius: 0.75rem;
   --shadow-x: 0px;
@@ -302,8 +306,27 @@
 
   .glass-card {
     @apply bg-card/60 border border-border/50 shadow-lg;
-    backdrop-filter: blur(12px) saturate(180%);
-    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  .industrial-panel {
+    @apply bg-background/40 border border-border/40 shadow-xl;
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    background-image: 
+      radial-gradient(circle at 2px 2px, var(--border) 1px, transparent 0),
+      linear-gradient(to bottom right, rgba(255, 255, 255, 0.05), transparent);
+    background-size: 24px 24px, 100% 100%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .industrial-panel:hover {
+    @apply border-primary/30 shadow-2xl shadow-primary/5;
+  }
+
+  .safety-accent-border {
+    @apply border-l-4 border-l-primary shadow-[0_0_15px_-5px_var(--primary)];
   }
 
   .animate-reveal {
@@ -358,6 +381,7 @@ h4,
 h5,
 h6 {
   @apply tracking-tighter;
+  font-family: var(--font-heading);
   font-weight: 800;
   line-height: 1.1;
 }
@@ -750,6 +774,7 @@ html {
  */
 @theme inline {
   --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
   --font-mono: var(--font-mono);
   --font-serif: var(--font-serif);
   --radius: var(--radius);
@@ -840,3 +865,4 @@ html {
   pointer-events: none;
   z-index: 0;
 }
+
