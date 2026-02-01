@@ -28,7 +28,7 @@ const getMaskColor = (maskId: string): string => {
     '#14b8a6',
     '#f97316',
   ];
-  
+
   const hash = maskId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
 };
@@ -85,14 +85,14 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { maskManipulation, resetMaskTransform } = useSegmentationStore();
-  
+
   const manipState = maskManipulation.get(mask.mask_id);
   const hasMoved = manipState && !areBoundingBoxesEqual(
     manipState.originalBoundingBox,
     manipState.currentBoundingBox
   );
   const hasEdits = manipState && hasActiveImageEdits(manipState.transform.imageEdits);
-  
+
   useEffect(() => {
     if (isHovered || isSelected) {
       setIsExpanded(true);
@@ -100,18 +100,18 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
       setIsExpanded(false);
     }
   }, [isHovered, isSelected]);
-  
+
   // Memoize expensive calculations
   const borderColor = useMemo(() => getMaskColor(mask.mask_id), [mask.mask_id]);
-  
+
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     const target = e.target as HTMLElement;
     const isInputElement = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-    
+
     if (isInputElement) {
       return;
     }
-    
+
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClick();
@@ -125,16 +125,20 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
       prevItem?.focus();
     }
   };
-  
+
   return (
     <div
       data-mask-id={mask.mask_id}
       className={cn(
-        "border-l-4 p-3 transition-colors duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-        isHovered && "bg-accent",
-        isSelected && "bg-accent/50"
+        "relative mb-2 transition-all duration-300 ease-out group",
+        "industrial-panel border-l-2",
+        "cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-1",
+        isSelected
+          ? "bg-primary/5 border-primary/40 border-l-primary shadow-[0_0_15px_-5px_var(--primary)]"
+          : "bg-background/20 border-border/40 hover:bg-background/40 hover:border-primary/30 border-l-transparent",
+        isHovered && !isSelected && "bg-background/40 border-primary/20"
       )}
-      style={{ borderLeftColor: borderColor }}
+      style={{ borderLeftColor: isSelected ? undefined : borderColor }}
       onMouseEnter={onHover}
       onMouseLeave={onHoverEnd}
       onClick={onClick}
@@ -145,30 +149,51 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
       aria-selected={isSelected}
       aria-expanded={isExpanded}
     >
-      <div className="flex items-start justify-between">
+      {/* Selection indicator line */}
+      <div className={cn(
+        "absolute top-0 right-0 h-px bg-primary/40 transition-all duration-500",
+        isSelected ? "w-16 opacity-100" : "w-0 opacity-0"
+      )} />
+
+      <div className="flex items-start justify-between p-3">
         <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-sm">{getSimplifiedLabel(mask.label, index)}</h4>
-            {isSelected && <CheckCircle className="h-4 w-4 text-primary" />}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest leading-none mb-1">
+                OBJ_{index + 1}
+              </span>
+              <h4 className="text-[11px] font-black uppercase tracking-[0.1em] text-foreground font-heading">
+                {getSimplifiedLabel(mask.label, index)}
+              </h4>
+            </div>
+
+            {isSelected && (
+              <div className="flex items-center justify-center h-4 w-4 rounded-full bg-primary/10 border border-primary/20">
+                <CheckCircle className="h-2.5 w-2.5 text-primary" />
+              </div>
+            )}
+
             {hasEdits && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Sparkles 
-                      className="h-4 w-4 text-amber-500" 
-                      aria-label="Image edits applied"
-                    />
+                    <div className="flex items-center justify-center h-4 w-4 rounded-full bg-amber-500/10 border border-amber-500/20 animate-pulse">
+                      <Sparkles
+                        className="h-2.5 w-2.5 text-amber-500"
+                        aria-label="Image edits applied"
+                      />
+                    </div>
                   </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Image edits applied to this mask</p>
+                  <TooltipContent className="industrial-panel text-[10px] uppercase tracking-wider">
+                    <p>Modifications Active</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
           </div>
         </div>
-        
-        <div 
+
+        <div
           className="w-12 h-12 rounded border bg-white overflow-hidden"
           style={{ borderColor }}
         >
@@ -179,30 +204,32 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
           />
         </div>
       </div>
-      
+
       <button
         onClick={(e) => {
           e.stopPropagation();
           setIsExpanded(!isExpanded);
         }}
-        className="flex items-center gap-1 text-xs text-muted-foreground mt-2 hover:text-foreground transition-colors"
+        className="w-full flex items-center justify-between px-3 py-1.5 border-t border-border/20 bg-muted/10 hover:bg-muted/20 transition-colors group/btn"
         aria-label={isExpanded ? 'Show less details' : 'Show more details'}
         aria-expanded={isExpanded}
       >
-        {isExpanded ? (
-          <>
-            <ChevronUp className="h-3 w-3" aria-hidden="true" />
-            Show less
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-3 w-3" aria-hidden="true" />
-            Show more
-          </>
-        )}
+        <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground group-hover/btn:text-foreground transition-colors">
+          {isExpanded ? 'Collapse Data' : 'View Metadata'}
+        </span>
+        <div className={cn(
+          "transition-transform duration-300",
+          isExpanded ? "rotate-180" : ""
+        )}>
+          {isExpanded ? (
+            <ChevronUp className="h-3 w-3 text-muted-foreground group-hover/btn:text-primary transition-colors" />
+          ) : (
+            <ChevronDown className="h-3 w-3 text-muted-foreground group-hover/btn:text-primary transition-colors" />
+          )}
+        </div>
       </button>
-      
-      <div 
+
+      <div
         className={cn(
           "overflow-hidden transition-all duration-300 ease-in-out",
           isExpanded ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"
@@ -211,7 +238,7 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
         <div className="mt-3 space-y-3 text-sm">
           <PromptSection mask={mask} />
           <MetadataSection mask={mask} />
-          
+
           {hasMoved && (
             <Button
               size="sm"
@@ -220,7 +247,7 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
                 e.stopPropagation();
                 resetMaskTransform(mask.mask_id);
               }}
-              className="w-full"
+              className="w-full h-8 text-[10px] uppercase tracking-wider font-bold border-destructive/20 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40"
               aria-label={`Reset ${mask.label} to original position`}
             >
               Reset Position

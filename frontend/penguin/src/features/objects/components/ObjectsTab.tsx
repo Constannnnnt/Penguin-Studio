@@ -26,8 +26,16 @@ export const ObjectsTab: React.FC = () => {
 
   if (!results || results.masks.length === 0) {
     return (
-      <div className="p-4 text-center text-muted-foreground">
-        <p className="text-sm">No objects detected. Upload an image for segmentation.</p>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="industrial-panel p-8 text-center max-w-xs w-full">
+          <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <span className="text-xl">🔍</span>
+          </div>
+          <h3 className="text-lg font-heading font-black uppercase tracking-wider text-primary mb-2">No Objects</h3>
+          <p className="text-xs font-mono text-muted-foreground">
+            Upload an image to detect and segment objects automatically.
+          </p>
+        </div>
       </div>
     );
   }
@@ -44,25 +52,27 @@ export const ObjectsTab: React.FC = () => {
   // }
 
   return (
-    <div 
-      ref={listRef} 
-      className="flex flex-col h-full overflow-y-auto"
+    <div
+      ref={listRef}
+      className="flex flex-col h-full overflow-y-auto px-1 studio-scrollbar"
       style={{ scrollBehavior: 'smooth' }}
       role="list"
       aria-label="Detected objects"
     >
-      {sortedMasks.map((mask, index) => (
-        <ObjectListItem
-          key={mask.mask_id}
-          mask={mask}
-          isSelected={selectedMaskId === mask.mask_id}
-          isHovered={hoveredMaskId === mask.mask_id}
-          onHover={() => hoverMask(mask.mask_id)}
-          onHoverEnd={() => hoverMask(null)}
-          onClick={() => selectMask(mask.mask_id)}
-          index={index}
-        />
-      ))}
+      <div className="space-y-1 py-1">
+        {sortedMasks.map((mask, index) => (
+          <ObjectListItem
+            key={mask.mask_id}
+            mask={mask}
+            isSelected={selectedMaskId === mask.mask_id}
+            isHovered={hoveredMaskId === mask.mask_id}
+            onHover={() => hoverMask(mask.mask_id)}
+            onHoverEnd={() => hoverMask(null)}
+            onClick={() => selectMask(mask.mask_id)}
+            index={index}
+          />
+        ))}
+      </div>
     </div>
   );
 };

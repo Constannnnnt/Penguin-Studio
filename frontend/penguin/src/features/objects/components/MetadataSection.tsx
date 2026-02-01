@@ -218,18 +218,18 @@ interface MetadataFieldProps {
   className?: string;
 }
 
-const MetadataField: React.FC<MetadataFieldProps> = ({ 
-  label, 
-  value, 
-  onChange, 
-  isEditing, 
+const MetadataField: React.FC<MetadataFieldProps> = ({
+  label,
+  value,
+  onChange,
+  isEditing,
   multiline = false,
   className = ''
 }) => {
   if (isEditing) {
     return (
       <div className={className}>
-        <label className="text-xs font-medium text-muted-foreground block mb-1">
+        <label className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground block mb-1">
           {label}
         </label>
         {multiline ? (
@@ -238,7 +238,7 @@ const MetadataField: React.FC<MetadataFieldProps> = ({
             onChange={(e) => onChange(e.target.value)}
             placeholder={`Enter ${label.toLowerCase()}...`}
             rows={3}
-            className="w-full text-sm bg-background border border-border rounded px-3 py-2 focus:border-primary focus:outline-none resize-none"
+            className="w-full text-xs font-mono bg-background/50 border border-primary/20 rounded-none px-3 py-2 focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none transition-colors"
           />
         ) : (
           <input
@@ -246,7 +246,7 @@ const MetadataField: React.FC<MetadataFieldProps> = ({
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder={`Enter ${label.toLowerCase()}...`}
-            className="w-full text-sm bg-background border border-border rounded px-3 py-2 focus:border-primary focus:outline-none"
+            className="w-full text-xs font-mono bg-background/50 border border-primary/20 rounded-none px-3 py-2 focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors"
           />
         )}
       </div>
@@ -255,8 +255,8 @@ const MetadataField: React.FC<MetadataFieldProps> = ({
 
   return (
     <div className={className}>
-      <span className="text-xs font-medium text-muted-foreground">{label}:</span>
-      <p className="text-sm text-foreground mt-0.5 leading-relaxed">{value}</p>
+      <span className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground opacity-70">{label}:</span>
+      <p className="text-xs text-foreground mt-0.5 leading-relaxed font-mono">{value}</p>
     </div>
   );
 };

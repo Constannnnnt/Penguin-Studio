@@ -19,15 +19,22 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full text-sm font-semibold hover:text-primary transition-colors"
+        className="flex items-center justify-between w-full text-[10px] font-black uppercase tracking-[0.2em] text-primary/60 hover:text-primary transition-all group font-heading"
       >
-        <span>{title}</span>
-        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        <span className="flex items-center gap-2">
+          <div className="h-1 w-4 bg-primary/20 rounded-full group-hover:bg-primary/40 transition-colors" />
+          {title}
+        </span>
+        {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
       </button>
-      {isOpen && <div className="space-y-4 pl-1">{children}</div>}
+      {isOpen && (
+        <div className="relative space-y-5 pl-2 border-l border-primary/10 ml-2 py-1">
+          {children}
+        </div>
+      )}
     </div>
   );
 };
@@ -71,16 +78,16 @@ export const ImageControlsTab: React.FC = () => {
   } = useImageEditStore();
 
   const { selectedMaskId, maskManipulation, applyImageEditToMask, results } = useSegmentationStore();
-  
+
   // Get the selected mask details
-  const selectedMask = selectedMaskId && results 
-    ? results.masks.find(m => m.mask_id === selectedMaskId) 
+  const selectedMask = selectedMaskId && results
+    ? results.masks.find(m => m.mask_id === selectedMaskId)
     : null;
-  
+
   // Get per-mask edits if a mask is selected
   const selectedMaskState = selectedMaskId ? maskManipulation.get(selectedMaskId) : null;
   const perMaskEdits = selectedMaskState?.transform.imageEdits;
-  
+
   // Use per-mask values if a mask is selected, otherwise use global values
   const brightness = perMaskEdits?.brightness ?? globalBrightness;
   const contrast = perMaskEdits?.contrast ?? globalContrast;
@@ -89,7 +96,7 @@ export const ImageControlsTab: React.FC = () => {
   const blur = perMaskEdits?.blur ?? globalBlur;
   const exposure = perMaskEdits?.exposure ?? globalExposure;
   const vibrance = perMaskEdits?.vibrance ?? globalVibrance;
-  
+
   // Wrapper functions that apply to selected mask or global
   const setBrightness = (value: number) => {
     if (selectedMaskId) {
@@ -98,7 +105,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalBrightness(value);
     }
   };
-  
+
   const setContrast = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { contrast: value });
@@ -106,7 +113,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalContrast(value);
     }
   };
-  
+
   const setSaturation = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { saturation: value });
@@ -114,7 +121,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalSaturation(value);
     }
   };
-  
+
   const setHue = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { hue: value });
@@ -122,7 +129,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalHue(value);
     }
   };
-  
+
   const setBlur = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { blur: value });
@@ -130,7 +137,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalBlur(value);
     }
   };
-  
+
   const setExposure = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { exposure: value });
@@ -138,7 +145,7 @@ export const ImageControlsTab: React.FC = () => {
       setGlobalExposure(value);
     }
   };
-  
+
   const setVibrance = (value: number) => {
     if (selectedMaskId) {
       applyImageEditToMask(selectedMaskId, { vibrance: value });
@@ -147,9 +154,9 @@ export const ImageControlsTab: React.FC = () => {
     }
   };
 
-  const hasEdits = brightness !== 0 || contrast !== 0 || saturation !== 0 || rotation !== 0 || 
-    flipHorizontal || flipVertical || hue !== 0 || blur !== 0 || sharpen !== 0 || 
-    exposure !== 0 || highlights !== 0 || shadows !== 0 || temperature !== 0 || 
+  const hasEdits = brightness !== 0 || contrast !== 0 || saturation !== 0 || rotation !== 0 ||
+    flipHorizontal || flipVertical || hue !== 0 || blur !== 0 || sharpen !== 0 ||
+    exposure !== 0 || highlights !== 0 || shadows !== 0 || temperature !== 0 ||
     tint !== 0 || vibrance !== 0 || vignette !== 0 || grain !== 0;
 
   const handleReset = () => {
@@ -167,438 +174,445 @@ export const ImageControlsTab: React.FC = () => {
     <TooltipProvider>
       <div className="space-y-5">
         {selectedMask ? (
-          <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
-            <div className="flex items-start gap-2">
-              <Target className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <div className="industrial-panel safety-accent-border p-3">
+            <div className="flex items-start gap-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded bg-primary/10 border border-primary/20 text-primary">
+                <Target className="h-5 w-5" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                  Selected Object
-                </p>
-                <p className="text-sm font-medium text-blue-800 dark:text-blue-200 truncate">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-primary/80 font-heading mb-0.5">
+                  Component Logic
+                </h4>
+                <p className="text-[13px] font-black text-foreground truncate uppercase font-sans tracking-tight">
                   {selectedMask.promptText || selectedMask.label}
                 </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  All adjustments apply to this object only
-                </p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                    Local Modulation Active
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-muted/50 border border-muted rounded-md">
-            <div className="flex items-start gap-2">
-              <ImageIcon className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div className="industrial-panel p-4 border-dashed bg-background/20">
+            <div className="flex items-start gap-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded bg-muted/10 border border-border/20 text-muted-foreground/60">
+                <ImageIcon className="h-5 w-5" />
+              </div>
               <div className="flex-1">
-                <p className="text-xs font-semibold text-foreground mb-1">
-                  Global Image Edits
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Select an object to edit it individually, or adjust the entire image
+                <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/80 font-heading mb-0.5">
+                  Global Parameters
+                </h4>
+                <p className="text-[11px] font-bold text-muted-foreground leading-snug">
+                  Standard adjustments apply to master composite. Select object for focal edit.
                 </p>
               </div>
             </div>
           </div>
         )}
-      
-      <CollapsibleSection title="Basic Adjustments" defaultOpen={true}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="brightness-slider" className="text-sm cursor-help">
-                  Brightness
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust brightness for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust brightness for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{brightness}</span>
+
+        <CollapsibleSection title="Basic Adjustments" defaultOpen={true}>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="brightness-slider" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-help font-heading">
+                    Brightness
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent className="industrial-panel">
+                  <p className="text-[10px] font-bold uppercase tracking-widest">
+                    {selectedMask
+                      ? `Modulate brightness for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Modulate master brightness'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono font-black text-primary border border-primary/5">{brightness}</span>
+            </div>
+            <Slider
+              id="brightness-slider"
+              value={[brightness]}
+              onValueChange={([value]) => setBrightness(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="brightness-slider"
-            value={[brightness]}
-            onValueChange={([value]) => setBrightness(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="contrast-slider" className="text-sm cursor-help">
-                  Contrast
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust contrast for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust contrast for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{contrast}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="contrast-slider" className="text-sm cursor-help">
+                    Contrast
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust contrast for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust contrast for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{contrast}</span>
+            </div>
+            <Slider
+              id="contrast-slider"
+              value={[contrast]}
+              onValueChange={([value]) => setContrast(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="contrast-slider"
-            value={[contrast]}
-            onValueChange={([value]) => setContrast(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="exposure-slider" className="text-sm cursor-help">
-                  Exposure
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust exposure for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust exposure for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{exposure}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="exposure-slider" className="text-sm cursor-help">
+                    Exposure
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust exposure for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust exposure for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{exposure}</span>
+            </div>
+            <Slider
+              id="exposure-slider"
+              value={[exposure]}
+              onValueChange={([value]) => setExposure(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="exposure-slider"
-            value={[exposure]}
-            onValueChange={([value]) => setExposure(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="highlights-slider" className="text-sm">Highlights</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{highlights}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="highlights-slider" className="text-sm">Highlights</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{highlights}</span>
+            </div>
+            <Slider
+              id="highlights-slider"
+              value={[highlights]}
+              onValueChange={([value]) => setHighlights(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="highlights-slider"
-            value={[highlights]}
-            onValueChange={([value]) => setHighlights(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="shadows-slider" className="text-sm">Shadows</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{shadows}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="shadows-slider" className="text-sm">Shadows</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{shadows}</span>
+            </div>
+            <Slider
+              id="shadows-slider"
+              value={[shadows]}
+              onValueChange={([value]) => setShadows(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="shadows-slider"
-            value={[shadows]}
-            onValueChange={([value]) => setShadows(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
-      </CollapsibleSection>
+        </CollapsibleSection>
 
-      <Separator />
+        <Separator />
 
-      <CollapsibleSection title="Color Adjustments" defaultOpen={true}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="saturation-slider" className="text-sm cursor-help">
-                  Saturation
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust color saturation for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust color saturation for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{saturation}</span>
+        <CollapsibleSection title="Color Adjustments" defaultOpen={true}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="saturation-slider" className="text-sm cursor-help">
+                    Saturation
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust color saturation for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust color saturation for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{saturation}</span>
+            </div>
+            <Slider
+              id="saturation-slider"
+              value={[saturation]}
+              onValueChange={([value]) => setSaturation(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="saturation-slider"
-            value={[saturation]}
-            onValueChange={([value]) => setSaturation(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="vibrance-slider" className="text-sm cursor-help">
-                  Vibrance
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust vibrance for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust vibrance for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{vibrance}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="vibrance-slider" className="text-sm cursor-help">
+                    Vibrance
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust vibrance for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust vibrance for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{vibrance}</span>
+            </div>
+            <Slider
+              id="vibrance-slider"
+              value={[vibrance]}
+              onValueChange={([value]) => setVibrance(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="vibrance-slider"
-            value={[vibrance]}
-            onValueChange={([value]) => setVibrance(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="hue-slider" className="text-sm cursor-help">
-                  Hue
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust hue for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust hue for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{hue}°</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="hue-slider" className="text-sm cursor-help">
+                    Hue
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust hue for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust hue for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{hue}°</span>
+            </div>
+            <Slider
+              id="hue-slider"
+              value={[hue]}
+              onValueChange={([value]) => setHue(value)}
+              min={-180}
+              max={180}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="hue-slider"
-            value={[hue]}
-            onValueChange={([value]) => setHue(value)}
-            min={-180}
-            max={180}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="temperature-slider" className="text-sm">Temperature</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{temperature}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="temperature-slider" className="text-sm">Temperature</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{temperature}</span>
+            </div>
+            <Slider
+              id="temperature-slider"
+              value={[temperature]}
+              onValueChange={([value]) => setTemperature(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="temperature-slider"
-            value={[temperature]}
-            onValueChange={([value]) => setTemperature(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="tint-slider" className="text-sm">Tint</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{tint}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="tint-slider" className="text-sm">Tint</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{tint}</span>
+            </div>
+            <Slider
+              id="tint-slider"
+              value={[tint]}
+              onValueChange={([value]) => setTint(value)}
+              min={-100}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="tint-slider"
-            value={[tint]}
-            onValueChange={([value]) => setTint(value)}
-            min={-100}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
-      </CollapsibleSection>
+        </CollapsibleSection>
 
-      <Separator />
+        <Separator />
 
-      <CollapsibleSection title="Detail & Effects" defaultOpen={false}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="sharpen-slider" className="text-sm">Sharpen</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{sharpen}</span>
+        <CollapsibleSection title="Detail & Effects" defaultOpen={false}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="sharpen-slider" className="text-sm">Sharpen</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{sharpen}</span>
+            </div>
+            <Slider
+              id="sharpen-slider"
+              value={[sharpen]}
+              onValueChange={([value]) => setSharpen(value)}
+              min={0}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="sharpen-slider"
-            value={[sharpen]}
-            onValueChange={([value]) => setSharpen(value)}
-            min={0}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Label htmlFor="blur-slider" className="text-sm cursor-help">
-                  Blur
-                </Label>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">
-                  {selectedMask 
-                    ? `Adjust blur for ${selectedMask.promptText || selectedMask.label}` 
-                    : 'Adjust blur for the entire image'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <span className="text-sm text-muted-foreground tabular-nums">{blur}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Label htmlFor="blur-slider" className="text-sm cursor-help">
+                    Blur
+                  </Label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    {selectedMask
+                      ? `Adjust blur for ${selectedMask.promptText || selectedMask.label}`
+                      : 'Adjust blur for the entire image'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-muted-foreground tabular-nums">{blur}</span>
+            </div>
+            <Slider
+              id="blur-slider"
+              value={[blur]}
+              onValueChange={([value]) => setBlur(value)}
+              min={0}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="blur-slider"
-            value={[blur]}
-            onValueChange={([value]) => setBlur(value)}
-            min={0}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="vignette-slider" className="text-sm">Vignette</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{vignette}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="vignette-slider" className="text-sm">Vignette</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{vignette}</span>
+            </div>
+            <Slider
+              id="vignette-slider"
+              value={[vignette]}
+              onValueChange={([value]) => setVignette(value)}
+              min={0}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="vignette-slider"
-            value={[vignette]}
-            onValueChange={([value]) => setVignette(value)}
-            min={0}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="grain-slider" className="text-sm">Grain</Label>
-            <span className="text-sm text-muted-foreground tabular-nums">{grain}</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="grain-slider" className="text-sm">Grain</Label>
+              <span className="text-sm text-muted-foreground tabular-nums">{grain}</span>
+            </div>
+            <Slider
+              id="grain-slider"
+              value={[grain]}
+              onValueChange={([value]) => setGrain(value)}
+              min={0}
+              max={100}
+              step={1}
+              className="cursor-pointer"
+            />
           </div>
-          <Slider
-            id="grain-slider"
-            value={[grain]}
-            onValueChange={([value]) => setGrain(value)}
-            min={0}
-            max={100}
-            step={1}
-            className="cursor-pointer"
-          />
-        </div>
-      </CollapsibleSection>
+        </CollapsibleSection>
 
-      <Separator />
+        <Separator />
 
-      <CollapsibleSection title="Transform" defaultOpen={true}>
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Rotation</Label>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRotation((rotation - 90 + 360) % 360)}
-              aria-label="Rotate counter-clockwise"
-              className="h-9 transition-all duration-150 hover:scale-105 active:scale-95"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRotation((rotation + 90) % 360)}
-              aria-label="Rotate clockwise"
-              className="h-9 transition-all duration-150 hover:scale-105 active:scale-95"
-            >
-              <RotateCw className="h-4 w-4" />
-            </Button>
-            <span className="flex items-center text-sm font-medium text-muted-foreground ml-auto tabular-nums">
-              {rotation}°
-            </span>
+        <CollapsibleSection title="Transform" defaultOpen={true}>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Rotation</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRotation((rotation - 90 + 360) % 360)}
+                aria-label="Rotate counter-clockwise"
+                className="h-9 transition-all duration-150 hover:scale-105 active:scale-95"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRotation((rotation + 90) % 360)}
+                aria-label="Rotate clockwise"
+                className="h-9 transition-all duration-150 hover:scale-105 active:scale-95"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+              <span className="flex items-center text-sm font-medium text-muted-foreground ml-auto tabular-nums">
+                {rotation}°
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Flip</Label>
-          <div className="flex gap-2">
-            <Button
-              variant={flipHorizontal ? 'default' : 'outline'}
-              size="sm"
-              onClick={toggleFlipHorizontal}
-              aria-label="Flip horizontal"
-              aria-pressed={flipHorizontal}
-              className="flex-1 h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <FlipHorizontal className="h-4 w-4 mr-2" />
-              Horizontal
-            </Button>
-            <Button
-              variant={flipVertical ? 'default' : 'outline'}
-              size="sm"
-              onClick={toggleFlipVertical}
-              aria-label="Flip vertical"
-              aria-pressed={flipVertical}
-              className="flex-1 h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <FlipVertical className="h-4 w-4 mr-2" />
-              Vertical
-            </Button>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Flip</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={flipHorizontal ? 'default' : 'outline'}
+                size="sm"
+                onClick={toggleFlipHorizontal}
+                aria-label="Flip horizontal"
+                aria-pressed={flipHorizontal}
+                className="flex-1 h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <FlipHorizontal className="h-4 w-4 mr-2" />
+                Horizontal
+              </Button>
+              <Button
+                variant={flipVertical ? 'default' : 'outline'}
+                size="sm"
+                onClick={toggleFlipVertical}
+                aria-label="Flip vertical"
+                aria-pressed={flipVertical}
+                className="flex-1 h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <FlipVertical className="h-4 w-4 mr-2" />
+                Vertical
+              </Button>
+            </div>
           </div>
-        </div>
-      </CollapsibleSection>
+        </CollapsibleSection>
 
-      <Separator />
+        <Separator />
 
-      <Button
-        variant="outline"
-        className="w-full h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-        onClick={handleReset}
-        disabled={!hasEdits}
-        aria-label={selectedMaskId ? "Reset mask edits" : "Reset all image edits"}
-      >
-        Reset All
-      </Button>
-      {hasEdits && (
-        <p className="text-xs text-center text-muted-foreground animate-in fade-in duration-200">
-          Changes are applied in real-time
-        </p>
-      )}
+        <Button
+          variant="outline"
+          className="w-full h-9 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+          onClick={handleReset}
+          disabled={!hasEdits}
+          aria-label={selectedMaskId ? "Reset mask edits" : "Reset all image edits"}
+        >
+          Reset All
+        </Button>
+        {hasEdits && (
+          <p className="text-xs text-center text-muted-foreground animate-in fade-in duration-200">
+            Changes are applied in real-time
+          </p>
+        )}
       </div>
     </TooltipProvider>
   );
