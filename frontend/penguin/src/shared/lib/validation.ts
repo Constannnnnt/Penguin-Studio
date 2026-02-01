@@ -17,9 +17,26 @@ export interface ValidationResult {
  * Sanitizes user input by removing potentially dangerous characters
  * and enforcing maximum length
  */
-export const sanitizeInput = (input: string): string => {
+export const sanitizeInput = (input: unknown): string => {
+  if (input === null || input === undefined) {
+    return '';
+  }
+
+  const raw =
+    typeof input === 'string'
+      ? input
+      : typeof input === 'number' || typeof input === 'boolean'
+        ? String(input)
+        : (() => {
+            try {
+              return JSON.stringify(input);
+            } catch {
+              return String(input);
+            }
+          })();
+
   // Remove potentially dangerous characters (< and >)
-  return input
+  return raw
     .replace(/[<>]/g, '')
     .trim()
     .slice(0, 1000); // Max length of 1000 characters
