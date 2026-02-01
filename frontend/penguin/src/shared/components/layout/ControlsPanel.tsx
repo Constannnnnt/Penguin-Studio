@@ -134,7 +134,7 @@ export const ControlsPanel: React.FC = () => {
   return (
     <aside className="flex h-full flex-col" aria-label="Controls panel">
       <PanelHeader
-        title="Edit"
+        title=""
         position="right"
         actions={
           <div className="flex items-center gap-4">
