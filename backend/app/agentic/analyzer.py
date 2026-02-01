@@ -1,7 +1,9 @@
+import json
 import logging
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 from google.adk import Agent, Runner
+from google.genai import types
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from .tool_registry import ToolRegistry
 
@@ -74,18 +76,60 @@ PLANNING RULES:
 - If the user query is vague but clearly a modification, propose the most likely tool (e.g., "Make it look better" -> update_aesthetics).
 
 The user may also mention specific objects. Use 'select_object' first to get a mask_id if you need to adjust a specific thing.
+
+RESPONSE FORMAT (STRICT):
+- Return ONLY a valid JSON object. No markdown, no prose, no code fences.
+- Do not include any keys other than the schema below.
+- For generation intent, set "plan" to null.
+
+Schema:
+{{
+  "intent": "generation" | "refinement",
+  "explanation": "string",
+  "plan": null | [
+    {{
+      "tool_name": "string",
+      "tool_input": {{ ... }},
+      "step_description": "string"
+    }}
+  ]
+}}
 """
 
-    async def analyze(self, query: str) -> AnalysisResult:
+    async def analyze(
+        self, query: str, image_context: Optional[Dict[str, Any]] = None
+    ) -> AnalysisResult:
         """Analyzes a user query and returns a structured AnalysisResult."""
         logger.info(f"Analyzing query: {query}")
+
+        context_summary: Optional[str] = None
+        if image_context:
+            structured_prompt = image_context.get("structured_prompt")
+            context_payload: Dict[str, Any] = {"seed": image_context.get("seed")}
+            if isinstance(structured_prompt, dict):
+                context_payload.update(
+                    {
+                        "short_description": structured_prompt.get("short_description"),
+                        "background_setting": structured_prompt.get(
+                            "background_setting"
+                        ),
+                        "objects": structured_prompt.get("objects"),
+                        "lighting": structured_prompt.get("lighting"),
+                        "aesthetics": structured_prompt.get("aesthetics"),
+                        "photographic_characteristics": structured_prompt.get(
+                            "photographic_characteristics"
+                        ),
+                        "style_medium": structured_prompt.get("style_medium"),
+                        "artistic_style": structured_prompt.get("artistic_style"),
+                    }
+                )
+            context_summary = json.dumps(context_payload, ensure_ascii=True)
 
         # Define the analyzer agent
         agent = Agent(
             name="penguin_analyzer",
             model=self.model_name,
             instruction=self._get_system_instruction(),
-            output_schema=AnalysisResult,
         )
 
         # Initialize Runner with required services
@@ -98,35 +142,67 @@ The user may also mention specific objects. Use 'select_object' first to get a m
 
         try:
             # Run the agent async and collect events
-            final_content = None
+            final_text: Optional[str] = None
+            user_content = query
+            if context_summary:
+                user_content = (
+                    f"{query}\n\nCurrent scene context (structured prompt):\n{context_summary}"
+                )
+
+            def extract_text(content: Any) -> str:
+                if content is None:
+                    return ""
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, dict):
+                    try:
+                        return json.dumps(content, ensure_ascii=True)
+                    except Exception:
+                        return str(content)
+                parts = getattr(content, "parts", None)
+                if parts:
+                    chunks: List[str] = []
+                    for part in parts:
+                        text = getattr(part, "text", None)
+                        if isinstance(text, str) and text.strip():
+                            chunks.append(text)
+                    if chunks:
+                        return "".join(chunks)
+                text_attr = getattr(content, "text", None)
+                if isinstance(text_attr, str):
+                    return text_attr
+                return str(content)
+
+            def parse_json_payload(text: str) -> Dict[str, Any]:
+                cleaned = text.strip()
+                if cleaned.startswith("```"):
+                    fence_end = cleaned.find("\n")
+                    if fence_end != -1:
+                        cleaned = cleaned[fence_end + 1 :]
+                    if cleaned.endswith("```"):
+                        cleaned = cleaned[:-3]
+                    cleaned = cleaned.strip()
+                start = cleaned.find("{")
+                end = cleaned.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    cleaned = cleaned[start : end + 1]
+                return json.loads(cleaned)
+
             async for event in runner.run_async(
                 user_id="default_user",
                 session_id="current_analysis",
-                new_message={"role": "user", "content": query},
+                new_message=types.UserContent(parts=[types.Part(text=user_content)]),
             ):
-                # When output_schema is set, ADK typically returns the parsed model in the content
                 if event.content:
-                    final_content = event.content
+                    event_text = extract_text(event.content).strip()
+                    if event_text:
+                        final_text = event_text
 
-            if not final_content:
+            if not final_text:
                 raise ValueError("Agent failed to produce any content")
 
-            # If ADK returned a dict or the model instance directly
-            if isinstance(final_content, AnalysisResult):
-                return final_content
-
-            if isinstance(final_content, dict):
-                return AnalysisResult.parse_obj(final_content)
-
-            # Fallback: if it's a string (though unlikely with output_schema)
-            if isinstance(final_content, str):
-                import json
-
-                return AnalysisResult.parse_obj(json.loads(final_content))
-
-            raise TypeError(
-                f"Unexpected content type from agent: {type(final_content)}"
-            )
+            payload = parse_json_payload(final_text)
+            return AnalysisResult.parse_obj(payload)
 
         except Exception as e:
             logger.error(f"Analysis failed: {str(e)}")

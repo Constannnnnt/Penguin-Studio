@@ -57,7 +57,7 @@ class PenguinOrchestrator:
         logger.info(f"Analyzing request: '{query}' for session: {session_id}")
 
         # 1. Run Analysis
-        analysis = await self.analyzer.analyze(query)
+        analysis = await self.analyzer.analyze(query, image_context)
 
         # 2. Create session state
         status = "awaiting_approval" if analysis.intent == "refinement" else "executing"
@@ -145,9 +145,12 @@ class PenguinOrchestrator:
             return await self._execute_bria_refinement(tool_name, tool_input, session)
 
         # 2. Selection Tools
-        if tool_name == "object_selection":
+        if tool_name in ["select_object", "object_selection"]:
             # Selection is a logical focus shift, usually doesn't trigger a generation by itself
-            return {"status": "focused", "object": tool_input.get("object_name")}
+            return {
+                "status": "focused",
+                "object": tool_input.get("prompt") or tool_input.get("object_name"),
+            }
 
         logger.warning(f"No execution logic defined for tool: {tool_name}")
         return {"status": "no_op", "tool": tool_name}
@@ -168,11 +171,29 @@ class PenguinOrchestrator:
 
         # Apply updates based on tool
         if tool_name == "update_lighting":
-            for k, v in tool_input.items():
+            normalized = dict(tool_input)
+            if "direction" not in normalized:
+                direction_parts: List[str] = []
+                if "direction_x" in normalized:
+                    direction_parts.append(f"x:{normalized['direction_x']}")
+                if "direction_y" in normalized:
+                    direction_parts.append(f"y:{normalized['direction_y']}")
+                if "rotation" in normalized:
+                    direction_parts.append(f"rotation:{normalized['rotation']}")
+                if "tilt" in normalized:
+                    direction_parts.append(f"tilt:{normalized['tilt']}")
+                if direction_parts:
+                    normalized["direction"] = ", ".join(direction_parts)
+
+            for k, v in normalized.items():
                 if hasattr(sp.lighting, k):
                     setattr(sp.lighting, k, str(v))
         elif tool_name == "update_aesthetics":
-            for k, v in tool_input.items():
+            normalized = dict(tool_input)
+            if "mood_atmosphere" not in normalized and "mood" in normalized:
+                normalized["mood_atmosphere"] = normalized["mood"]
+
+            for k, v in normalized.items():
                 if hasattr(sp.aesthetics, k):
                     setattr(sp.aesthetics, k, str(v))
         elif tool_name == "update_photographic":
@@ -180,8 +201,11 @@ class PenguinOrchestrator:
                 if hasattr(sp.photographic_characteristics, k):
                     setattr(sp.photographic_characteristics, k, str(v))
         elif tool_name == "update_background":
-            if "background_setting" in tool_input:
-                sp.background_setting = tool_input["background_setting"]
+            background_setting = tool_input.get("background_setting")
+            if background_setting is None:
+                background_setting = tool_input.get("setting")
+            if background_setting is not None:
+                sp.background_setting = str(background_setting)
 
         # Call Bria refinement
         logger.info(f"Calling Bria refinement for {tool_name}")

@@ -104,11 +104,9 @@ class UpdateLighting(BaseModel):
     shadows: Optional[int] = Field(
         None, ge=0, le=5, description="Shadow intensity from 0 (none) to 5 (dramatic)"
     )
-    direction_x: Optional[int] = Field(
-        None, ge=0, le=100, description="Light X position (0-100)"
-    )
-    direction_y: Optional[int] = Field(
-        None, ge=0, le=100, description="Light Y position (0-100)"
+    direction: Optional[str] = Field(
+        None,
+        description="Lighting direction string (e.g., 'x:50, y:30, rotation:0, tilt:0')",
     )
 
 
@@ -141,7 +139,7 @@ class UpdateAesthetics(BaseModel):
     color_scheme: Optional[str] = Field(
         None, description="Color scheme (e.g., 'vibrant', 'muted', 'warm')"
     )
-    mood: Optional[str] = Field(
+    mood_atmosphere: Optional[str] = Field(
         None, description="Mood or atmosphere (e.g., 'elegant', 'energetic')"
     )
 
@@ -149,7 +147,7 @@ class UpdateAesthetics(BaseModel):
 class UpdateBackground(BaseModel):
     """Update the background setting description."""
 
-    setting: str = Field(
+    background_setting: str = Field(
         ...,
         description="Description of the background (e.g., 'a minimalist studio', 'a lush forest')",
     )
