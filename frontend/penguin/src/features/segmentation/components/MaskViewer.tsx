@@ -40,6 +40,29 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
   const layoutAppliedRef = React.useRef(false);
   const [showPreview, setShowPreview] = React.useState(true);
 
+  // Chunked rendering state to avoid blocking main thread with too many masks
+  const [visibleMaskCount, setVisibleMaskCount] = React.useState(10);
+
+  React.useEffect(() => {
+    // Reset when masks transform/change significantly, but here we just check length for simplicity
+    // If masks array reference changes (new segmentation), we should reset or just let it catch up
+    // Ideally we reset to 10 on new masks
+    setVisibleMaskCount(10);
+  }, [masks]);
+
+  React.useEffect(() => {
+    if (visibleMaskCount < masks.length) {
+      // Use efficient batching - render more masks if we are far behind
+      const batchSize = Math.max(10, Math.ceil((masks.length - visibleMaskCount) / 5));
+
+      const timeoutId = setTimeout(() => {
+        setVisibleMaskCount(prev => Math.min(prev + batchSize, masks.length));
+      }, 0); // Yield to main thread
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [visibleMaskCount, masks.length]);
+
   const masksVisible = useSegmentationStore((state) => state.masksVisible);
   const hoveredMaskId = useSegmentationStore((state) => state.hoveredMaskId);
   const maskManipulation = useSegmentationStore((state) => state.maskManipulation);
@@ -194,7 +217,7 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
   const handleClick = React.useCallback((maskId: string) => {
     onMaskClick?.(maskId);
   }, [onMaskClick]);
-  
+
   const handleBackgroundClick = React.useCallback((e: React.MouseEvent) => {
     if (!onBackgroundDeselect) return;
     if (e.target === containerRef.current || e.target === overlayRef.current) {
@@ -235,7 +258,8 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
           }}
         >
           {/* Render masks with integrated visual overlay inside DraggableMaskOverlay */}
-          {masks.map((mask) => {
+          {/* Render masks with integrated visual overlay inside DraggableMaskOverlay */}
+          {masks.slice(0, visibleMaskCount).map((mask) => {
             const manipState = maskManipulation.get(mask.mask_id);
             if (manipState?.isHidden) {
               return null;

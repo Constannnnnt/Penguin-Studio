@@ -1,5 +1,5 @@
-import React from 'react';
-import { Input } from '@/shared/components/ui/input';
+﻿import React from 'react';
+import { ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 import { Label } from '@/shared/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -13,47 +13,33 @@ import {
     type LightingDirectionValue,
 } from '@/core/types';
 import type { PlanStep } from '@/core/types';
+import {
+    COMPOSITION_PREVIEWS,
+} from '@/features/scene/constants/previewImages';
+import { COLOR_SCHEME_SWATCHES } from '@/features/scene/constants/colorSchemes';
+import { motion, AnimatePresence } from 'framer-motion';
+import { PerformantSlider } from '@/shared/components/ui/performant-slider';
+import { PerformantInput } from '@/shared/components/ui/performant-input';
+import { Input } from '@/shared/components/ui/input'; // Keep Input for readonly or non-debounced cases if any
 
-const EMPTY_MASKS: Array<{ mask_id?: string }> = [];
+const EMPTY_MASKS: any[] = [];
 
-interface InteractiveParameterEditorProps {
-    steps: PlanStep[];
-    onUpdateStep: (index: number, updatedInput: Record<string, any>) => void;
-    onExecute: () => void;
-    disabled?: boolean;
-    status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed' | 'awaiting_input';
-}
-
-interface PlanSliderProps {
-    value: number;
-    min: number;
-    max: number;
-    step: number;
-    disabled?: boolean;
-    onValueChange: (value: number) => void;
-}
-
-const PlanSlider: React.FC<PlanSliderProps> = ({
-    value,
-    min,
-    max,
-    step,
-    disabled = false,
-    onValueChange
-}) => {
-    return (
-        <input
-            type="range"
-            value={value}
-            min={min}
-            max={max}
-            step={step}
-            disabled={disabled}
-            onChange={(e) => onValueChange(Number(e.target.value))}
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-        />
-    );
-};
+const PreviewThumbnail: React.FC<{ src?: string; active?: boolean; gradient?: string; label: string }> = ({
+    src,
+    active,
+    gradient,
+    label
+}) => (
+    <div className={`overflow-hidden rounded-md border-2 transition-all ${active ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-transparent opacity-60 hover:opacity-100 hover:scale-102'}`}>
+        {gradient ? (
+            <div className="h-10 w-full" style={{ background: gradient }} />
+        ) : src ? (
+            <img src={src} alt={label} className="h-10 w-full object-cover" />
+        ) : (
+            <div className="h-10 w-full bg-muted flex items-center justify-center text-[8px] font-bold text-muted-foreground uppercase">{label}</div>
+        )}
+    </div>
+);
 
 /**
  * InteractiveParameterEditor renders a list of proposed plan steps with editable parameters.
@@ -66,7 +52,16 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
     disabled = false,
     status
 }) => {
+    const [isExpanded, setIsExpanded] = React.useState(true);
+    const [expandedSteps, setExpandedSteps] = React.useState<Record<number, boolean>>(() =>
+        steps.reduce((acc, _, i) => ({ ...acc, [i]: i === 0 }), {}) // Expand first step by default
+    );
+
     if (!steps || steps.length === 0) return null;
+
+    const toggleStep = (idx: number) => {
+        setExpandedSteps(prev => ({ ...prev, [idx]: !prev[idx] }));
+    };
 
     const masks = useSegmentationStore((state) => state.results?.masks ?? EMPTY_MASKS);
     const defaultDirection = useConfigStore((state) => state.sceneConfig.lighting.direction);
@@ -173,7 +168,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
     ];
 
     const getMaskLabel = (maskId: string): string => {
-        const mask = masks.find((item) => item.mask_id === maskId);
+        const mask = masks.find((item: any) => item.mask_id === maskId);
         return mask?.promptObject || mask?.label || maskId;
     };
 
@@ -235,21 +230,21 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                     </div>
 
                     {isNumber ? (
-                        <Input
+                        <PerformantInput
                             disabled={isLocked}
                             type="number"
                             value={value}
                             className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                            onChange={(e) =>
-                                updateStep(idx, toolInput, { [key]: Number(e.target.value) })
+                            onValueCommit={(val) =>
+                                updateStep(idx, toolInput, { [key]: Number(val) })
                             }
                         />
                     ) : (
-                        <Input
+                        <PerformantInput
                             disabled={isLocked}
                             value={coerceString(value)}
                             className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                            onChange={(e) => updateStep(idx, toolInput, { [key]: e.target.value })}
+                            onValueCommit={(val) => updateStep(idx, toolInput, { [key]: val })}
                         />
                     )}
                 </div>
@@ -266,19 +261,47 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                     toolInput.background_setting ?? toolInput.setting ?? ''
                 );
                 return (
-                    <div className="space-y-3">
-                        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                            Background Setting
-                        </Label>
-                        <Textarea
-                            disabled={isLocked}
-                            value={backgroundSetting}
-                            rows={5}
-                            className="resize-none bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                            onChange={(e) =>
-                                updateStep(idx, toolInput, { background_setting: e.target.value })
-                            }
-                        />
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">
+                                Environment Set
+                            </Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {['studio', 'outdoor', 'urban', 'interior'].map((s) => (
+                                    <button
+                                        key={s}
+                                        disabled={isLocked}
+                                        onClick={() => updateStep(idx, toolInput, { background_setting: s })}
+                                        className="focus:outline-none"
+                                    >
+                                        <PreviewThumbnail
+                                            label={s}
+                                            active={backgroundSetting.toLowerCase().includes(s)}
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">
+                                Detailed Prompt
+                            </Label>
+                            <div className="rounded-md border border-border/40 overflow-hidden bg-background/20 relative group/bg">
+                                <Textarea
+                                    disabled={isLocked}
+                                    value={backgroundSetting}
+                                    rows={3}
+                                    className="resize-none bg-transparent border-none text-[11px] focus-visible:ring-0 p-3 leading-relaxed"
+                                    onChange={(e) =>
+                                        updateStep(idx, toolInput, { background_setting: e.target.value })
+                                    }
+                                />
+                                <div className="absolute bottom-2 right-2 opacity-20 group-hover/bg:opacity-40 transition-opacity">
+                                    <div className="h-1 w-8 bg-primary/30 rounded-full" />
+                                </div>
+                            </div>
+                        </div>
                         {renderGenericFields(idx, toolInput, ['background_setting', 'setting'])}
                     </div>
                 );
@@ -295,8 +318,9 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
                                 Conditions
                             </Label>
+
                             <Select
-                                value={matchedConditions.selected || undefined}
+                                value={matchedConditions.selected || ""}
                                 onValueChange={(value) => {
                                     if (value === 'custom') {
                                         updateStep(idx, toolInput, { conditions: matchedConditions.custom || '' });
@@ -304,22 +328,26 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                         updateStep(idx, toolInput, { conditions: value });
                                     }
                                 }}
-                                disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue
-                                        className="truncate"
-                                        placeholder={showConditionCustom ? 'Custom condition' : 'Select lighting condition'}
-                                    />
+
+                                <SelectTrigger className="h-9 text-[11px] truncate studio-blur bg-background/40">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                        <SelectValue placeholder={showConditionCustom ? 'Custom condition' : 'Select lighting condition'} />
+                                    </div>
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="industrial-panel">
                                     {LIGHTING_CONDITIONS_OPTIONS.map((option) => (
                                         <SelectItem key={option} value={option}>
-                                            {option}
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1 h-3 bg-primary/20 rounded-full" />
+                                                {option}
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+
                         </div>
 
                         {showConditionCustom && (
@@ -342,7 +370,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 Shadows
                             </Label>
                             <div className="px-1">
-                                <PlanSlider
+                                <PerformantSlider
                                     disabled={isLocked}
                                     value={shadows}
                                     min={0}
@@ -378,11 +406,11 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                 return (
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                Camera Angle
+                            <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">
+                                Camera Control
                             </Label>
                             <Select
-                                value={matchedCamera.selected || undefined}
+                                value={matchedCamera.selected || ""}
                                 onValueChange={(value) => {
                                     if (value === 'custom') {
                                         updateStep(idx, toolInput, { camera_angle: matchedCamera.custom || '' });
@@ -392,69 +420,30 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 }}
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue
-                                        className="truncate"
-                                        placeholder={showCameraCustom ? 'Custom angle' : 'Select camera angle'}
-                                    />
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                    <SelectValue placeholder={showCameraCustom ? 'Custom angle' : 'Select angle'} />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="industrial-panel">
                                     {CAMERA_ANGLE_OPTIONS.map((option) => (
-                                        <SelectItem key={option} value={option}>
-                                            {option}
-                                        </SelectItem>
+                                        <SelectItem key={option} value={option}>{option}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        {showCameraCustom && (
-                            <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                    Custom Angle
-                                </Label>
-                                <Textarea
-                                    disabled={isLocked}
-                                    value={matchedCamera.custom}
-                                    rows={3}
-                                    className="resize-none bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                    onChange={(e) => updateStep(idx, toolInput, { camera_angle: e.target.value })}
-                                />
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                Depth of Field
-                            </Label>
-                            <div className="px-1">
-                                <PlanSlider
-                                    disabled={isLocked}
-                                    value={depth}
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    onValueChange={(val) => updateStep(idx, toolInput, { depth_of_field: val })}
-                                />
+                        <div className="space-y-3">
+                            <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">Optical Settings</Label>
+                            <div className="space-y-4 rounded-md border border-border/20 bg-background/20 p-3">
+                                <div className="space-y-1">
+                                    <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Depth of Field</Label>
+                                    <PerformantSlider disabled={isLocked} value={depth} min={0} max={100} step={1} onValueChange={(val) => updateStep(idx, toolInput, { depth_of_field: val })} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Focus Shift</Label>
+                                    <PerformantSlider disabled={isLocked} value={focus} min={0} max={100} step={1} onValueChange={(val) => updateStep(idx, toolInput, { focus: val })} />
+                                </div>
                             </div>
                         </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                Focus
-                            </Label>
-                            <div className="px-1">
-                                <PlanSlider
-                                    disabled={isLocked}
-                                    value={focus}
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    onValueChange={(val) => updateStep(idx, toolInput, { focus: val })}
-                                />
-                            </div>
-                        </div>
-
                         {renderGenericFields(idx, toolInput, ['camera_angle', 'depth_of_field', 'focus'])}
                     </div>
                 );
@@ -466,112 +455,83 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                 const matchedComposition = matchOption(composition, compositionOptions);
                 const matchedColor = matchOption(colorScheme, colorSchemeOptions);
                 const matchedMood = matchOption(mood, moodOptions);
-                const showCompositionCustom = !!matchedComposition.custom && matchedComposition.custom !== matchedComposition.selected;
-                const showColorCustom = !!matchedColor.custom && matchedColor.custom !== matchedColor.selected;
                 const showMoodCustom = !!matchedMood.custom && matchedMood.custom !== matchedMood.selected;
                 return (
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                Composition
-                            </Label>
-                            <Select
-                                value={matchedComposition.selected || undefined}
-                                onValueChange={(value) => updateStep(idx, toolInput, { composition: value })}
-                                disabled={isLocked}
-                            >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue
-                                        className="truncate"
-                                        placeholder={showCompositionCustom ? 'Custom composition' : 'Select composition'}
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {compositionOptions.map((option) => (
-                                        <SelectItem key={option} value={option}>
-                                            {option}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {showCompositionCustom && (
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                    Custom Composition
-                                </Label>
-                                <Textarea
+                                <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">Composition</Label>
+                                <Select
+                                    value={matchedComposition.selected || ""}
+                                    onValueChange={(value) => updateStep(idx, toolInput, { composition: value })}
                                     disabled={isLocked}
-                                    value={matchedComposition.custom}
-                                    rows={3}
-                                    className="resize-none bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                    onChange={(e) => updateStep(idx, toolInput, { composition: e.target.value })}
-                                />
+                                >
+                                    <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                        <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
+                                    <SelectContent className="industrial-panel">
+                                        {compositionOptions.map((option: string) => (
+                                            <SelectItem key={option} value={option}>
+                                                <div className="flex flex-col gap-1 py-1">
+                                                    {COMPOSITION_PREVIEWS[option] && (
+                                                        <img src={COMPOSITION_PREVIEWS[option]} alt="" className="h-8 w-12 object-cover rounded-sm border border-border/20 shadow-sm" />
+                                                    )}
+                                                    <span className="text-[10px]">{option}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        )}
 
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                Color Scheme
-                            </Label>
-                            <Select
-                                value={matchedColor.selected || undefined}
-                                onValueChange={(value) => updateStep(idx, toolInput, { color_scheme: value })}
-                                disabled={isLocked}
-                            >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue
-                                        className="truncate"
-                                        placeholder={showColorCustom ? 'Custom color scheme' : 'Select color scheme'}
-                                    />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {colorSchemeOptions.map((option) => (
-                                        <SelectItem key={option} value={option}>
-                                            {option}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {showColorCustom && (
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
-                                    Custom Color Scheme
-                                </Label>
-                                <Textarea
+                                <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">Color Palette</Label>
+                                <Select
+                                    value={matchedColor.selected || ""}
+                                    onValueChange={(value) => updateStep(idx, toolInput, { color_scheme: value })}
                                     disabled={isLocked}
-                                    value={matchedColor.custom}
-                                    rows={3}
-                                    className="resize-none bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                    onChange={(e) => updateStep(idx, toolInput, { color_scheme: e.target.value })}
-                                />
+                                >
+                                    <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                        <SelectValue placeholder="Select" />
+                                    </SelectTrigger>
+                                    <SelectContent className="industrial-panel">
+                                        {colorSchemeOptions.map((option: string) => (
+                                            <SelectItem key={option} value={option}>
+                                                <div className="flex flex-col gap-1 py-1">
+                                                    <div className="h-5 w-12 rounded-sm border border-border/20 shadow-sm" style={{ background: COLOR_SCHEME_SWATCHES[option] || 'var(--muted)' }} />
+                                                    <span className="text-[10px]">{option}</span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        )}
+                        </div>
 
                         <div className="space-y-2">
                             <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
                                 Mood & Atmosphere
                             </Label>
                             <Select
-                                value={matchedMood.selected || undefined}
+                                value={matchedMood.selected || ""}
                                 onValueChange={(value) =>
                                     updateStep(idx, toolInput, { mood_atmosphere: value })
                                 }
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue
-                                        className="truncate"
-                                        placeholder={showMoodCustom ? 'Custom mood' : 'Select mood'}
-                                    />
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <div className="h-2 w-2 rounded-full" style={{ background: COLOR_SCHEME_SWATCHES[matchedMood.selected || ''] || 'var(--muted)' }} />
+                                        <SelectValue placeholder={showMoodCustom ? 'Custom mood' : 'Select mood'} />
+                                    </div>
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="industrial-panel">
                                     {moodOptions.map((option) => (
                                         <SelectItem key={option} value={option}>
-                                            {option}
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-3 w-3 rounded-full border border-border" style={{ background: COLOR_SCHEME_SWATCHES[option] || 'var(--muted)' }} />
+                                                {option}
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -601,7 +561,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
             }
             case 'select_object': {
                 const prompt = coerceString(toolInput.prompt ?? '');
-                const maskOptions = masks.map((mask) => ({
+                const maskOptions = masks.map((mask: any) => ({
                     value: mask.promptObject || mask.label || mask.mask_id,
                     label: mask.promptObject || mask.label || mask.mask_id,
                 }));
@@ -613,24 +573,24 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
                             Object Prompt
                         </Label>
-                        <Input
+                        <PerformantInput
                             disabled={isLocked}
                             value={prompt}
                             placeholder="Describe the object to select"
                             className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                            onChange={(e) => updateStep(idx, toolInput, { prompt: e.target.value })}
+                            onValueCommit={(val) => updateStep(idx, toolInput, { prompt: val })}
                         />
                         {maskOptions.length > 0 && (
                             <Select
-                                value={selectedPrompt || undefined}
+                                value={selectedPrompt || ""}
                                 onValueChange={(value) => updateStep(idx, toolInput, { prompt: value })}
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue className="truncate" placeholder="Pick from detected masks" />
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                    <SelectValue placeholder="Pick from detected masks" />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    {maskOptions.map((option) => (
+                                <SelectContent className="industrial-panel">
+                                    {maskOptions.map((option: { value: string; label: string }) => (
                                         <SelectItem key={option.value} value={option.value}>
                                             {option.label}
                                         </SelectItem>
@@ -664,15 +624,15 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                         </Label>
                         {masks.length > 0 ? (
                             <Select
-                                value={maskId || undefined}
+                                value={maskId || ""}
                                 onValueChange={(val) => updateStep(idx, toolInput, { mask_id: val })}
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue className="truncate" placeholder="Select a mask" />
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                    <SelectValue placeholder="Select a mask" />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    {masks.map((mask) => (
+                                <SelectContent className="industrial-panel">
+                                    {masks.map((mask: any) => (
                                         <SelectItem key={mask.mask_id} value={mask.mask_id}>
                                             {getMaskLabel(mask.mask_id)}
                                         </SelectItem>
@@ -680,12 +640,12 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 </SelectContent>
                             </Select>
                         ) : (
-                            <Input
+                            <PerformantInput
                                 disabled={isLocked}
                                 value={maskId}
                                 placeholder="Mask ID"
                                 className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                onChange={(e) => updateStep(idx, toolInput, { mask_id: e.target.value })}
+                                onValueCommit={(val) => updateStep(idx, toolInput, { mask_id: val })}
                             />
                         )}
 
@@ -693,14 +653,14 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             Property
                         </Label>
                         <Select
-                            value={property || undefined}
+                            value={property || ""}
                             onValueChange={(val) => updateStep(idx, toolInput, { property: val })}
                             disabled={isLocked}
                         >
-                            <SelectTrigger className="h-8 text-[11px] truncate">
-                                <SelectValue className="truncate" placeholder="Select property" />
+                            <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                <SelectValue placeholder="Select property" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="industrial-panel">
                                 {objectPropertyOptions.map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>
                                         {opt.label}
@@ -714,17 +674,16 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                         </Label>
                         {propertyValues.length > 0 ? (
                             <Select
-                                value={matchedValue.selected || undefined}
+                                value={matchedValue.selected || ""}
                                 onValueChange={(val) => updateStep(idx, toolInput, { value: val })}
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
                                     <SelectValue
-                                        className="truncate"
                                         placeholder={showValueCustom ? 'Custom value' : 'Select value'}
                                     />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="industrial-panel">
                                     {propertyValues.map((option) => (
                                         <SelectItem key={option} value={option}>
                                             {option}
@@ -733,22 +692,22 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 </SelectContent>
                             </Select>
                         ) : (
-                            <Input
+                            <PerformantInput
                                 disabled={isLocked}
                                 value={value}
                                 placeholder="Enter value"
                                 className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                onChange={(e) => updateStep(idx, toolInput, { value: e.target.value })}
+                                onValueCommit={(val) => updateStep(idx, toolInput, { value: val })}
                             />
                         )}
 
                         {showValueCustom && (
-                            <Input
+                            <PerformantInput
                                 disabled={isLocked}
                                 value={matchedValue.custom}
                                 placeholder="Custom value"
                                 className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                onChange={(e) => updateStep(idx, toolInput, { value: e.target.value })}
+                                onValueCommit={(val) => updateStep(idx, toolInput, { value: val })}
                             />
                         )}
 
@@ -759,7 +718,6 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
             case 'adjust_object_image_edit': {
                 const maskId = coerceString(toolInput.mask_id ?? '');
                 const editType = coerceString(toolInput.edit_type ?? 'brightness');
-                const value = clampNumber(parseNumber(toolInput.value, 0), range.min, range.max);
                 const ranges: Record<string, { min: number; max: number }> = {
                     brightness: { min: -100, max: 100 },
                     contrast: { min: -100, max: 100 },
@@ -770,6 +728,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                     vibrance: { min: -100, max: 100 },
                 };
                 const range = ranges[editType] || { min: -100, max: 100 };
+                const value = clampNumber(parseNumber(toolInput.value, 0), range.min, range.max);
                 return (
                     <div className="space-y-3">
                         <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">
@@ -777,15 +736,15 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                         </Label>
                         {masks.length > 0 ? (
                             <Select
-                                value={maskId || undefined}
+                                value={maskId || ""}
                                 onValueChange={(val) => updateStep(idx, toolInput, { mask_id: val })}
                                 disabled={isLocked}
                             >
-                                <SelectTrigger className="h-8 text-[11px] truncate">
-                                    <SelectValue className="truncate" placeholder="Select a mask" />
+                                <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                    <SelectValue placeholder="Select a mask" />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    {masks.map((mask) => (
+                                <SelectContent className="industrial-panel">
+                                    {masks.map((mask: any) => (
                                         <SelectItem key={mask.mask_id} value={mask.mask_id}>
                                             {getMaskLabel(mask.mask_id)}
                                         </SelectItem>
@@ -793,12 +752,12 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                 </SelectContent>
                             </Select>
                         ) : (
-                            <Input
+                            <PerformantInput
                                 disabled={isLocked}
                                 value={maskId}
                                 placeholder="Mask ID"
                                 className="h-8 bg-background/40 text-[11px] focus-visible:ring-primary/30"
-                                onChange={(e) => updateStep(idx, toolInput, { mask_id: e.target.value })}
+                                onValueCommit={(val) => updateStep(idx, toolInput, { mask_id: val })}
                             />
                         )}
 
@@ -806,14 +765,14 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             Edit Type
                         </Label>
                         <Select
-                            value={editType || undefined}
+                            value={editType || ""}
                             onValueChange={(val) => updateStep(idx, toolInput, { edit_type: val })}
                             disabled={isLocked}
                         >
-                            <SelectTrigger className="h-8 text-[11px] truncate">
-                                <SelectValue className="truncate" placeholder="Select edit" />
+                            <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                <SelectValue placeholder="Select edit" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="industrial-panel">
                                 {objectEditOptions.map((option) => (
                                     <SelectItem key={option} value={option}>
                                         {option}
@@ -887,17 +846,17 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             Rotation Angle
                         </Label>
                         <Select
-                            value={angle || undefined}
+                            value={angle || ""}
                             onValueChange={(val) => updateStep(idx, toolInput, { angle: Number(val) })}
                             disabled={isLocked}
                         >
-                            <SelectTrigger className="h-8 text-[11px] truncate">
-                                <SelectValue className="truncate" placeholder="Select angle" />
+                            <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                <SelectValue placeholder="Select angle" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="industrial-panel">
                                 {[0, 90, 180, 270].map((val) => (
                                     <SelectItem key={val} value={String(val)}>
-                                        {val}°
+                                        {val}掳
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -914,14 +873,14 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                             Flip Axis
                         </Label>
                         <Select
-                            value={axis || undefined}
-                            onValueChange={(val) => updateStep(idx, toolInput, { axis: val })}
+                            value={axis || ""}
+                            onValueChange={(val: string) => updateStep(idx, toolInput, { axis: val })}
                             disabled={isLocked}
                         >
-                            <SelectTrigger className="h-8 text-[11px] truncate">
-                                <SelectValue className="truncate" placeholder="Select axis" />
+                            <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
+                                <SelectValue placeholder="Select axis" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="industrial-panel">
                                 <SelectItem value="horizontal">Horizontal</SelectItem>
                                 <SelectItem value="vertical">Vertical</SelectItem>
                             </SelectContent>
@@ -936,50 +895,125 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
     };
 
     return (
-        <Card className="w-full border-primary/20 bg-primary/5 shadow-md">
-            <CardHeader className="pb-3 px-4 pt-4">
-                <CardTitle className="text-[11px] font-black uppercase tracking-[0.2em] text-primary/80">
-                    Proposed Workflow
-                </CardTitle>
+        <Card className="w-full border-primary/20 bg-background/30 backdrop-blur-xl shadow-2xl overflow-hidden industrial-panel">
+            <CardHeader
+                className="pb-3 px-4 pt-4 relative cursor-pointer hover:bg-background/20 transition-colors"
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/0 via-primary/40 to-primary/0" />
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-[11px] font-black uppercase tracking-[0.25em] text-primary flex items-center gap-2">
+                        <Settings2 className="h-3 w-3" />
+                        Refinement Plan
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono text-muted-foreground/60 uppercase tracking-tighter">
+                            {steps.length} {steps.length === 1 ? 'Action' : 'Actions'}
+                        </span>
+                        {isExpanded ? <ChevronDown className="h-3 w-3 text-primary/60" /> : <ChevronRight className="h-3 w-3 text-primary/60" />}
+                    </div>
+                </div>
             </CardHeader>
-            <CardContent className="space-y-4 px-4 pb-4">
-                {steps.map((step, idx) => (
-                    <div key={idx} className="relative space-y-3 rounded-lg border border-border/40 bg-background/60 p-4 transition-all hover:border-primary/30">
-                        <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary border border-primary/20">
-                                {idx + 1}
-                            </span>
-                            <div className="space-y-1">
-                                <h5 className="text-[13px] font-bold leading-tight text-foreground">{step.step_description}</h5>
-                                <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">{step.tool_name}</p>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-4 pl-8">
-                            {renderToolInputs(step, idx)}
-                        </div>
-                    </div>
-                ))}
-
-                {!disabled && status !== 'executing' && status !== 'completed' && (
-                    <button
-                        onClick={onExecute}
-                        className="group relative mt-2 w-full overflow-hidden rounded-md bg-primary py-2.5 text-[11px] font-black uppercase tracking-[0.15em] text-primary-foreground transition-all hover:brightness-110 active:scale-[0.98] active:brightness-95"
+            <AnimatePresence mode="wait">
+                {isExpanded && (
+                    <motion.div
+                        key="refinement-plan-content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
                     >
-                        <div className="relative z-10 flex items-center justify-center gap-2">
-                            <span>Execute Refinement</span>
-                        </div>
-                        <div className="absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500" />
-                    </button>
-                )}
+                        <CardContent className="space-y-4 px-4 pb-4">
+                            <div className="space-y-3">
+                                <AnimatePresence mode="popLayout" initial={false}>
+                                    {steps.map((step, idx) => {
+                                        const isStepExpanded = expandedSteps[idx];
+                                        return (
+                                            <motion.div
+                                                key={idx}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: 10 }}
+                                                transition={{ delay: idx * 0.05 }}
+                                                className="relative space-y-3 rounded-lg border border-border/40 bg-background/60 p-0 transition-all hover:border-primary/30 safety-accent-border group/step overflow-hidden"
+                                            >
+                                                {/* Step Header */}
+                                                <div
+                                                    className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-background/40 transition-colors"
+                                                    onClick={() => toggleStep(idx)}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-[10px] font-black text-primary border border-primary/5">
+                                                            {idx + 1}
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground font-heading">
+                                                                {step.tool_name.replace(/_/g, ' ')}
+                                                            </h4>
+                                                            <p className="text-[8px] text-muted-foreground/60 line-clamp-1">{step.step_description}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {isStepExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground/40" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/40" />}
+                                                    </div>
+                                                </div>
 
-                {status === 'executing' && (
-                    <div className="flex items-center justify-center gap-2 rounded-md border border-primary/20 bg-primary/5 py-2.5 text-[11px] font-black uppercase tracking-[0.15em] text-primary">
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                        <span>Applying Changes...</span>
-                    </div>
+                                                {/* Step Content */}
+                                                <AnimatePresence initial={false}>
+                                                    {isStepExpanded && (
+                                                        <motion.div
+                                                            key={`step-content-${idx}`}
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                        >
+                                                            <div className="px-4 pb-4 space-y-4 border-t border-border/20 pt-4">
+                                                                {renderToolInputs(step, idx)}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Global Action Button */}
+                            {!disabled && status !== 'executing' && status !== 'completed' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-6 flex items-center justify-between gap-4 border-t border-border/20 pt-6"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                                        <span className="text-[9px] font-bold uppercase tracking-widest text-primary/80">
+                                            Plan Ready
+                                        </span>
+                                    </div>
+                                    <button
+                                        disabled={isLocked}
+                                        onClick={onExecute}
+                                        className="group relative inline-flex h-10 items-center justify-center overflow-hidden rounded bg-primary px-8 text-[11px] font-black uppercase tracking-[0.2em] text-primary-foreground transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                                    >
+                                        <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-[100%]" />
+                                        Execute Refinement Plan
+                                    </button>
+                                </motion.div>
+                            )}
+
+                            {status === 'executing' && (
+                                <div className="mt-6 flex items-center justify-center gap-3 rounded-md border border-primary/20 bg-primary/5 py-4 text-[11px] font-black uppercase tracking-[0.2em] text-primary">
+                                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                    <span className="animate-pulse">Applying Changes...</span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </motion.div>
                 )}
-            </CardContent>
+            </AnimatePresence>
         </Card>
     );
 };

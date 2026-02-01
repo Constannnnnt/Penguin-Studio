@@ -11,16 +11,16 @@ import { AlertCircle, RefreshCw, Box, Camera, Lightbulb, Palette } from 'lucide-
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { apiClient } from '@/core/services/api';
-import { 
-  ApiError, 
-  NetworkError, 
+import {
+  ApiError,
+  NetworkError,
   ValidationError,
   type LoadingState,
   handleError,
   safeParseJSONMetadata,
 } from '@/shared/lib/errorHandling';
-import { 
-  useDebouncedCallback, 
+import {
+  useDebouncedCallback,
   measureOperation,
   memoize,
 } from '@/shared/lib/performance';
@@ -46,8 +46,9 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
   const lastParsedMetadataRef = React.useRef<string | null>(LAST_PARSED_METADATA_HASH);
   const lastParsedSceneRef = React.useRef<SceneConfiguration | null>(LAST_PARSED_SCENE_CACHE);
   const [activeSubTab, setActiveSubTab] = React.useState<SceneSubTab>('background');
-  
-  const sceneConfig = useConfigStore((state) => state.sceneConfig);
+
+  // Optimize subscription: we don't need sceneConfig for rendering, only for the async parsing logic.
+  // Accessing it via a ref or getState in the callback prevents SceneTab from re-rendering on every slider move.
   const setSceneConfig = useConfigStore((state) => state.setSceneConfig);
   const resetConfig = useConfigStore((state) => state.resetConfig);
 
@@ -58,7 +59,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
     isLoading: false,
   });
 
-  const validateMetadata = React.useMemo(() => 
+  const validateMetadata = React.useMemo(() =>
     memoize((metadata: unknown) => {
       return measureOperation('validateMetadata', () => {
         return safeParseJSONMetadata(metadata);
@@ -103,7 +104,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
 
     try {
       const validationResult = validateMetadata(jsonMetadata);
-      
+
       if (!validationResult.success) {
         throw new ValidationError(
           'Invalid metadata format',
@@ -127,7 +128,10 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
         progress: 80,
       });
 
-      const nextSceneConfig = buildSceneConfigFromParsed(parsedData, sceneConfig);
+      // Use getState to avoid subscribing component to updates
+      const currentConfig = useConfigStore.getState().sceneConfig;
+      const nextSceneConfig = buildSceneConfigFromParsed(parsedData, currentConfig);
+
       setSceneConfig(nextSceneConfig);
       lastParsedSceneRef.current = nextSceneConfig;
       LAST_PARSED_SCENE_CACHE = nextSceneConfig;
@@ -141,7 +145,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
       setTimeout(() => {
         setLoadingState({ isLoading: false });
       }, 500);
-      
+
       try {
         lastParsedMetadataRef.current = JSON.stringify(jsonMetadata) || null;
         LAST_PARSED_METADATA_HASH = lastParsedMetadataRef.current;
@@ -158,7 +162,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
       });
 
       let errorMessage = 'Failed to parse scene configuration';
-      
+
       if (error instanceof ValidationError) {
         errorMessage = `Validation Error: ${error.errors.join(', ')}`;
       } else if (error instanceof ApiError) {
@@ -180,7 +184,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
         retryCount: (prev.retryCount || 0) + 1,
       }));
     }
-  }, [buildSceneConfigFromParsed, validateMetadata, sceneConfig, setSceneConfig]);
+  }, [buildSceneConfigFromParsed, validateMetadata, setSceneConfig]);
 
   const handleReset = React.useCallback(() => {
     resetConfig();
@@ -222,38 +226,38 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
 
   if (loadingState.isLoading) {
     return (
-      <div className={cn('flex flex-col items-center justify-center p-8 space-y-6', className)}>
+      <div className={cn('flex flex-col items-center justify-center p-8 space-y-6 h-full', className)}>
         <div className="relative">
-          <LoadingSpinner />
+          <LoadingSpinner className="w-8 h-8 text-primary" />
           {loadingState.progress !== undefined && (
-            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
-              <div className="text-xs text-muted-foreground">
+            <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2">
+              <div className="text-[10px] font-mono font-bold text-primary/80 animate-pulse">
                 {Math.round(loadingState.progress)}%
               </div>
             </div>
           )}
         </div>
-        
-        <div className="text-center space-y-3 max-w-md">
-          <h3 className="text-lg font-medium text-foreground">
-            Processing Scene Configuration
+
+        <div className="text-center space-y-4 max-w-md w-full px-4">
+          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-primary/80 font-heading">
+            Processing Scene Data
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {loadingState.operation || 'Loading...'}
+          <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest">
+            {loadingState.operation || 'Loading operations...'}
           </p>
-          
+
           {loadingState.progress !== undefined && (
-            <div className="w-full bg-secondary rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+            <div className="w-full bg-primary/10 rounded-full h-1 border border-primary/20 overflow-hidden">
+              <div
+                className="bg-primary h-full transition-all duration-300 ease-out shadow-[0_0_10px_var(--primary)]"
                 style={{ width: `${Math.max(0, Math.min(100, loadingState.progress))}%` }}
               />
             </div>
           )}
-          
+
           {loadingState.retryCount && loadingState.retryCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Retry attempt {loadingState.retryCount}
+            <p className="text-[10px] font-mono text-destructive tracking-widest">
+              RETRY_ATTEMPT_{loadingState.retryCount}
             </p>
           )}
         </div>
@@ -286,7 +290,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
                   Dismiss
                 </button>
               </div>
-              
+
               <div className="flex gap-2 pt-2 border-t border-destructive/20">
                 <Button
                   onClick={() => {
@@ -320,7 +324,7 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
         </Alert>
       )}
 
-      <div className="flex items-center justify-center gap-1 p-1 bg-muted rounded-lg mx-4 mt-4">
+      <div className="flex items-center justify-center gap-2 p-1.5 bg-background/40 backdrop-blur-md rounded-lg mx-4 mt-4 border border-border/40 safety-accent-border border-l-0 border-t-0 border-b-0 border-r-0">
         {SCENE_SUB_TABS.map(({ id, label, icon: Icon }) => {
           const isActive = activeSubTab === id;
 
@@ -330,25 +334,22 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
               variant="ghost"
               onClick={() => setActiveSubTab(id)}
               className={cn(
-                'relative gap-2 h-10 text-sm font-medium transition-all duration-300 ease-in-out',
-                isActive 
-                  ? 'flex-grow px-4 text-primary-background shadow-sm' 
-                  : 'flex-shrink-0 w-10 px-0 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                'relative gap-2 h-9 text-[10px] font-black uppercase tracking-wider transition-all duration-300 ease-out overflow-hidden',
+                isActive
+                  ? 'flex-grow px-4 text-primary bg-primary/10 border border-primary/20 shadow-[0_0_15px_-5px_var(--primary)]'
+                  : 'flex-shrink-0 w-10 px-0 text-muted-foreground hover:text-foreground hover:bg-white/5'
               )}
             >
-              {isActive && (
-                <div className="absolute inset-0 bg-primary rounded-lg -z-10 transition-all duration-300" />
-              )}
-              <Icon 
+              <Icon
                 className={cn(
-                  'h-4 w-4 flex-shrink-0 transition-all duration-300',
-                  isActive ? 'text-primary' : 'text-current'
-                )} 
+                  'h-3.5 w-3.5 flex-shrink-0 transition-transform duration-300',
+                  isActive ? 'scale-110' : 'scale-100 group-hover:scale-105'
+                )}
               />
-              <span 
+              <span
                 className={cn(
-                  'truncate transition-all duration-300 overflow-hidden whitespace-nowrap',
-                  isActive ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0'
+                  'truncate transition-all duration-300 overflow-hidden whitespace-nowrap font-heading',
+                  isActive ? 'opacity-100 max-w-[120px] translate-x-0' : 'opacity-0 max-w-0 -translate-x-4'
                 )}
               >
                 {label}
@@ -358,30 +359,19 @@ export const SceneTab: React.FC<SceneTabProps> = ({ className }) => {
         })}
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        {activeSubTab === 'background' && (
-          <div className="h-full overflow-y-auto p-4 animate-in fade-in duration-200">
-            <BackgroundSection />
-          </div>
-        )}
-        
-        {activeSubTab === 'camera' && (
-          <div className="h-full overflow-y-auto p-4 animate-in fade-in duration-200">
-            <CameraSection />
-          </div>
-        )}
-        
-        {activeSubTab === 'lighting' && (
-          <div className="h-full overflow-y-auto p-4 animate-in fade-in duration-200">
-            <LightingSection />
-          </div>
-        )}
-        
-        {activeSubTab === 'aesthetics' && (
-          <div className="h-full overflow-y-auto p-4 animate-in fade-in duration-200">
-            <AestheticsSection />
-          </div>
-        )}
+      <div className="flex-1 overflow-hidden relative">
+        <div className={cn("absolute inset-0 overflow-y-auto p-4 animate-in fade-in duration-200", activeSubTab !== 'background' && "hidden")}>
+          <BackgroundSection />
+        </div>
+        <div className={cn("absolute inset-0 overflow-y-auto p-4 animate-in fade-in duration-200", activeSubTab !== 'camera' && "hidden")}>
+          <CameraSection />
+        </div>
+        <div className={cn("absolute inset-0 overflow-y-auto p-4 animate-in fade-in duration-200", activeSubTab !== 'lighting' && "hidden")}>
+          <LightingSection />
+        </div>
+        <div className={cn("absolute inset-0 overflow-y-auto p-4 animate-in fade-in duration-200", activeSubTab !== 'aesthetics' && "hidden")}>
+          <AestheticsSection />
+        </div>
       </div>
 
       {/* {import.meta.env.DEV && (
