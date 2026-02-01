@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot } from 'lucide-react';
+import React, { useRef, useEffect } from 'react';
+import { User, Bot } from 'lucide-react';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { InteractiveParameterEditor } from './InteractiveParameterEditor';
 import { useAgentChat, type Message } from '../hooks/useAgentChat';
@@ -10,12 +10,10 @@ export const AgentChatInterface: React.FC = () => {
     const {
         messages,
         isTyping,
-        sendMessage,
         executePlan,
         updatePlanStep
     } = useAgentChat();
 
-    const [input, setInput] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom
@@ -25,12 +23,6 @@ export const AgentChatInterface: React.FC = () => {
         }
     }, [messages, isTyping]);
 
-    const handleSendMessage = () => {
-        if (!input.trim()) return;
-        sendMessage(input);
-        setInput('');
-    };
-
     const handleExecutePlan = (msgId: string) => {
         executePlan(msgId);
     };
@@ -38,7 +30,7 @@ export const AgentChatInterface: React.FC = () => {
     return (
         <div className="flex h-full flex-col bg-background/40 backdrop-blur-sm">
             <PanelHeader
-                title="Penguin Chat"
+                title=""
                 position="right"
                 actions={<ModeToggle />}
             />
@@ -73,9 +65,16 @@ export const AgentChatInterface: React.FC = () => {
                                     />
                                 )}
 
-                                <span className="px-2 text-[10px] font-medium text-muted-foreground opacity-50">
-                                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
+                                <div className="flex items-center gap-2 px-2 text-[10px] font-medium text-muted-foreground opacity-50">
+                                    <span>
+                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    {msg.status === 'awaiting_input' && (
+                                        <span className="rounded bg-muted/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            Awaiting Input
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -95,31 +94,7 @@ export const AgentChatInterface: React.FC = () => {
                 </div>
             </ScrollArea>
 
-            {/* Input Area */}
-            <div className="border-t border-border/50 p-3 bg-background/80 backdrop-blur">
-                <div className="w-full">
-                    <div className="relative flex items-center gap-2 rounded-xl bg-muted/30 p-1 pl-3 transition-all focus-within:ring-2 focus-within:ring-primary/20">
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                            placeholder="Ask Penguin to refine your image..."
-                            className="flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground/50"
-                        />
-                        <button
-                            onClick={handleSendMessage}
-                            disabled={!input.trim()}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-                        >
-                            <Send className="h-4 w-4" />
-                        </button>
-                    </div>
-                    <p className="mt-2 text-center text-[10px] text-muted-foreground/40 tracking-tight">
-                        Try: <span className="hover:text-primary cursor-pointer transition-colors" onClick={() => setInput("Add dramatic lighting with soft shadows")}>"Add dramatic lighting with soft shadows"</span>
-                    </p>
-                </div>
-            </div>
+            <div className="h-4" />
         </div>
     );
 };
