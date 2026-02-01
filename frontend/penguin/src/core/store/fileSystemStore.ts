@@ -90,9 +90,10 @@ export const useFileSystemStore = create<FileSystemState>()(
           ? (node.url.startsWith('http') ? node.url : `${env.apiBaseUrl}${node.url}`)
           : null;
 
-        // Check if this is a generated.png in a generation folder (outputs/*)
+        // Check if this is a base image in a generation folder (outputs/*)
         const pathParts = node.path.split('/');
-        const isGeneratedImage = node.name === 'generated.png' && pathParts.length >= 2;
+        const isGeneratedImage =
+          (node.name === 'generated.png' || node.name === 'original.png') && pathParts.length >= 2;
         
         if (isGeneratedImage) {
           // Extract generation ID from path (e.g., /outputs/gen_123/generated.png -> gen_123)
@@ -193,14 +194,47 @@ export const useFileSystemStore = create<FileSystemState>()(
             ? response.image_url
             : `${env.apiBaseUrl}${response.image_url}`;
 
-          // Extract seed from metadata if available
-          const seed = response.metadata?.seed as number | undefined;
+          const coerceSeed = (value: unknown): number | null => {
+            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            if (typeof value === 'string') {
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          };
+
+          const metadata = response.metadata as Record<string, unknown> | undefined;
+          const metadataParams = (metadata?.parameters as Record<string, unknown> | undefined) || undefined;
+          const seedCandidates = [
+            response.seed,
+            metadata?.seed,
+            metadataParams?.seed,
+            (response.structured_prompt as Record<string, unknown> | undefined)?.seed,
+          ];
+
+          let seed: number | null = null;
+          for (const candidate of seedCandidates) {
+            const parsed = coerceSeed(candidate);
+            if (parsed !== null) {
+              seed = parsed;
+              break;
+            }
+          }
+
+          if (seed !== null) {
+            const { sceneConfig, setSceneConfig } = useConfigStore.getState();
+            if (sceneConfig.seed !== seed) {
+              setSceneConfig({ ...sceneConfig, seed });
+            }
+          }
+
+          const imageFilename = response.image_url.split('/').pop() || 'generated.png';
 
           set({
-            selectedFile: `/outputs/${generationId}/generated.png`,
+            selectedFile: `/results/${generationId}/${imageFilename}`,
             selectedFileUrl: absoluteUrl,
             currentGenerationId: generationId,
-            currentSeed: seed ?? null,
+            currentSeed: seed,
             promptVersions: response.prompt_versions,
             isLoadingGeneration: false,
             // Store original structured prompt for refinement

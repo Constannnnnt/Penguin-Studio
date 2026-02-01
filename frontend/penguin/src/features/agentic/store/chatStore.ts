@@ -7,7 +7,14 @@ import { useLayoutStore } from '@/core/store/layoutStore';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { useImageEditStore } from '@/features/imageEdit/store/imageEditStore';
 import { editTracker } from '@/shared/lib/editTracker';
-import type { PlanStep, AgentMessage as Message, LightingDirectionValue } from '@/core/types';
+import type {
+    PlanStep,
+    AgentMessage as Message,
+    LightingDirectionValue,
+    PenguinConfig,
+    SceneConfiguration,
+    SceneObject,
+} from '@/core/types';
 
 interface ChatState {
     messages: Message[];
@@ -101,6 +108,164 @@ const parseLightingDirectionInput = (
     }
 
     return changed ? next : null;
+};
+
+const cloneValue = <T>(value: T): T => {
+    if (typeof structuredClone === 'function') {
+        return structuredClone(value);
+    }
+    return JSON.parse(JSON.stringify(value)) as T;
+};
+
+const DEFAULT_SCENE_OBJECT: SceneObject = {
+    description: '',
+    location: 'center',
+    relative_size: 'medium',
+    shape_and_color: '',
+    orientation: 'front-facing',
+};
+
+const derivePlanConfig = (
+    steps: PlanStep[],
+    baseConfig: PenguinConfig,
+    baseSceneConfig: SceneConfiguration
+): { config: PenguinConfig; sceneConfig: SceneConfiguration } => {
+    const config = cloneValue(baseConfig);
+    const sceneConfig = cloneValue(baseSceneConfig);
+    const segmentationResults = useSegmentationStore.getState().results;
+
+    const ensureObject = (index: number): void => {
+        if (!config.objects[index]) {
+            config.objects[index] = { ...DEFAULT_SCENE_OBJECT };
+        }
+    };
+
+    steps.forEach((step) => {
+        const input = step.tool_input || {};
+
+        switch (step.tool_name) {
+            case 'update_lighting': {
+                if (input.conditions !== undefined) {
+                    sceneConfig.lighting.conditions = String(input.conditions);
+                }
+                if (input.shadows !== undefined) {
+                    const next = Number(input.shadows);
+                    if (!Number.isNaN(next)) {
+                        sceneConfig.lighting.shadows = next as SceneConfiguration['lighting']['shadows'];
+                    }
+                }
+                const currentDirection = sceneConfig.lighting.direction;
+                const parsedDirection = parseLightingDirectionInput(input.direction, currentDirection);
+                if (parsedDirection) {
+                    sceneConfig.lighting.direction = parsedDirection;
+                } else if (
+                    input.direction_x !== undefined ||
+                    input.direction_y !== undefined ||
+                    input.rotation !== undefined ||
+                    input.tilt !== undefined
+                ) {
+                    sceneConfig.lighting.direction = {
+                        ...currentDirection,
+                        x:
+                            input.direction_x !== undefined
+                                ? Number(input.direction_x)
+                                : currentDirection.x,
+                        y:
+                            input.direction_y !== undefined
+                                ? Number(input.direction_y)
+                                : currentDirection.y,
+                        rotation:
+                            input.rotation !== undefined
+                                ? Number(input.rotation)
+                                : currentDirection.rotation,
+                        tilt:
+                            input.tilt !== undefined ? Number(input.tilt) : currentDirection.tilt,
+                    };
+                }
+                break;
+            }
+            case 'update_photographic': {
+                if (input.depth_of_field !== undefined) {
+                    sceneConfig.photographic_characteristics.depth_of_field = Number(
+                        input.depth_of_field
+                    );
+                }
+                if (input.focus !== undefined) {
+                    sceneConfig.photographic_characteristics.focus = Number(input.focus);
+                }
+                if (input.camera_angle !== undefined) {
+                    sceneConfig.photographic_characteristics.camera_angle = String(input.camera_angle);
+                }
+                if (input.lens_focal_length !== undefined) {
+                    sceneConfig.photographic_characteristics.lens_focal_length = String(
+                        input.lens_focal_length
+                    );
+                }
+                break;
+            }
+            case 'update_aesthetics': {
+                if (input.composition !== undefined) {
+                    sceneConfig.aesthetics.composition = String(input.composition);
+                }
+                if (input.color_scheme !== undefined) {
+                    sceneConfig.aesthetics.color_scheme = String(input.color_scheme);
+                }
+                if (input.mood_atmosphere !== undefined) {
+                    sceneConfig.aesthetics.mood_atmosphere = String(input.mood_atmosphere);
+                } else if (input.mood !== undefined) {
+                    sceneConfig.aesthetics.mood_atmosphere = String(input.mood);
+                }
+                break;
+            }
+            case 'update_background': {
+                if (input.background_setting !== undefined) {
+                    sceneConfig.background_setting = String(input.background_setting);
+                } else if (input.setting !== undefined) {
+                    sceneConfig.background_setting = String(input.setting);
+                }
+                break;
+            }
+            case 'adjust_object_property': {
+                const maskId = String(input.mask_id || '');
+                const property = String(input.property || '');
+                if (!property) break;
+
+                let index = -1;
+                if (typeof input.object_index === 'number') {
+                    index = input.object_index;
+                } else if (typeof input.index === 'number') {
+                    index = input.index;
+                } else if (maskId && segmentationResults?.masks) {
+                    index = segmentationResults.masks.findIndex((mask) => mask.mask_id === maskId);
+                }
+
+                if (index < 0) break;
+                ensureObject(index);
+                (config.objects[index] as Record<string, unknown>)[property] = input.value;
+                break;
+            }
+            default:
+                break;
+        }
+    });
+
+    config.background_setting = sceneConfig.background_setting;
+    config.aspect_ratio = sceneConfig.aspect_ratio || config.aspect_ratio;
+    config.lighting = { ...config.lighting, ...sceneConfig.lighting };
+    config.photographic_characteristics = {
+        ...config.photographic_characteristics,
+        ...sceneConfig.photographic_characteristics,
+    };
+    config.aesthetics = { ...config.aesthetics, ...sceneConfig.aesthetics };
+
+    if (sceneConfig.aesthetics?.style_medium) {
+        config.style_medium = sceneConfig.aesthetics.style_medium;
+    }
+    if (sceneConfig.aesthetics?.aesthetic_style) {
+        config.artistic_style = sceneConfig.aesthetics.aesthetic_style;
+    }
+
+    return { config, sceneConfig };
 };
 
 const applyPlanSteps = (steps: PlanStep[]): void => {
@@ -264,6 +429,31 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                 break;
         }
     });
+};
+
+const areInputsEqual = (a: any, b: any): boolean => {
+    if (a === b) return true;
+    if (a === null || b === null || a === undefined || b === undefined) return false;
+    if (typeof a !== typeof b) return false;
+    if (typeof a !== 'object') return a === b;
+
+    if (Array.isArray(a) || Array.isArray(b)) {
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i += 1) {
+            if (!areInputsEqual(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+        if (!areInputsEqual(a[key], b[key])) return false;
+    }
+    return true;
 };
 
 export const useChatStore = create<ChatState>()(
@@ -436,9 +626,21 @@ export const useChatStore = create<ChatState>()(
                     messages: messages.map(m => m.id === msgId ? { ...m, status: 'executing' as const } : m)
                 });
 
+                const configStore = useConfigStore.getState();
+                const { config: planConfig } = derivePlanConfig(
+                    steps,
+                    configStore.config,
+                    configStore.sceneConfig
+                );
+
                 applyPlanSteps(steps);
                 const modificationPrompt = editTracker.getModificationPrompt();
-                useLayoutStore.getState().workspaceHandlers?.handleRefine?.(modificationPrompt || undefined);
+                const workspaceHandlers = useLayoutStore.getState().workspaceHandlers;
+                if (workspaceHandlers?.handleRefineWithConfig) {
+                    workspaceHandlers.handleRefineWithConfig(planConfig, modificationPrompt || undefined);
+                } else {
+                    workspaceHandlers?.handleRefine?.(modificationPrompt || undefined);
+                }
 
                 set({
                     messages: get().messages.map(m => m.id === msgId ? { ...m, status: 'completed' as const } : m),
@@ -447,15 +649,23 @@ export const useChatStore = create<ChatState>()(
             },
 
             updatePlanStep: (msgId: string, stepIdx: number, updatedInput: any) => {
-                set({
-                    messages: get().messages.map(msg => {
+                set((state) => {
+                    let didChange = false;
+                    const nextMessages = state.messages.map((msg) => {
                         if (msg.id === msgId && msg.plan) {
+                            const existing = msg.plan[stepIdx];
+                            if (existing && areInputsEqual(existing.tool_input, updatedInput)) {
+                                return msg;
+                            }
                             const newPlan = [...msg.plan];
                             newPlan[stepIdx] = { ...newPlan[stepIdx], tool_input: updatedInput };
+                            didChange = true;
                             return { ...msg, plan: newPlan };
                         }
                         return msg;
-                    })
+                    });
+                    if (!didChange) return state;
+                    return { messages: nextMessages };
                 });
             },
         }),

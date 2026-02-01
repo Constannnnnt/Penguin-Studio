@@ -77,6 +77,10 @@ export const useGeneration = () => {
       
       if (response.seed !== undefined) {
         lastSeedRef.current = response.seed;
+        const { sceneConfig, setSceneConfig } = useConfigStore.getState();
+        if (sceneConfig.seed !== response.seed) {
+          setSceneConfig({ ...sceneConfig, seed: response.seed });
+        }
       }
       if (response.structured_prompt) {
         setStructuredPrompt(response.structured_prompt);

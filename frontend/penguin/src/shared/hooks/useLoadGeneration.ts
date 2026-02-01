@@ -96,6 +96,40 @@ export const useLoadGeneration = () => {
         segmentationStore.setResults(segmentationResults);
       }
 
+      const coerceSeed = (value: unknown): number | null => {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+      };
+
+      const metadata = response.metadata as Record<string, unknown> | undefined;
+      const metadataParams = (metadata?.parameters as Record<string, unknown> | undefined) || undefined;
+      const seedCandidates = [
+        response.seed,
+        metadata?.seed,
+        metadataParams?.seed,
+        (response.structured_prompt as Record<string, unknown> | undefined)?.seed,
+      ];
+
+      let seed: number | null = null;
+      for (const candidate of seedCandidates) {
+        const parsed = coerceSeed(candidate);
+        if (parsed !== null) {
+          seed = parsed;
+          break;
+        }
+      }
+
+      if (seed !== null) {
+        const { sceneConfig, setSceneConfig } = useConfigStore.getState();
+        if (sceneConfig.seed !== seed) {
+          setSceneConfig({ ...sceneConfig, seed });
+        }
+      }
+
       // 3. Update local state
       setCurrentGenerationId(generationId);
       setPromptVersions(response.prompt_versions);
