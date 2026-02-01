@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
@@ -14,6 +15,11 @@ from app.utils.logging import setup_logging
 from app.utils.middleware import RequestLoggingMiddleware
 
 setup_logging()
+
+# Ensure Google API key is available for ADK/Gemini clients
+if settings.google_api_key:
+    os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
+    os.environ.setdefault("GEMINI_API_KEY", settings.google_api_key)
 
 
 class CORSStaticFiles(StaticFiles):

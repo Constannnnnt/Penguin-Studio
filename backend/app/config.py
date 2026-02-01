@@ -64,5 +64,10 @@ class Settings(BaseSettings):
         default=None, description="Bria API key for image generation"
     )
 
+    # Google AI API Configuration (Gemini / ADK)
+    google_api_key: Optional[str] = Field(
+        default=None, description="Google AI API key for Gemini/ADK"
+    )
+
 
 settings = Settings()
