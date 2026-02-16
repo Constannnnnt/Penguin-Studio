@@ -7,12 +7,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
-from app.api.dependencies import cleanup_dependencies, get_file_service, get_sam3_model
+from app.api.dependencies import (
+    cleanup_dependencies,
+    get_file_service,
+    get_sam3_model,
+    get_segmentation_service,
+)
 from app.api.routes import segmentation, websocket, scene_parsing, generation
 from app.config import settings
 from app.utils.error_handlers import register_error_handlers
 from app.utils.logging import setup_logging
-from app.utils.middleware import RequestLoggingMiddleware
 
 setup_logging()
 
@@ -20,36 +24,6 @@ setup_logging()
 if settings.google_api_key:
     os.environ.setdefault("GOOGLE_API_KEY", settings.google_api_key)
     os.environ.setdefault("GEMINI_API_KEY", settings.google_api_key)
-
-
-class CORSStaticFiles(StaticFiles):
-    """StaticFiles with CORS headers for cross-origin access."""
-
-    async def __call__(self, scope, receive, send) -> None:
-        # Handle OPTIONS preflight requests
-        if scope["type"] == "http" and scope["method"] == "OPTIONS":
-            response = Response(
-                status_code=200,
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
-                },
-            )
-            await response(scope, receive, send)
-            return
-
-        # Wrap send to add CORS headers to response
-        async def send_with_cors(message):
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append((b"access-control-allow-origin", b"*"))
-                headers.append((b"access-control-allow-methods", b"GET, OPTIONS"))
-                headers.append((b"access-control-allow-headers", b"*"))
-                message["headers"] = headers
-            await send(message)
-
-        await super().__call__(scope, receive, send_with_cors)
 
 
 @asynccontextmanager
@@ -68,6 +42,10 @@ async def lifespan(app: FastAPI):
         sam3_model = get_sam3_model()
         await sam3_model.load()
         logger.info("SAM3 model loaded successfully")
+
+        logger.info("Initializing Segmentation Service...")
+        get_segmentation_service()
+        logger.info("Segmentation Service initialized")
     except Exception as e:
         logger.exception(f"Failed to load SAM3 model: {e}")
         raise
@@ -122,13 +100,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # app.add_middleware(RequestLoggingMiddleware)
-    # logger.info("Request logging middleware registered")
-
     # CORS middleware for API routes
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -146,10 +121,10 @@ def create_app() -> FastAPI:
 
     settings.outputs_dir.mkdir(parents=True, exist_ok=True)
     app.mount(
-        "/outputs", CORSStaticFiles(directory=str(settings.outputs_dir)), name="outputs"
+        "/outputs", StaticFiles(directory=str(settings.outputs_dir)), name="outputs"
     )
     logger.info(
-        f"Static files mounted at /outputs -> {settings.outputs_dir} (with CORS)"
+        f"Static files mounted at /outputs -> {settings.outputs_dir}"
     )
 
     return app
