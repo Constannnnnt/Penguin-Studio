@@ -52,8 +52,11 @@ class FileService:
             raise RuntimeError(f"Failed to save uploaded file: {e}") from e
 
     async def save_mask(
-        self, mask_array: torch.Tensor, result_id: str, mask_index: int,
-        output_dir: Optional[Path] = None
+        self,
+        mask_array: torch.Tensor,
+        result_id: str,
+        mask_index: int,
+        output_dir: Optional[Path] = None,
     ) -> str:
         """Save mask as PNG and return URL."""
         try:
@@ -135,9 +138,7 @@ class FileService:
                                 f"Deleted old result directory: {result_dir.name}"
                             )
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to delete directory {result_dir}: {e}"
-                        )
+                        logger.warning(f"Failed to delete directory {result_dir}: {e}")
 
             logger.info(
                 f"Cleanup completed: deleted {deleted_count} result directories "
