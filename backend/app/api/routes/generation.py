@@ -8,15 +8,17 @@ refining images with structured prompts, and managing generation history.
 import asyncio
 import json
 import uuid
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_segmentation_service
 from app.config import settings
-from app.utils.filesystem import glob_async, read_json_async, write_json_async, validate_path
+from app.utils.filesystem import glob_async, read_json_async, write_json_async, safe_join
 from app.services.bria_service import (
     BriaService,
     GenerationParameters,
@@ -357,13 +359,7 @@ async def get_generation(
     from app.config import settings
     import json
 
-    try:
-        generation_dir = validate_path(settings.outputs_dir, generation_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -491,13 +487,7 @@ async def segment_generation(
     """
     from io import BytesIO
 
-    try:
-        generation_dir = validate_path(settings.outputs_dir, generation_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -524,8 +514,6 @@ async def segment_generation(
         image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
 
         # Create file-like objects for segmentation service
-        from fastapi import UploadFile
-
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
@@ -600,13 +588,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
-    try:
-        generation_dir = validate_path(settings.outputs_dir, generation_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -699,13 +681,7 @@ async def save_prompt_version(
     """
     from datetime import datetime
 
-    try:
-        generation_dir = validate_path(settings.outputs_dir, generation_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(

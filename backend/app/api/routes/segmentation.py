@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -18,9 +19,9 @@ from app.models.schemas import (
     SegmentationResponse,
 )
 from app.services.file_service import FileService
+from app.utils.filesystem import safe_join, write_json_async
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
-from app.utils.filesystem import write_json_async
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -208,7 +209,7 @@ async def segment_image(
 
             metadata_content = await metadata.read()
             try:
-                json.loads(metadata_content)
+                await asyncio.to_thread(json.loads, metadata_content)
             except json.JSONDecodeError as e:
                 raise ValidationException(
                     "Invalid JSON metadata",
@@ -269,7 +270,7 @@ async def get_result(
         logger.info(f"Retrieving result: result_id={result_id}")
 
         file_service = segmentation_service.file_service
-        result_dir = file_service.outputs_dir / result_id
+        result_dir = safe_join(file_service.outputs_dir, result_id)
 
         if not result_dir.exists():
             raise NotFoundException(
@@ -333,7 +334,7 @@ async def save_result_metadata(
     The payload mirrors the example JSON format (see backend/examples/*.json).
     """
     try:
-        result_dir = file_service.outputs_dir / result_id
+        result_dir = safe_join(file_service.outputs_dir, result_id)
         if not result_dir.exists():
             raise NotFoundException(
                 "Result not found", details={"result_id": result_id}

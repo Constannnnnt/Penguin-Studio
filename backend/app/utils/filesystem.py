@@ -42,26 +42,27 @@ async def glob_async(path: Path, pattern: str) -> List[Path]:
     return await loop.run_in_executor(None, list, path.glob(pattern))
 
 
-def validate_path(base_dir: Path, sub_path: str) -> Path:
+def safe_join(base: Path, *parts: str) -> Path:
     """
-    Validate that a path constructed from sub_path is within base_dir.
+    Safely join path parts to a base directory, preventing path traversal.
 
     Args:
-        base_dir: The base directory to restrict access to.
-        sub_path: The sub-path to join with base_dir.
+        base: The base directory that should contain the resulting path.
+        *parts: Path parts to join to the base directory.
 
     Returns:
-        The resolved path if valid.
+        The resolved Path object.
 
     Raises:
-        ValueError: If the resolved path is outside base_dir.
+        ValueError: If the resulting path is outside the base directory.
     """
-    # Join the paths
-    full_path = (base_dir / sub_path).resolve()
-    resolved_base = base_dir.resolve()
+    base_path = base.resolve()
+    target_path = base_path.joinpath(*parts).resolve()
 
-    # Check if full_path starts with resolved_base
-    if not full_path.is_relative_to(resolved_base):
-        raise ValueError("Path traversal attempt")
+    if not target_path.is_relative_to(base_path):
+        raise ValueError(
+            f"Security Alert: Path traversal detected. "
+            f"Target {target_path} is outside base {base_path}"
+        )
 
-    return full_path
+    return target_path
