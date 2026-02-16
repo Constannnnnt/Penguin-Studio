@@ -1,16 +1,22 @@
 import json
 from pathlib import Path
 from typing import Iterable
+import sys
+
+# Ensure backend directory is in path
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# Add thirdparty/sam3 directory to sys.path
+THIRDPARTY_SAM3 = ROOT.parent / "thirdparty" / "sam3"
+if str(THIRDPARTY_SAM3) not in sys.path:
+    sys.path.append(str(THIRDPARTY_SAM3))
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 from PIL import Image
-import sys
-# Ensure backend directory is in path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from app.detection.types import DetectionResult # noqa: E402
 from app.setup_model import setup_models # noqa: E402
@@ -83,7 +89,7 @@ def _save_json(result: DetectionResult, output_path: Path) -> None:
 
 
 def main() -> None:
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = ROOT
     image_path = project_root / "examples" / "03.png"
     prompt_json = project_root / "examples" / "03.json"
     outputs_dir = project_root / "outputs"
