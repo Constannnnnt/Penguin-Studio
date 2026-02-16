@@ -345,6 +345,36 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
     const nextObjects = [...baseObjects];
 
+    const isPlaceholderObject = (obj: SceneObject): boolean => {
+      const description = typeof obj.description === 'string' ? obj.description.trim() : '';
+      const shape = typeof obj.shape_and_color === 'string' ? obj.shape_and_color.trim() : '';
+      const hasOptionalDetails = Boolean(
+        (obj.relationship && String(obj.relationship).trim()) ||
+        (obj.texture && String(obj.texture).trim()) ||
+        (obj.appearance_details && String(obj.appearance_details).trim())
+      );
+
+      return (
+        !description &&
+        !shape &&
+        !hasOptionalDetails &&
+        obj.location === 'center' &&
+        obj.relative_size === 'medium' &&
+        obj.orientation === 'front-facing'
+      );
+    };
+
+    const pickValue = (baseValue: unknown, metaValue: unknown, fallbackValue: unknown, preferMeta = false) => {
+      const baseText = baseValue === undefined || baseValue === null ? '' : String(baseValue).trim();
+      const metaText = metaValue === undefined || metaValue === null ? '' : String(metaValue).trim();
+      const fallbackText = fallbackValue === undefined || fallbackValue === null ? '' : String(fallbackValue).trim();
+
+      if (preferMeta) {
+        return metaText || baseText || fallbackText;
+      }
+      return baseText || metaText || fallbackText;
+    };
+
     masks.forEach((mask, index) => {
       const meta = mask.objectMetadata;
       if (!meta) return;
@@ -359,16 +389,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
       };
 
       const base = existing ? { ...existing } : fallback;
+      const preferMeta = !existing || isPlaceholderObject(base);
       const updated: SceneObject = {
-        ...base,
-        description: meta.description || base.description,
-        location: (meta.location || base.location) as SceneObject['location'],
-        relationship: meta.relationship || base.relationship,
-        relative_size: (meta.relative_size || base.relative_size) as SceneObject['relative_size'],
-        shape_and_color: meta.shape_and_color || base.shape_and_color,
-        texture: meta.texture || base.texture,
-        appearance_details: meta.appearance_details || base.appearance_details,
-        orientation: (meta.orientation || base.orientation) as SceneObject['orientation'],
+        description: pickValue(base.description, meta.description, fallback.description, preferMeta),
+        location: pickValue(base.location, meta.location, fallback.location, preferMeta) as SceneObject['location'],
+        relationship: pickValue(base.relationship, meta.relationship, fallback.relationship, preferMeta),
+        relative_size: pickValue(base.relative_size, meta.relative_size, fallback.relative_size, preferMeta) as SceneObject['relative_size'],
+        shape_and_color: pickValue(base.shape_and_color, meta.shape_and_color, fallback.shape_and_color, preferMeta),
+        texture: pickValue(base.texture, meta.texture, fallback.texture, preferMeta),
+        appearance_details: pickValue(
+          base.appearance_details,
+          meta.appearance_details,
+          fallback.appearance_details,
+          preferMeta
+        ),
+        orientation: pickValue(base.orientation, meta.orientation, fallback.orientation, preferMeta) as SceneObject['orientation'],
       };
 
       nextObjects[index] = updated;
