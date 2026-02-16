@@ -429,6 +429,101 @@ class TestSegmentationService:
         assert prompt_info[0]["text"] == "second"
 
     @pytest.mark.asyncio
+    async def test_tiered_detection_uses_relaxed_threshold_for_particle_objects(
+        self, segmentation_service, mock_sam3_model
+    ):
+        low_conf_particle = DetectionResult(
+            boxes_xyxy=torch.tensor([[1.0, 2.0, 3.0, 4.0]]),
+            scores=torch.tensor([0.25]),  # below 0.4 global threshold
+            labels=["unused"],
+            masks=torch.ones((1, 1, 10, 10), dtype=torch.bool),
+        )
+
+        plans = PromptPlanSet(
+            label="snowflakes",
+            plans=[
+                PromptPlan(
+                    label="snowflakes",
+                    tier=PromptTier.CORE,
+                    text="snowflakes",
+                ),
+            ],
+        )
+
+        mock_sam3_model.detect = Mock(return_value=low_conf_particle)
+
+        image = Mock(spec=Image.Image)
+        image.width = 10
+        image.height = 10
+
+        result, prompt_info = segmentation_service._run_tiered_detection(image, [plans])
+
+        assert result.boxes_xyxy.shape[0] == 1
+        assert result.labels == ["snowflakes"]
+        assert len(prompt_info) == 1
+        assert prompt_info[0]["tier"] == PromptTier.CORE.value
+
+    @pytest.mark.asyncio
+    async def test_tiered_detection_keeps_default_threshold_for_non_particle_objects(
+        self, segmentation_service, mock_sam3_model
+    ):
+        low_conf_non_particle = DetectionResult(
+            boxes_xyxy=torch.tensor([[1.0, 2.0, 3.0, 4.0]]),
+            scores=torch.tensor([0.25]),  # below default threshold
+            labels=["unused"],
+            masks=torch.ones((1, 1, 10, 10), dtype=torch.bool),
+        )
+
+        plans = PromptPlanSet(
+            label="car",
+            plans=[
+                PromptPlan(
+                    label="car",
+                    tier=PromptTier.CORE,
+                    text="car",
+                ),
+            ],
+        )
+
+        mock_sam3_model.detect = Mock(return_value=low_conf_non_particle)
+
+        image = Mock(spec=Image.Image)
+        image.width = 10
+        image.height = 10
+
+        result, prompt_info = segmentation_service._run_tiered_detection(image, [plans])
+
+        assert result.boxes_xyxy.shape[0] == 0
+        assert result.labels == []
+        assert prompt_info == []
+
+    def test_deduplicate_detection_result_merges_overlapping_masks(self, segmentation_service):
+        overlapping_masks = torch.zeros((2, 1, 16, 16), dtype=torch.bool)
+        overlapping_masks[0, 0, 2:10, 2:10] = True
+        overlapping_masks[1, 0, 3:11, 3:11] = True
+
+        detection = DetectionResult(
+            boxes_xyxy=torch.tensor(
+                [[2.0, 2.0, 9.0, 9.0], [3.0, 3.0, 10.0, 10.0]], dtype=torch.float32
+            ),
+            scores=torch.tensor([0.92, 0.88], dtype=torch.float32),
+            labels=["person", "person"],
+            masks=overlapping_masks,
+        )
+        prompt_info = [
+            {"object_id": "object_0", "text": "person"},
+            {"object_id": "object_0", "text": "person"},
+        ]
+
+        deduped, deduped_info = segmentation_service._deduplicate_detection_result(
+            detection, prompt_info
+        )
+
+        assert deduped.boxes_xyxy.shape[0] == 1
+        assert deduped.masks.shape[0] == 1
+        assert len(deduped_info) == 1
+
+    @pytest.mark.asyncio
     async def test_response_includes_prompt_tier_and_text(
         self,
         segmentation_service,

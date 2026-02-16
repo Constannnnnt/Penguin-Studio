@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 from pathlib import Path
@@ -402,6 +403,45 @@ class SegmentationService:
 
     # Minimum confidence threshold for accepting detections
     MIN_CONFIDENCE_THRESHOLD = 0.4
+    PARTICLE_CONFIDENCE_THRESHOLD = 0.22
+    PARTICLE_KEYWORDS = {
+        "snowflake",
+        "snowflakes",
+        "snow",
+        "confetti",
+        "spark",
+        "sparks",
+        "dust",
+        "smoke",
+        "mist",
+        "fog",
+        "pollen",
+        "raindrop",
+        "raindrops",
+        "rain",
+        "droplet",
+        "droplets",
+        "petal",
+        "petals",
+        "leaf",
+        "leaves",
+        "bubble",
+        "bubbles",
+    }
+
+    @classmethod
+    def _contains_particle_keywords(cls, prompt_set: PromptPlanSet) -> bool:
+        haystack = " ".join(
+            [prompt_set.label] + [plan.text for plan in prompt_set.plans]
+        ).lower()
+        tokens = set(re.findall(r"[a-z0-9]+", haystack))
+        return any(keyword in tokens for keyword in cls.PARTICLE_KEYWORDS)
+
+    @classmethod
+    def _confidence_threshold_for_prompt_set(cls, prompt_set: PromptPlanSet) -> float:
+        if cls._contains_particle_keywords(prompt_set):
+            return cls.PARTICLE_CONFIDENCE_THRESHOLD
+        return cls.MIN_CONFIDENCE_THRESHOLD
 
     def _run_tiered_detection(
         self, image: Image.Image, prompt_sets: List[PromptPlanSet]
@@ -424,6 +464,9 @@ class SegmentationService:
             best_result: Optional[DetectionResult] = None
             best_plan: Optional[Any] = None
             best_score: float = 0.0
+            object_confidence_threshold = self._confidence_threshold_for_prompt_set(
+                prompt_set
+            )
 
             # Try all tiers and pick the best one
             for plan in prompt_set.plans:
@@ -451,7 +494,7 @@ class SegmentationService:
 
             # Use best result if it meets threshold
             if best_result is not None and best_plan is not None:
-                if best_score >= self.MIN_CONFIDENCE_THRESHOLD:
+                if best_score >= object_confidence_threshold:
                     relabeled = self._relabel_detection(best_result, best_plan.label)
                     per_object_results.append(relabeled)
                     
@@ -470,15 +513,20 @@ class SegmentationService:
                 else:
                     logger.warning(
                         f"Best detection for object_{obj_idx} ({best_plan.label}) "
-                        f"has low confidence {best_score:.2f} < {self.MIN_CONFIDENCE_THRESHOLD}, skipping"
+                        f"has low confidence {best_score:.2f} < {object_confidence_threshold:.2f}, skipping"
                     )
             else:
+                attempted_prompts = [plan.text for plan in prompt_set.plans]
                 logger.warning(
-                    f"No detection found for object_{obj_idx} ({prompt_set.label}) across all tiers"
+                    f"No detection found for object_{obj_idx} ({prompt_set.label}) "
+                    f"across {len(attempted_prompts)} prompt candidate(s): {attempted_prompts}"
                 )
 
         combined_result = self._combine_detection_results(per_object_results, fallback_size)
-        return combined_result, prompt_info
+        deduped_result, deduped_prompt_info = self._deduplicate_detection_result(
+            combined_result, prompt_info
+        )
+        return deduped_result, deduped_prompt_info
 
     @staticmethod
     def _relabel_detection(result: DetectionResult, label: str) -> DetectionResult:
@@ -522,6 +570,145 @@ class SegmentationService:
             labels=labels,
             masks=masks,
         )
+
+    @classmethod
+    def _box_iou(cls, box_a: torch.Tensor, box_b: torch.Tensor) -> float:
+        x1 = max(float(box_a[0]), float(box_b[0]))
+        y1 = max(float(box_a[1]), float(box_b[1]))
+        x2 = min(float(box_a[2]), float(box_b[2]))
+        y2 = min(float(box_a[3]), float(box_b[3]))
+
+        inter_w = max(0.0, x2 - x1)
+        inter_h = max(0.0, y2 - y1)
+        inter = inter_w * inter_h
+
+        area_a = max(0.0, float(box_a[2] - box_a[0])) * max(
+            0.0, float(box_a[3] - box_a[1])
+        )
+        area_b = max(0.0, float(box_b[2] - box_b[0])) * max(
+            0.0, float(box_b[3] - box_b[1])
+        )
+        union = area_a + area_b - inter
+        if union <= 0.0:
+            return 0.0
+        return inter / union
+
+    @classmethod
+    def _mask_iou(cls, mask_a: torch.Tensor, mask_b: torch.Tensor) -> float:
+        a = mask_a.bool()
+        b = mask_b.bool()
+        inter = (a & b).sum().item()
+        union = (a | b).sum().item()
+        if union <= 0:
+            return 0.0
+        return float(inter) / float(union)
+
+    @classmethod
+    def _bbox_from_mask_or_fallback(
+        cls, mask: torch.Tensor, fallback_box: torch.Tensor
+    ) -> torch.Tensor:
+        squeezed = mask
+        while squeezed.dim() > 2:
+            squeezed = squeezed.squeeze(0)
+        coords = torch.nonzero(squeezed, as_tuple=False)
+        if coords.numel() == 0:
+            return fallback_box
+
+        y_coords = coords[:, 0].float()
+        x_coords = coords[:, 1].float()
+        x1 = x_coords.min()
+        y1 = y_coords.min()
+        x2 = x_coords.max()
+        y2 = y_coords.max()
+        return torch.stack([x1, y1, x2, y2]).to(fallback_box.device)
+
+    @classmethod
+    def _deduplicate_detection_result(
+        cls,
+        result: DetectionResult,
+        prompt_info: List[Dict[str, Any]],
+    ) -> tuple[DetectionResult, List[Dict[str, Any]]]:
+        num_masks = int(result.masks.shape[0]) if result.masks.ndim >= 1 else 0
+        if num_masks <= 1:
+            return result, prompt_info
+
+        sorted_indices = sorted(
+            range(num_masks),
+            key=lambda idx: float(result.scores[idx].item()),
+            reverse=True,
+        )
+
+        kept_indices: List[int] = []
+        merged_count = 0
+
+        for idx in sorted_indices:
+            merged_into_existing = False
+            label_idx = result.labels[idx] if idx < len(result.labels) else ""
+            info_idx = prompt_info[idx] if idx < len(prompt_info) else {}
+            object_id_idx = str(info_idx.get("object_id") or "")
+
+            for keep_idx in kept_indices:
+                label_keep = result.labels[keep_idx] if keep_idx < len(result.labels) else ""
+                info_keep = prompt_info[keep_idx] if keep_idx < len(prompt_info) else {}
+                object_id_keep = str(info_keep.get("object_id") or "")
+
+                same_object_id = bool(object_id_idx and object_id_keep and object_id_idx == object_id_keep)
+                same_label = bool(label_idx and label_keep and label_idx == label_keep)
+                if not (same_object_id or same_label):
+                    continue
+
+                box_iou = cls._box_iou(result.boxes_xyxy[idx], result.boxes_xyxy[keep_idx])
+                if box_iou < 0.30 and not same_object_id:
+                    continue
+
+                mask_iou = cls._mask_iou(result.masks[idx], result.masks[keep_idx])
+                is_duplicate = (
+                    mask_iou >= 0.72
+                    or (box_iou >= 0.90 and mask_iou >= 0.45)
+                    or (same_object_id and (mask_iou >= 0.55 or box_iou >= 0.75))
+                )
+                if not is_duplicate:
+                    continue
+
+                result.masks[keep_idx] = result.masks[keep_idx].bool() | result.masks[idx].bool()
+                result.boxes_xyxy[keep_idx] = cls._bbox_from_mask_or_fallback(
+                    result.masks[keep_idx], result.boxes_xyxy[keep_idx]
+                )
+                if float(result.scores[idx].item()) > float(result.scores[keep_idx].item()):
+                    result.scores[keep_idx] = result.scores[idx]
+                    if idx < len(result.labels):
+                        result.labels[keep_idx] = result.labels[idx]
+
+                if keep_idx < len(prompt_info) and idx < len(prompt_info):
+                    if not prompt_info[keep_idx].get("text") and prompt_info[idx].get("text"):
+                        prompt_info[keep_idx] = prompt_info[idx]
+
+                merged_count += 1
+                merged_into_existing = True
+                break
+
+            if not merged_into_existing:
+                kept_indices.append(idx)
+
+        kept_indices_sorted = sorted(kept_indices)
+
+        deduped = DetectionResult(
+            boxes_xyxy=result.boxes_xyxy[kept_indices_sorted],
+            scores=result.scores[kept_indices_sorted],
+            labels=[result.labels[i] for i in kept_indices_sorted],
+            masks=result.masks[kept_indices_sorted],
+        )
+        deduped_prompt_info = [
+            prompt_info[i] if i < len(prompt_info) else {} for i in kept_indices_sorted
+        ]
+
+        if merged_count > 0:
+            logger.info(
+                f"Deduplicated overlapping masks: merged={merged_count}, "
+                f"before={num_masks}, after={len(kept_indices_sorted)}"
+            )
+
+        return deduped, deduped_prompt_info
 
     @staticmethod
     def _clamp_box(
