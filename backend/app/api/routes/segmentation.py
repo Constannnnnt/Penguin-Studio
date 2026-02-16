@@ -269,9 +269,11 @@ async def get_result(
         logger.info(f"Retrieving result: result_id={result_id}")
 
         file_service = segmentation_service.file_service
-        result_dir = file_service.outputs_dir / result_id
+        # Security: Prevent path traversal
+        result_dir = (file_service.outputs_dir / result_id).resolve()
+        outputs_dir_resolved = file_service.outputs_dir.resolve()
 
-        if not result_dir.exists():
+        if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
             raise NotFoundException(
                 f"Result not found",
                 details={"result_id": result_id},
@@ -333,8 +335,11 @@ async def save_result_metadata(
     The payload mirrors the example JSON format (see backend/examples/*.json).
     """
     try:
-        result_dir = file_service.outputs_dir / result_id
-        if not result_dir.exists():
+        # Security: Prevent path traversal
+        result_dir = (file_service.outputs_dir / result_id).resolve()
+        outputs_dir_resolved = file_service.outputs_dir.resolve()
+
+        if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
             raise NotFoundException(
                 "Result not found", details={"result_id": result_id}
             )
