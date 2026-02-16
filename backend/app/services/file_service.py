@@ -106,6 +106,13 @@ class FileService:
 
     async def cleanup_old_results(self, max_age_hours: Optional[int] = None) -> int:
         """Delete result files older than specified age."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self._cleanup_old_results_sync, max_age_hours
+        )
+
+    def _cleanup_old_results_sync(self, max_age_hours: Optional[int] = None) -> int:
+        """Synchronous implementation of cleanup logic."""
         max_age = max_age_hours or settings.cleanup_age_hours
         cutoff_time = time.time() - (max_age * 3600)
         deleted_count = 0
@@ -122,10 +129,7 @@ class FileService:
                     try:
                         dir_mtime = result_dir.stat().st_mtime
                         if dir_mtime < cutoff_time:
-                            loop = asyncio.get_event_loop()
-                            await loop.run_in_executor(
-                                None, self._remove_directory, result_dir
-                            )
+                            self._remove_directory(result_dir)
                             deleted_count += 1
                             logger.info(
                                 f"Deleted old result directory: {result_dir.name}"
