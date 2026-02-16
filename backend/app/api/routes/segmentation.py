@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -208,7 +209,7 @@ async def segment_image(
 
             metadata_content = await metadata.read()
             try:
-                json.loads(metadata_content)
+                await asyncio.to_thread(json.loads, metadata_content)
             except json.JSONDecodeError as e:
                 raise ValidationException(
                     "Invalid JSON metadata",
