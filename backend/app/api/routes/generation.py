@@ -8,9 +8,11 @@ refining images with structured prompts, and managing generation history.
 import asyncio
 import json
 import uuid
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -354,9 +356,6 @@ async def get_generation(
     Returns:
         GenerateResponse with generation details
     """
-    from app.config import settings
-    import json
-
     generation_dir = settings.outputs_dir / generation_id
 
     if not generation_dir.exists():
@@ -483,8 +482,6 @@ async def segment_generation(
     Returns:
         Segmentation results with mask information
     """
-    from io import BytesIO
-
     generation_dir = settings.outputs_dir / generation_id
 
     if not generation_dir.exists():
@@ -512,8 +509,6 @@ async def segment_generation(
         image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
 
         # Create file-like objects for segmentation service
-        from fastapi import UploadFile
-
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
@@ -679,8 +674,6 @@ async def save_prompt_version(
 
     Creates a timestamped file, preserving the original.
     """
-    from datetime import datetime
-
     generation_dir = settings.outputs_dir / generation_id
 
     if not generation_dir.exists():
