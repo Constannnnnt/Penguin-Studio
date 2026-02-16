@@ -1,4 +1,3 @@
-import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -19,9 +18,9 @@ from app.models.schemas import (
     SegmentationResponse,
 )
 from app.services.file_service import FileService
-from app.utils.filesystem import safe_join, write_json_async
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
+from app.utils.filesystem import write_json_async
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -35,6 +34,21 @@ router = APIRouter(prefix="/api/v1", tags=["segmentation"])
 def _format_path(*parts: str) -> str:
     path = "/".join(part.strip("/") for part in parts if part)
     return f"/{path}" if not path.startswith("/") else path
+
+
+def _get_secure_result_dir(file_service: FileService, result_id: str) -> Path:
+    """
+    Resolve result directory and ensure it is within safe outputs directory.
+    Raises NotFoundException if path traversal detected or directory does not exist.
+    """
+    result_dir = (file_service.outputs_dir / result_id).resolve()
+    outputs_dir_resolved = file_service.outputs_dir.resolve()
+
+    if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
+        raise NotFoundException(
+            "Result not found", details={"result_id": result_id}
+        )
+    return result_dir
 
 
 def _build_file_node(
@@ -209,7 +223,7 @@ async def segment_image(
 
             metadata_content = await metadata.read()
             try:
-                await asyncio.to_thread(json.loads, metadata_content)
+                json.loads(metadata_content)
             except json.JSONDecodeError as e:
                 raise ValidationException(
                     "Invalid JSON metadata",
@@ -270,16 +284,7 @@ async def get_result(
         logger.info(f"Retrieving result: result_id={result_id}")
 
         file_service = segmentation_service.file_service
-        # Security: Prevent path traversal
-        result_dir = (file_service.outputs_dir / result_id).resolve()
-        outputs_dir_resolved = file_service.outputs_dir.resolve()
-        result_dir = safe_join(file_service.outputs_dir, result_id)
-
-        if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
-            raise NotFoundException(
-                f"Result not found",
-                details={"result_id": result_id},
-            )
+        result_dir = _get_secure_result_dir(file_service, result_id)
 
         original_image_path = result_dir / "original.png"
         if not original_image_path.exists():
@@ -337,17 +342,7 @@ async def save_result_metadata(
     The payload mirrors the example JSON format (see backend/examples/*.json).
     """
     try:
-        # Security: Prevent path traversal
-        result_dir = (file_service.outputs_dir / result_id).resolve()
-        outputs_dir_resolved = file_service.outputs_dir.resolve()
-
-        if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
-        result_dir = safe_join(file_service.outputs_dir, result_id)
-        if not result_dir.exists():
-            raise NotFoundException(
-                "Result not found", details={"result_id": result_id}
-            )
-
+        result_dir = _get_secure_result_dir(file_service, result_id)
         result_dir.mkdir(parents=True, exist_ok=True)
         metadata_path = result_dir / "metadata.json"
         await write_json_async(metadata_path, metadata.model_dump(), indent=2)
