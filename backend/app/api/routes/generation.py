@@ -5,6 +5,7 @@ Provides endpoints for generating images from text prompts,
 refining images with structured prompts, and managing generation history.
 """
 
+import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_segmentation_service
 from app.config import settings
+from app.utils.filesystem import glob_async, read_json_async, write_json_async
 from app.services.bria_service import (
     BriaService,
     GenerationParameters,
@@ -87,7 +89,7 @@ class StructuredPromptResponse(BaseModel):
 def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
     """Convert Bria API errors to HTTP exceptions."""
     logger.error(f"Bria API error for request_id={request_id}: {e.code} - {e}")
-    
+
     if isinstance(e, AuthenticationError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -123,19 +125,19 @@ async def generate_image(
 ) -> GenerateResponse:
     """
     Generate an image from a text prompt using Bria's FIBO model.
-    
+
     The API uses a two-step process:
     1. VLM Bridge translates the prompt into a structured JSON description
     2. FIBO model generates the image based on the structured prompt
-    
+
     Args:
         request: Generation request with prompt and parameters
-        
+
     Returns:
         GenerateResponse with image URL, structured prompt, and seed
     """
     request_id = str(uuid.uuid4())
-    
+
     logger.info(
         f"Generation request: request_id={request_id}, "
         f"prompt={request.prompt[:50] if request.prompt else 'none'}..., "
@@ -208,21 +210,21 @@ async def generate_structured_prompt(
 ) -> StructuredPromptResponse:
     """
     Generate or refine a structured prompt using Bria's VLM bridge.
-    
+
     This endpoint generates a structured JSON prompt without generating an image.
     Useful for:
     - Converting text prompt to structured prompt
     - Analyzing reference images
     - Refining an existing structured prompt with modifications
-    
+
     Args:
         request: Request with prompt, images, or structured_prompt to refine
-        
+
     Returns:
         StructuredPromptResponse with the generated structured prompt
     """
     request_id = str(uuid.uuid4())
-    
+
     logger.info(
         f"Structured prompt request: request_id={request_id}, "
         f"has_prompt={request.prompt is not None}, "
@@ -267,18 +269,18 @@ async def refine_image(
 ) -> GenerateResponse:
     """
     Refine an image using an updated structured prompt and original seed.
-    
+
     This allows precise adjustments to a generated image by modifying
     the structured prompt while maintaining consistency via the seed.
-    
+
     Args:
         request: Refinement request with structured prompt and seed
-        
+
     Returns:
         GenerateResponse with refined image URL and updated structured prompt
     """
     request_id = str(uuid.uuid4())
-    
+
     logger.info(
         f"Refinement request: request_id={request_id}, seed={request.seed}"
     )
@@ -342,21 +344,21 @@ async def get_generation(
 ) -> GenerateResponse:
     """
     Get a previously generated image by ID.
-    
+
     This endpoint is used for polling generation status when using
     async generation (not currently implemented - generations are synchronous).
-    
+
     Args:
         generation_id: Unique generation identifier
-        
+
     Returns:
         GenerateResponse with generation details
     """
     from app.config import settings
     import json
-    
+
     generation_dir = settings.outputs_dir / generation_id
-    
+
     if not generation_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -367,7 +369,7 @@ async def get_generation(
         # Load metadata
         metadata_path = generation_dir / "metadata.json"
         if metadata_path.exists():
-            metadata = json.loads(metadata_path.read_text())
+            metadata = await read_json_async(metadata_path)
         else:
             metadata = {}
 
@@ -375,7 +377,7 @@ async def get_generation(
         prompt_path = generation_dir / "structured_prompt.json"
         structured_prompt = None
         if prompt_path.exists():
-            structured_prompt = json.loads(prompt_path.read_text())
+            structured_prompt = await read_json_async(prompt_path)
 
         # Check for image
         image_path = generation_dir / "generated.png"
@@ -406,10 +408,10 @@ async def check_cache(
 ) -> CacheStatusResponse:
     """
     Check if a cached result exists for the given prompt and parameters.
-    
+
     Args:
         request: Generation request to check
-        
+
     Returns:
         CacheStatusResponse indicating cache availability
     """
@@ -435,7 +437,7 @@ async def clear_cache(
 ) -> Dict[str, Any]:
     """
     Clear the generation cache.
-    
+
     Returns:
         Dictionary with number of entries cleared
     """
@@ -449,12 +451,12 @@ async def generation_health(
 ) -> Dict[str, Any]:
     """
     Check Bria API health and configuration status.
-    
+
     Returns:
         Health status including API key configuration
     """
     has_api_key = bool(bria_service.api_key)
-    
+
     return {
         "status": "healthy" if has_api_key else "degraded",
         "api_key_configured": has_api_key,
@@ -470,21 +472,21 @@ async def segment_generation(
 ) -> Dict[str, Any]:
     """
     Segment a previously generated image.
-    
+
     This endpoint triggers segmentation on an existing generation.
     The segmentation results are stored in a new result folder.
-    
+
     Args:
         generation_id: ID of the generation to segment
         prompts: Optional comma-separated text prompts for segmentation
-        
+
     Returns:
         Segmentation results with mask information
     """
     from io import BytesIO
 
     generation_dir = settings.outputs_dir / generation_id
-    
+
     if not generation_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -503,19 +505,20 @@ async def segment_generation(
         metadata_path = generation_dir / "structured_prompt.json"
         metadata_dict = None
         if metadata_path.exists():
-            metadata_dict = json.loads(metadata_path.read_text())
+            metadata_dict = await read_json_async(metadata_path)
 
         # Read image file
-        image_bytes = image_path.read_bytes()
-        
+        loop = asyncio.get_event_loop()
+        image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
+
         # Create file-like objects for segmentation service
         from fastapi import UploadFile
-        
+
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
         )
-        
+
         metadata_file = None
         if metadata_dict:
             metadata_bytes = json.dumps(metadata_dict).encode()
@@ -580,13 +583,13 @@ class SavePromptResponse(BaseModel):
 async def load_generation(generation_id: str) -> LoadGenerationResponse:
     """
     Load a generation folder with all its data.
-    
+
     Returns the image, structured prompt, all prompt versions, and masks.
     If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
     generation_dir = settings.outputs_dir / generation_id
-    
+
     if not generation_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -598,7 +601,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     if not image_path.exists():
         # Try original.png for older results
         image_path = generation_dir / "original.png"
-    
+
     if not image_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -611,26 +614,27 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     structured_prompt = {}
     prompt_path = generation_dir / "structured_prompt.json"
     if prompt_path.exists():
-        structured_prompt = json.loads(prompt_path.read_text())
+        structured_prompt = await read_json_async(prompt_path)
 
     # Find all prompt versions
     prompt_versions = []
-    for f in sorted(generation_dir.glob("structured_prompt*.json")):
+    found_files = await glob_async(generation_dir, "structured_prompt*.json")
+    for f in sorted(found_files):
         prompt_versions.append(f.name)
 
     # Load masks - prefer segmentation_meta.json for full object metadata
     masks = []
     seg_meta_path = generation_dir / "segmentation_meta.json"
-    
+
     if seg_meta_path.exists():
         # Rich metadata available - use it
-        seg_meta = json.loads(seg_meta_path.read_text())
+        seg_meta = await read_json_async(seg_meta_path)
         masks = seg_meta.get("masks", [])
         logger.debug(f"Loaded {len(masks)} masks from segmentation_meta.json")
     else:
         # Fallback to basic mask file enumeration
-        mask_files = sorted(generation_dir.glob("mask_*.png"))
-        for i, mask_file in enumerate(mask_files):
+        mask_files = await glob_async(generation_dir, "mask_*.png")
+        for i, mask_file in enumerate(sorted(mask_files)):
             mask_url = f"/outputs/{generation_id}/{mask_file.name}"
             masks.append({
                 "mask_id": f"mask_{i}",
@@ -642,7 +646,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     metadata = None
     metadata_path = generation_dir / "metadata.json"
     if metadata_path.exists():
-        metadata = json.loads(metadata_path.read_text())
+        metadata = await read_json_async(metadata_path)
 
     seed = None
     if isinstance(metadata, dict):
@@ -672,13 +676,13 @@ async def save_prompt_version(
 ) -> SavePromptResponse:
     """
     Save a new version of the structured prompt.
-    
+
     Creates a timestamped file, preserving the original.
     """
     from datetime import datetime
-    
+
     generation_dir = settings.outputs_dir / generation_id
-    
+
     if not generation_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -691,7 +695,7 @@ async def save_prompt_version(
     prompt_path = generation_dir / filename
 
     # Save the new version
-    prompt_path.write_text(json.dumps(request.structured_prompt, indent=2))
+    await write_json_async(prompt_path, request.structured_prompt)
 
     logger.info(f"Saved prompt version for {generation_id}: {filename}")
 
