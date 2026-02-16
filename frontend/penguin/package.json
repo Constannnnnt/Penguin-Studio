@@ -32,7 +32,10 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "@fibo-ui/core": "workspace:*",
+    "@fibo-ui/ui": "workspace:*",
+    "@fibo-ui/canvas": "workspace:*"
   },
   "devDependencies": {
     "@axe-core/react": "^4.11.0",

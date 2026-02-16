@@ -1,0 +1,45 @@
+{
+  "name": "@fibo-ui/ui",
+  "version": "0.1.0",
+  "description": "React component library for Fibanocci UI",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "ui",
+    "react",
+    "components"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@fibo-ui/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@fibo-ui/core": "workspace:*"
+  },
+  "dependencies": {
+    "zustand": "^4.5.0",
+    "lucide-react": "^0.300.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.0"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "penguin-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend/*",
+    "backend/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces"
+  }
+}
