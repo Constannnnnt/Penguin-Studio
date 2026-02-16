@@ -130,7 +130,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-
     # CORS middleware for API routes
     app.add_middleware(
         CORSMiddleware,
