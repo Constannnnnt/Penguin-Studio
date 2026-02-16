@@ -3,6 +3,15 @@ import { Button } from '@/shared/components/ui/button';
 import { Upload } from 'lucide-react';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
+import { Label } from '@/shared/components/ui/label';
+import { Progress } from '@/shared/components/ui/progress';
 
 export const UploadForSegmentationButton: React.FC = () => {
   const { uploadForSegmentation, isProcessing, progress, progressMessage } = useSegmentationStore();
@@ -14,21 +23,22 @@ export const UploadForSegmentationButton: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      <div>
-        {/* <label htmlFor="example-select" className="text-sm font-medium mb-2 block">
-          Example Image
-        </label> */}
-        <select
-          id="example-select"
+      <div className="space-y-2">
+        <Label htmlFor="example-select">Example Image</Label>
+        <Select
           value={selectedExample}
-          onChange={(e) => setSelectedExample(e.target.value)}
-          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          onValueChange={setSelectedExample}
           disabled={isProcessing}
         >
-          <option value="01">Example 01 - Ring</option>
-          <option value="02">Example 02 - Text</option>
-          <option value="03">Example 03 - Owl</option>
-        </select>
+          <SelectTrigger id="example-select" className="w-full">
+            <SelectValue placeholder="Select an example" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="01">Example 01 - Ring</SelectItem>
+            <SelectItem value="02">Example 02 - Text</SelectItem>
+            <SelectItem value="03">Example 03 - Owl</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Button
@@ -51,13 +61,8 @@ export const UploadForSegmentationButton: React.FC = () => {
 
       {isProcessing && (
         <div className="space-y-1">
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground text-center">
+          <Progress value={progress} className="h-2" />
+          <p className="text-xs text-muted-foreground text-center" aria-live="polite">
             {progress}% - {progressMessage}
           </p>
         </div>
