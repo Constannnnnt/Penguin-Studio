@@ -108,6 +108,18 @@ class UpdateLighting(BaseModel):
         None,
         description="Lighting direction string (e.g., 'x:50, y:30, rotation:0, tilt:0')",
     )
+    direction_x: Optional[int] = Field(
+        None, ge=0, le=100, description="Lighting direction x-axis (0-100)"
+    )
+    direction_y: Optional[int] = Field(
+        None, ge=0, le=100, description="Lighting direction y-axis (0-100)"
+    )
+    rotation: Optional[int] = Field(
+        None, ge=0, le=360, description="Lighting rotation angle (0-360)"
+    )
+    tilt: Optional[int] = Field(
+        None, ge=-90, le=90, description="Lighting tilt angle (-90 to 90)"
+    )
 
 
 class UpdatePhotographic(BaseModel):
@@ -127,6 +139,9 @@ class UpdatePhotographic(BaseModel):
     )
     camera_angle: Optional[str] = Field(
         None, description="Camera angle (e.g., 'eye-level', 'overhead', 'low-angle')"
+    )
+    lens_focal_length: Optional[str] = Field(
+        None, description="Lens focal length (e.g., 'wide-angle', 'standard', 'portrait', 'macro')"
     )
 
 
@@ -171,7 +186,18 @@ class AdjustObjectProperty(BaseModel):
     """Adjust spatial properties of a specific object."""
 
     mask_id: str = Field(..., description="The ID of the object mask")
-    property: Literal["location", "relative_size", "orientation"] = Field(
+    property: Literal[
+        "location",
+        "relative_size",
+        "orientation",
+        "description",
+        "shape_and_color",
+        "texture",
+        "appearance_details",
+        "pose",
+        "expression",
+        "action",
+    ] = Field(
         ..., description="Property to adjust"
     )
     value: str = Field(

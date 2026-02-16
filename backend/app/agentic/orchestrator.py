@@ -73,6 +73,19 @@ class PenguinOrchestrator:
         self.active_sessions[session_id] = session
         return session
 
+    async def polish_generation_draft(
+        self,
+        query: str,
+        generation_draft: Dict[str, Any],
+        image_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        polished = await self.analyzer.polish_generation_draft(
+            query=query,
+            generation_draft=generation_draft,
+            image_context=image_context,
+        )
+        return polished.model_dump()
+
     async def approve_and_execute(
         self, session_id: str, overrides: Optional[List[PlanStep]] = None
     ) -> WorkflowSession:
@@ -83,7 +96,21 @@ class PenguinOrchestrator:
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        plan = overrides if overrides is not None else session.analysis.plan
+        plan: Optional[List[PlanStep]]
+        if overrides is not None:
+            parsed_overrides: List[PlanStep] = []
+            for raw_step in overrides:
+                if isinstance(raw_step, PlanStep):
+                    parsed_overrides.append(raw_step)
+                    continue
+                if isinstance(raw_step, dict):
+                    try:
+                        parsed_overrides.append(PlanStep.model_validate(raw_step))
+                    except Exception as exc:
+                        logger.warning(f"Skipping invalid override step: {exc}")
+            plan = parsed_overrides
+        else:
+            plan = session.analysis.plan
 
         if not plan:
             logger.info(
@@ -133,27 +160,61 @@ class PenguinOrchestrator:
         Internal dispatcher that routes tool calls to the correct backend services.
         Maps LLM intention to code execution on Bria and other services.
         """
-        logger.info(f"Dispatching tool '{tool_name}' for session {session.session_id}")
+        normalized_tool_name = self._normalize_tool_name(tool_name)
+        logger.info(
+            f"Dispatching tool '{normalized_tool_name}' for session {session.session_id}"
+        )
 
         # 1. Background / Scene Tools (Bria Refinement)
-        if tool_name in [
+        if normalized_tool_name in [
             "update_lighting",
             "update_aesthetics",
             "update_photographic",
             "update_background",
         ]:
-            return await self._execute_bria_refinement(tool_name, tool_input, session)
+            return await self._execute_bria_refinement(
+                normalized_tool_name, tool_input, session
+            )
 
         # 2. Selection Tools
-        if tool_name in ["select_object", "object_selection"]:
+        if normalized_tool_name == "select_object":
             # Selection is a logical focus shift, usually doesn't trigger a generation by itself
             return {
                 "status": "focused",
                 "object": tool_input.get("prompt") or tool_input.get("object_name"),
             }
 
-        logger.warning(f"No execution logic defined for tool: {tool_name}")
-        return {"status": "no_op", "tool": tool_name}
+        # 3. Object / local image tools currently execute on the frontend client.
+        if normalized_tool_name in [
+            "adjust_object_property",
+            "adjust_object_image_edit",
+            "set_global_brightness",
+            "set_global_contrast",
+            "set_global_saturation",
+            "set_global_exposure",
+            "set_global_vibrance",
+            "set_global_hue",
+            "set_global_blur",
+            "set_global_sharpen",
+            "set_global_rotation",
+            "toggle_global_flip",
+        ]:
+            return {
+                "status": "frontend_handled",
+                "tool": normalized_tool_name,
+                "tool_input": tool_input,
+            }
+
+        logger.warning(f"No execution logic defined for tool: {normalized_tool_name}")
+        return {"status": "no_op", "tool": normalized_tool_name}
+
+    @staticmethod
+    def _normalize_tool_name(tool_name: str) -> str:
+        aliases = {
+            "object_selection": "select_object",
+        }
+        normalized = (tool_name or "").strip().lower()
+        return aliases.get(normalized, normalized)
 
     async def _execute_bria_refinement(
         self, tool_name: str, tool_input: Dict[str, Any], session: WorkflowSession
@@ -172,6 +233,15 @@ class PenguinOrchestrator:
         # Apply updates based on tool
         if tool_name == "update_lighting":
             normalized = dict(tool_input)
+            direction_value = normalized.get("direction")
+            if isinstance(direction_value, dict):
+                direction_parts: List[str] = []
+                for key in ("x", "y", "rotation", "tilt"):
+                    if key in direction_value:
+                        direction_parts.append(f"{key}:{direction_value[key]}")
+                if direction_parts:
+                    normalized["direction"] = ", ".join(direction_parts)
+
             if "direction" not in normalized:
                 direction_parts: List[str] = []
                 if "direction_x" in normalized:
