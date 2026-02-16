@@ -101,7 +101,10 @@ export const ControlsPanel: React.FC = () => {
         `${env.apiBaseUrl}/api/v1/results/${resultId}/metadata`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': env.apiKey
+          },
           body: JSON.stringify(metadataPayload),
         }
       );
