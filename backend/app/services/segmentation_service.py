@@ -403,6 +403,102 @@ class SegmentationService:
     # Minimum confidence threshold for accepting detections
     MIN_CONFIDENCE_THRESHOLD = 0.4
 
+    # Static sets/lists for prompt extraction (moved to class attributes for performance)
+    _CONCRETE_NOUNS = {
+        # People
+        "person", "man", "woman", "child", "boy", "girl", "baby", "people", "crowd",
+        "soldier", "doctor", "teacher", "chef", "artist", "musician", "dancer",
+        "lady", "gentleman", "teenager", "adult", "elder", "figure", "character",
+        # Fantasy/Characters
+        "demon", "angel", "dragon", "wizard", "knight", "warrior", "monster", "creature",
+        "giant", "dwarf", "elf", "fairy", "ghost", "vampire", "zombie", "robot", "alien",
+        "witch", "sorcerer", "mage", "hero", "villain", "god", "goddess", "spirit",
+        # Animals
+        "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear",
+        "elephant", "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin",
+        "duck", "chicken", "eagle", "owl", "snake", "frog", "turtle", "dolphin", "whale",
+        "butterfly", "bee", "spider", "ant", "phoenix",
+        # Body parts
+        "face", "head", "hand", "hands", "arm", "arms", "leg", "legs", "eye", "eyes",
+        "wings", "wing", "tail", "horn", "horns", "hair", "finger", "fingers",
+        # Plants/Nature
+        "flower", "flowers", "rose", "petal", "petals", "leaf", "leaves", "tree", "trees",
+        "plant", "plants", "grass", "bush", "vine", "blossom", "bloom", "bud",
+        "rock", "stone", "mountain", "river", "lake", "ocean", "beach", "forest",
+        "cloud", "clouds", "sun", "moon", "star", "stars", "sky",
+        # Vehicles
+        "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane",
+        "boat", "ship", "helicopter", "spacecraft", "rocket", "submarine", "vehicle",
+        # Furniture
+        "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet",
+        "drawer", "bench", "stool", "throne", "seat",
+        # Food/Drink
+        "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread",
+        "fruit", "vegetable", "meat", "cheese", "wine", "beer", "water", "coffee",
+        # Weapons/Tools
+        "sword", "axe", "knife", "gun", "bow", "arrow", "shield", "spear", "hammer",
+        "staff", "wand", "blade", "dagger", "weapon",
+        # Accessories/Clothing
+        "sunglasses", "glasses", "hat", "helmet", "crown", "ring", "necklace", "bracelet",
+        "watch", "earring", "earrings", "mask", "cape", "cloak", "jewelry",
+        "shirt", "dress", "pants", "shoes", "jacket", "coat", "robe", "armor", "gown",
+        # Objects
+        "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone",
+        "computer", "laptop", "camera", "clock", "key", "door", "window", "mirror",
+        "candle", "torch", "flag", "banner", "sign", "poster", "picture", "frame",
+        "gem", "gemstone", "jewel", "crystal", "orb", "sphere", "cube",
+        # Buildings/Structures
+        "house", "building", "tower", "bridge", "road", "street", "path", "castle",
+        "temple", "church", "palace", "wall", "gate", "arch", "column", "pillar",
+        # Abstract but visible
+        "light", "shadow", "glow", "aura", "flame", "fire", "smoke", "mist", "fog",
+    }
+
+    _MODIFIERS = {
+        # Size
+        "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
+        "massive", "miniature", "giant", "little",
+        # Colors
+        "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver",
+        "orange", "pink", "purple", "crimson", "scarlet", "dark", "light", "bright",
+        "colorful", "pale", "vivid", "vibrant", "muted", "pastel",
+        # Age/Time
+        "old", "new", "young", "ancient", "modern", "vintage", "classic", "contemporary",
+        "fresh", "aged", "eternal",
+        # Material
+        "wooden", "metal", "plastic", "glass", "stone", "leather", "fabric", "silk",
+        "cotton", "velvet", "satin", "lace",
+        # Appearance
+        "beautiful", "ugly", "pretty", "handsome", "cute", "elegant", "fancy", "majestic",
+        "delicate", "rough", "smooth", "sleek", "shiny", "glossy", "matte", "dull",
+        "soft", "hard", "fuzzy", "fluffy", "sharp", "angular", "round", "curved",
+        # Emotion/State
+        "happy", "sad", "angry", "calm", "peaceful", "cheerful", "fierce", "menacing",
+        "serene", "gentle", "wild", "tame",
+        # Physical attributes
+        "male", "female", "muscular", "imposing", "powerful", "formidable", "slender",
+        "thin", "thick", "fat", "lean", "athletic",
+        # Other adjectives
+        "public", "private", "commercial", "reflective", "leathery", "scaly",
+        "fallen", "floating", "flying", "standing", "sitting", "lying", "running",
+        "organic", "irregular", "natural", "artificial", "magical", "mystical",
+        "asian", "european", "african", "american", "eastern", "western",
+        # Adverbs/others to skip
+        "predominantly", "slightly", "somewhat", "very", "quite", "rather",
+        "freshly", "newly", "recently", "slowly", "quickly", "gently",
+    }
+
+    _ARTICLES = [
+        "a ", "an ", "the ", "this ", "that ", "some ", "any ",
+        "pair of ", "set of ", "group of ", "bunch of "
+    ]
+
+    _PREP_SEPARATORS = [
+        ", her ", ", his ", ", its ", ", their ",  # Possessive subordinate clauses
+        " with ", " on ", " in ", " at ", " by ", " near ",
+        " wearing ", " holding ", " carrying ", " featuring ",
+    ]
+
     def _run_tiered_detection(
         self, image: Image.Image, prompt_sets: List[PromptPlanSet]
     ) -> tuple[DetectionResult, List[Dict[str, Any]]]:
@@ -640,111 +736,18 @@ class SegmentationService:
         if not text:
             return None
         
-        # Comprehensive concrete nouns list
-        concrete_nouns = {
-            # People
-            "person", "man", "woman", "child", "boy", "girl", "baby", "people", "crowd",
-            "soldier", "doctor", "teacher", "chef", "artist", "musician", "dancer",
-            "lady", "gentleman", "teenager", "adult", "elder", "figure", "character",
-            # Fantasy/Characters
-            "demon", "angel", "dragon", "wizard", "knight", "warrior", "monster", "creature",
-            "giant", "dwarf", "elf", "fairy", "ghost", "vampire", "zombie", "robot", "alien",
-            "witch", "sorcerer", "mage", "hero", "villain", "god", "goddess", "spirit",
-            # Animals
-            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear", 
-            "elephant", "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin", 
-            "duck", "chicken", "eagle", "owl", "snake", "frog", "turtle", "dolphin", "whale",
-            "butterfly", "bee", "spider", "ant", "dragon", "phoenix",
-            # Body parts
-            "face", "head", "hand", "hands", "arm", "arms", "leg", "legs", "eye", "eyes",
-            "wings", "wing", "tail", "horn", "horns", "hair", "finger", "fingers",
-            # Plants/Nature
-            "flower", "flowers", "rose", "petal", "petals", "leaf", "leaves", "tree", "trees",
-            "plant", "plants", "grass", "bush", "vine", "blossom", "bloom", "bud",
-            "rock", "stone", "mountain", "river", "lake", "ocean", "beach", "forest", 
-            "cloud", "clouds", "sun", "moon", "star", "stars", "sky",
-            # Vehicles
-            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane", 
-            "boat", "ship", "helicopter", "spacecraft", "rocket", "submarine", "vehicle",
-            # Furniture
-            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet", 
-            "drawer", "bench", "stool", "throne", "seat",
-            # Food/Drink
-            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread", 
-            "fruit", "vegetable", "meat", "cheese", "wine", "beer", "water", "coffee",
-            # Weapons/Tools
-            "sword", "axe", "knife", "gun", "bow", "arrow", "shield", "spear", "hammer",
-            "staff", "wand", "blade", "dagger", "weapon",
-            # Accessories/Clothing
-            "sunglasses", "glasses", "hat", "helmet", "crown", "ring", "necklace", "bracelet",
-            "watch", "earring", "earrings", "mask", "cape", "cloak", "jewelry",
-            "shirt", "dress", "pants", "shoes", "jacket", "coat", "robe", "armor", "gown",
-            # Objects
-            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone", 
-            "computer", "laptop", "camera", "clock", "key", "door", "window", "mirror",
-            "candle", "torch", "flag", "banner", "sign", "poster", "picture", "frame",
-            "gem", "gemstone", "jewel", "crystal", "orb", "sphere", "cube",
-            # Buildings/Structures
-            "house", "building", "tower", "bridge", "road", "street", "path", "castle", 
-            "temple", "church", "palace", "wall", "gate", "arch", "column", "pillar",
-            # Abstract but visible
-            "light", "shadow", "glow", "aura", "flame", "fire", "smoke", "mist", "fog",
-        }
-        
-        # Words that are definitely modifiers (adjectives, adverbs)
-        modifiers = {
-            # Size
-            "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
-            "massive", "miniature", "giant", "little",
-            # Colors
-            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver", 
-            "orange", "pink", "purple", "crimson", "scarlet", "dark", "light", "bright",
-            "colorful", "pale", "vivid", "vibrant", "muted", "pastel",
-            # Age/Time
-            "old", "new", "young", "ancient", "modern", "vintage", "classic", "contemporary",
-            "fresh", "aged", "eternal",
-            # Material
-            "wooden", "metal", "plastic", "glass", "stone", "leather", "fabric", "silk",
-            "cotton", "velvet", "satin", "lace",
-            # Appearance
-            "beautiful", "ugly", "pretty", "handsome", "cute", "elegant", "fancy", "majestic",
-            "delicate", "rough", "smooth", "sleek", "shiny", "glossy", "matte", "dull",
-            "soft", "hard", "fuzzy", "fluffy", "sharp", "angular", "round", "curved",
-            # Emotion/State
-            "happy", "sad", "angry", "calm", "peaceful", "cheerful", "fierce", "menacing",
-            "serene", "gentle", "wild", "tame",
-            # Physical attributes
-            "male", "female", "muscular", "imposing", "powerful", "formidable", "slender",
-            "thin", "thick", "fat", "lean", "athletic",
-            # Other adjectives
-            "public", "private", "commercial", "reflective", "leathery", "scaly",
-            "fallen", "floating", "flying", "standing", "sitting", "lying", "running",
-            "organic", "irregular", "natural", "artificial", "magical", "mystical",
-            "asian", "european", "african", "american", "eastern", "western",
-            # Adverbs/others to skip
-            "predominantly", "slightly", "somewhat", "very", "quite", "rather",
-            "freshly", "newly", "recently", "slowly", "quickly", "gently",
-        }
-        
         # FIRST: Isolate the main subject phrase (before prepositions/subordinate clauses)
         # Remove articles first
-        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any ", 
-                    "pair of ", "set of ", "group of ", "bunch of "]
         clean_text = text
-        for article in articles:
+        for article in SegmentationService._ARTICLES:
             if clean_text.startswith(article):
                 clean_text = clean_text[len(article):]
                 break
         
         # Split by prepositions/subordinate clause markers to get main subject
         # Order matters - try more specific patterns first
-        prep_separators = [
-            ", her ", ", his ", ", its ", ", their ",  # Possessive subordinate clauses
-            " with ", " on ", " in ", " at ", " by ", " near ", 
-            " wearing ", " holding ", " carrying ", " featuring ",
-        ]
         main_phrase = clean_text
-        for sep in prep_separators:
+        for sep in SegmentationService._PREP_SEPARATORS:
             if sep in clean_text:
                 main_phrase = clean_text.split(sep)[0]
                 break
@@ -762,7 +765,7 @@ class SegmentationService:
         found_noun = None
         for word in words:
             clean_word = word.strip(".,!?;:'\"()[]")
-            if clean_word in concrete_nouns:
+            if clean_word in SegmentationService._CONCRETE_NOUNS:
                 found_noun = clean_word
                 # Don't break - prefer last noun (head noun in English NP)
         
@@ -773,14 +776,14 @@ class SegmentationService:
         all_words = text.replace(",", " ").replace(".", " ").split()
         for word in all_words:
             clean_word = word.strip(".,!?;:'\"()[]")
-            if clean_word in concrete_nouns:
+            if clean_word in SegmentationService._CONCRETE_NOUNS:
                 # Return first concrete noun found in full text
                 return clean_word
         
         # FOURTH: Find last non-modifier word in main phrase (likely the head noun)
         for word in reversed(words):
             clean_word = word.strip(".,!?;:'\"()[]")
-            if clean_word and clean_word not in modifiers and len(clean_word) > 2:
+            if clean_word and clean_word not in SegmentationService._MODIFIERS and len(clean_word) > 2:
                 # Skip words that look like adjectives (ending in common suffixes)
                 if not any(clean_word.endswith(suffix) for suffix in 
                           ["ly", "ful", "less", "ous", "ive", "ing", "ed"]):

@@ -7,7 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
-from app.api.dependencies import cleanup_dependencies, get_file_service, get_sam3_model
+from app.api.dependencies import (
+    cleanup_dependencies,
+    get_file_service,
+    get_sam3_model,
+    get_segmentation_service,
+)
 from app.api.routes import segmentation, websocket, scene_parsing, generation
 from app.config import settings
 from app.utils.error_handlers import register_error_handlers
@@ -67,6 +72,10 @@ async def lifespan(app: FastAPI):
         sam3_model = get_sam3_model()
         await sam3_model.load()
         logger.info("SAM3 model loaded successfully")
+
+        logger.info("Initializing Segmentation Service...")
+        get_segmentation_service()
+        logger.info("Segmentation Service initialized")
     except Exception as e:
         logger.exception(f"Failed to load SAM3 model: {e}")
         raise
