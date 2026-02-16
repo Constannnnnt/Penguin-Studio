@@ -40,3 +40,29 @@ async def glob_async(path: Path, pattern: str) -> List[Path]:
     """Glob a directory asynchronously."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, list, path.glob(pattern))
+
+
+def safe_join(base: Path, *parts: str) -> Path:
+    """
+    Safely join path parts to a base directory, preventing path traversal.
+
+    Args:
+        base: The base directory that should contain the resulting path.
+        *parts: Path parts to join to the base directory.
+
+    Returns:
+        The resolved Path object.
+
+    Raises:
+        ValueError: If the resulting path is outside the base directory.
+    """
+    base_path = base.resolve()
+    target_path = base_path.joinpath(*parts).resolve()
+
+    if not target_path.is_relative_to(base_path):
+        raise ValueError(
+            f"Security Alert: Path traversal detected. "
+            f"Target {target_path} is outside base {base_path}"
+        )
+
+    return target_path

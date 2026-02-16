@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -18,9 +19,9 @@ from app.models.schemas import (
     SegmentationResponse,
 )
 from app.services.file_service import FileService
+from app.utils.filesystem import safe_join, write_json_async
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
-from app.utils.filesystem import write_json_async
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -208,7 +209,7 @@ async def segment_image(
 
             metadata_content = await metadata.read()
             try:
-                json.loads(metadata_content)
+                await asyncio.to_thread(json.loads, metadata_content)
             except json.JSONDecodeError as e:
                 raise ValidationException(
                     "Invalid JSON metadata",
@@ -272,6 +273,7 @@ async def get_result(
         # Security: Prevent path traversal
         result_dir = (file_service.outputs_dir / result_id).resolve()
         outputs_dir_resolved = file_service.outputs_dir.resolve()
+        result_dir = safe_join(file_service.outputs_dir, result_id)
 
         if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
             raise NotFoundException(
@@ -340,6 +342,8 @@ async def save_result_metadata(
         outputs_dir_resolved = file_service.outputs_dir.resolve()
 
         if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
+        result_dir = safe_join(file_service.outputs_dir, result_id)
+        if not result_dir.exists():
             raise NotFoundException(
                 "Result not found", details={"result_id": result_id}
             )
