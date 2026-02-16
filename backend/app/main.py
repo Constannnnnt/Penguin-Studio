@@ -17,7 +17,6 @@ from app.api.routes import segmentation, websocket, scene_parsing, generation
 from app.config import settings
 from app.utils.error_handlers import register_error_handlers
 from app.utils.logging import setup_logging
-from app.utils.middleware import RequestLoggingMiddleware
 
 setup_logging()
 
@@ -131,8 +130,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # app.add_middleware(RequestLoggingMiddleware)
-    # logger.info("Request logging middleware registered")
 
     # CORS middleware for API routes
     app.add_middleware(
