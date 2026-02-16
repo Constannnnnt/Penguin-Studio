@@ -185,7 +185,18 @@ class SelectObject(BaseModel):
 class AdjustObjectProperty(BaseModel):
     """Adjust spatial properties of a specific object."""
 
-    mask_id: str = Field(..., description="The ID of the object mask")
+    mask_id: Optional[str] = Field(
+        None, description="The ID of the object mask, if known"
+    )
+    object_name: Optional[str] = Field(
+        None, description="Object label/name hint when mask_id is unknown (e.g., 'girl')"
+    )
+    object_index: Optional[int] = Field(
+        None, ge=0, description="Object index fallback when mask_id is unknown"
+    )
+    index: Optional[int] = Field(
+        None, ge=0, description="Alias for object_index"
+    )
     property: Literal[
         "location",
         "relative_size",
