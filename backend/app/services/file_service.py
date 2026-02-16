@@ -11,6 +11,7 @@ from loguru import logger
 from PIL import Image
 
 from app.config import settings
+from app.utils.filesystem import safe_join
 
 
 class FileService:
@@ -33,7 +34,7 @@ class FileService:
     async def save_upload(self, file: UploadFile, result_id: str) -> Path:
         """Save uploaded file with unique identifier."""
         try:
-            result_dir = self.uploads_dir / result_id
+            result_dir = safe_join(self.uploads_dir, result_id)
             result_dir.mkdir(parents=True, exist_ok=True)
 
             file_extension = Path(file.filename or "image.png").suffix
@@ -57,7 +58,7 @@ class FileService:
     ) -> str:
         """Save mask as PNG and return URL."""
         try:
-            result_dir = output_dir or (self.outputs_dir / result_id)
+            result_dir = output_dir or safe_join(self.outputs_dir, result_id)
             result_dir.mkdir(parents=True, exist_ok=True)
 
             mask_filename = f"mask_{mask_index}.png"
@@ -102,7 +103,7 @@ class FileService:
 
     def get_result_path(self, result_id: str, filename: str) -> Path:
         """Get path for result file."""
-        return self.outputs_dir / result_id / filename
+        return safe_join(self.outputs_dir, result_id, filename)
 
     async def cleanup_old_results(self, max_age_hours: Optional[int] = None) -> int:
         """Delete result files older than specified age."""
