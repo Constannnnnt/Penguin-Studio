@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_segmentation_service
 from app.config import settings
-from app.utils.filesystem import glob_async, read_json_async, write_json_async
+from app.utils.filesystem import glob_async, read_json_async, write_json_async, safe_join
 from app.services.bria_service import (
     BriaService,
     GenerationParameters,
@@ -356,7 +356,10 @@ async def get_generation(
     Returns:
         GenerateResponse with generation details
     """
-    generation_dir = settings.outputs_dir / generation_id
+    from app.config import settings
+    import json
+
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -482,7 +485,9 @@ async def segment_generation(
     Returns:
         Segmentation results with mask information
     """
-    generation_dir = settings.outputs_dir / generation_id
+    from io import BytesIO
+
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -583,7 +588,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
-    generation_dir = settings.outputs_dir / generation_id
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
@@ -674,7 +679,9 @@ async def save_prompt_version(
 
     Creates a timestamped file, preserving the original.
     """
-    generation_dir = settings.outputs_dir / generation_id
+    from datetime import datetime
+
+    generation_dir = safe_join(settings.outputs_dir, generation_id)
 
     if not generation_dir.exists():
         raise HTTPException(
