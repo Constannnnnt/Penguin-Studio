@@ -42,27 +42,15 @@ async def glob_async(path: Path, pattern: str) -> List[Path]:
     return await loop.run_in_executor(None, list, path.glob(pattern))
 
 
-def safe_join(base: Path, *parts: str) -> Path:
+def safe_join(base: Path, *paths: str) -> Path:
     """
-    Safely join path parts to a base directory, preventing path traversal.
-
-    Args:
-        base: The base directory that should contain the resulting path.
-        *parts: Path parts to join to the base directory.
-
-    Returns:
-        The resolved Path object.
-
-    Raises:
-        ValueError: If the resulting path is outside the base directory.
+    Safely join a base path with one or more path components.
+    Ensures the resulting path is contained within the base path.
     """
-    base_path = base.resolve()
-    target_path = base_path.joinpath(*parts).resolve()
+    final_path = (base.joinpath(*paths)).resolve()
+    base_resolved = base.resolve()
 
-    if not target_path.is_relative_to(base_path):
-        raise ValueError(
-            f"Security Alert: Path traversal detected. "
-            f"Target {target_path} is outside base {base_path}"
-        )
+    if not final_path.is_relative_to(base_resolved):
+        raise ValueError(f"Path traversal detected: {final_path} is not within {base_resolved}")
 
-    return target_path
+    return final_path

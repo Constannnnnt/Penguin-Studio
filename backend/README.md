@@ -27,8 +27,8 @@ cd backend
 # Run all tests
 uv run pytest -q
 
-# Run manual SAM3 test script
-uv run python tests/manual_test_sam3.py
+# Run specific test file
+uv run pytest app/test_sam3.py -q
 
 # Run specific test
 uv run pytest -k "test_name" -q

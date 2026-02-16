@@ -33,6 +33,17 @@ All error responses follow the `ErrorResponse` schema with:
 - Timestamp
 - Additional details
 
+### Request Logging Middleware (`middleware.py`)
+
+- `RequestLoggingMiddleware`: Logs all HTTP requests with timing and context
+- `RequestContextFilter`: Adds request ID to all log records
+
+Features:
+- Automatic request ID generation
+- Request/response logging with duration
+- Request ID in response headers
+- Process time in response headers
+
 ### Logging Configuration (`logging.py`)
 
 Configures structured logging with:

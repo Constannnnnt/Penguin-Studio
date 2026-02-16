@@ -5,12 +5,6 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.config import settings
 
-# Skip all tests in this file if examples_dir is not configured
-pytestmark = pytest.mark.skipif(
-    not hasattr(settings, "examples_dir"),
-    reason="examples_dir not configured in settings"
-)
-
 
 @pytest.fixture
 def client():
@@ -21,19 +15,14 @@ def client():
 
 def test_examples_directory_exists():
     """Test that examples directory exists and contains files."""
-    # This attribute access is safe because of pytestmark
-    examples_dir = getattr(settings, "examples_dir", None)
-    if examples_dir is None:
-        pytest.skip("examples_dir not configured")
+    assert settings.examples_dir.exists(), f"Examples directory not found: {settings.examples_dir}"
 
-    assert examples_dir.exists(), f"Examples directory not found: {examples_dir}"
-
-    files = list(examples_dir.glob("*"))
+    files = list(settings.examples_dir.glob("*"))
     assert len(files) > 0, "Examples directory is empty"
 
     # Check for expected files
-    assert (examples_dir / "01.png").exists(), "01.png not found"
-    assert (examples_dir / "01.json").exists(), "01.json not found"
+    assert (settings.examples_dir / "01.png").exists(), "01.png not found"
+    assert (settings.examples_dir / "01.json").exists(), "01.json not found"
 
 
 def test_example_image_accessible(client):
