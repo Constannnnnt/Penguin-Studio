@@ -207,6 +207,117 @@ const asMoodType = (value: unknown, fallback: MoodType): MoodType => {
     return MOOD_OPTIONS.includes(normalized) ? normalized : fallback;
 };
 
+type SegmentationMaskLike = {
+    mask_id: string;
+    promptObject?: string;
+    promptText?: string;
+    label?: string;
+    objectMetadata?: {
+        description?: string;
+    };
+};
+
+const OBJECT_METADATA_FIELDS = new Set([
+    'description',
+    'location',
+    'relationship',
+    'relative_size',
+    'shape_and_color',
+    'texture',
+    'appearance_details',
+    'orientation',
+]);
+
+const normalizeObjectProperty = (rawProperty: unknown): string => {
+    const normalized = String(rawProperty || '').trim().toLowerCase();
+    if (!normalized) return '';
+
+    const aliases: Record<string, string> = {
+        appearance: 'appearance_details',
+        details: 'appearance_details',
+        color: 'shape_and_color',
+        shape: 'shape_and_color',
+        size: 'relative_size',
+        scale: 'relative_size',
+        position: 'location',
+        placement: 'location',
+        angle: 'orientation',
+        direction: 'orientation',
+        gender: 'description',
+        identity: 'description',
+        person: 'description',
+        character: 'description',
+        subject: 'description',
+    };
+    return aliases[normalized] || normalized;
+};
+
+const matchMaskByText = (
+    query: string,
+    masks: SegmentationMaskLike[]
+): number => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return -1;
+
+    return masks.findIndex((mask) => {
+        const candidates = [
+            mask.promptObject,
+            mask.promptText,
+            mask.label,
+            mask.objectMetadata?.description,
+        ]
+            .filter(Boolean)
+            .map((value) => String(value).toLowerCase());
+
+        return candidates.some((candidate) =>
+            candidate.includes(normalizedQuery) || normalizedQuery.includes(candidate)
+        );
+    });
+};
+
+const resolveMaskIndex = (
+    input: Record<string, unknown>,
+    masks: SegmentationMaskLike[],
+    selectedMaskId?: string | null
+): number => {
+    if (!Array.isArray(masks) || masks.length === 0) return -1;
+
+    const objectIndexRaw = input.object_index;
+    const indexRaw = input.index;
+    if (typeof objectIndexRaw === 'number' && Number.isInteger(objectIndexRaw)) {
+        return objectIndexRaw >= 0 && objectIndexRaw < masks.length ? objectIndexRaw : -1;
+    }
+    if (typeof indexRaw === 'number' && Number.isInteger(indexRaw)) {
+        return indexRaw >= 0 && indexRaw < masks.length ? indexRaw : -1;
+    }
+
+    const maskId = String(input.mask_id || '').trim();
+    if (maskId) {
+        const fromMaskId = masks.findIndex((mask) => mask.mask_id === maskId);
+        if (fromMaskId >= 0) return fromMaskId;
+    }
+
+    if (selectedMaskId) {
+        const fromSelected = masks.findIndex((mask) => mask.mask_id === selectedMaskId);
+        if (fromSelected >= 0) return fromSelected;
+    }
+
+    const objectHints = [
+        input.object_name,
+        input.prompt,
+        input.target_object,
+        input.subject,
+        input.object,
+    ];
+    for (const hint of objectHints) {
+        if (typeof hint !== 'string' || !hint.trim()) continue;
+        const matchIndex = matchMaskByText(hint, masks);
+        if (matchIndex >= 0) return matchIndex;
+    }
+
+    return masks.length === 1 ? 0 : -1;
+};
+
 const toPlanSteps = (input: unknown): PlanStep[] => {
     if (!Array.isArray(input)) return [];
 
@@ -246,6 +357,8 @@ const derivePlanConfig = (
             config.objects[index] = { ...DEFAULT_SCENE_OBJECT };
         }
     };
+
+    let selectedMaskId: string | null = useSegmentationStore.getState().selectedMaskId;
 
     steps.forEach((step) => {
         const input = step.tool_input || {};
@@ -346,23 +459,35 @@ const derivePlanConfig = (
                 break;
             }
             case 'adjust_object_property': {
-                const maskId = String(input.mask_id || '');
-                const property = String(input.property || '');
+                const property = normalizeObjectProperty(input.property);
                 if (!property) break;
-
-                let index = -1;
-                if (typeof input.object_index === 'number') {
-                    index = input.object_index;
-                } else if (typeof input.index === 'number') {
-                    index = input.index;
-                } else if (maskId && segmentationResults?.masks) {
-                    index = segmentationResults.masks.findIndex((mask) => mask.mask_id === maskId);
-                }
+                const index = resolveMaskIndex(
+                    input,
+                    (segmentationResults?.masks || []) as SegmentationMaskLike[],
+                    selectedMaskId
+                );
 
                 if (index < 0) break;
                 ensureObject(index);
                 const objectEntry = config.objects[index] as unknown as Record<string, unknown>;
                 objectEntry[property] = input.value;
+                const matchedMask = segmentationResults?.masks?.[index];
+                if (matchedMask?.mask_id) {
+                    selectedMaskId = matchedMask.mask_id;
+                }
+                break;
+            }
+            case 'select_object': {
+                if (!segmentationResults?.masks || segmentationResults.masks.length === 0) break;
+                const prompt = String(input.prompt || input.object_name || '').toLowerCase();
+                if (!prompt) break;
+                const matchIndex = matchMaskByText(
+                    prompt,
+                    segmentationResults.masks as SegmentationMaskLike[]
+                );
+                if (matchIndex >= 0) {
+                    selectedMaskId = segmentationResults.masks[matchIndex].mask_id;
+                }
                 break;
             }
             default:
@@ -395,6 +520,7 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
     const imageEditStore = useImageEditStore.getState();
 
     const results = segmentationStore.results;
+    let selectedMaskId: string | null = segmentationStore.selectedMaskId;
 
     steps.forEach((step) => {
         const input = step.tool_input || {};
@@ -442,6 +568,9 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                 if (input.camera_angle !== undefined) {
                     updateSceneConfig('photographic_characteristics.camera_angle', input.camera_angle);
                 }
+                if (input.lens_focal_length !== undefined) {
+                    updateSceneConfig('photographic_characteristics.lens_focal_length', input.lens_focal_length);
+                }
                 break;
             }
             case 'update_aesthetics': {
@@ -469,41 +598,56 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                 break;
             }
             case 'select_object': {
-                const prompt = String(input.prompt || '').toLowerCase();
+                const prompt = String(input.prompt || input.object_name || '').toLowerCase();
                 if (!prompt || !results?.masks) break;
-                const match = results.masks.find((mask) => {
-                    const candidates = [
-                        mask.promptObject,
-                        mask.promptText,
-                        mask.label,
-                        mask.objectMetadata?.description,
-                    ].filter(Boolean) as string[];
-                    return candidates.some((candidate) => candidate.toLowerCase().includes(prompt));
-                });
-                if (match) {
-                    segmentationStore.selectMask(match.mask_id);
+                const index = matchMaskByText(prompt, results.masks as SegmentationMaskLike[]);
+                if (index >= 0) {
+                    const matchedMask = results.masks[index];
+                    selectedMaskId = matchedMask.mask_id;
+                    segmentationStore.selectMask(matchedMask.mask_id);
                 }
                 break;
             }
             case 'adjust_object_property': {
-                const maskId = String(input.mask_id || '');
-                const property = String(input.property || '');
+                const property = normalizeObjectProperty(input.property);
                 const value = input.value;
-                if (!maskId || !property || value === undefined || !results?.masks) break;
-                const index = results.masks.findIndex((mask) => mask.mask_id === maskId);
+                if (!property || value === undefined || !results?.masks) break;
+                const index = resolveMaskIndex(
+                    input,
+                    results.masks as SegmentationMaskLike[],
+                    selectedMaskId
+                );
                 if (index >= 0) {
+                    const targetMask = results.masks[index];
+                    if (targetMask?.mask_id) {
+                        selectedMaskId = targetMask.mask_id;
+                    }
                     const { config } = useConfigStore.getState();
                     const currentObjects = config.objects;
-                    const target = currentObjects[index];
-                    if (!target) break;
+                    const target = currentObjects[index] || { ...DEFAULT_SCENE_OBJECT };
 
                     const nextObjects = currentObjects.map((obj, idx) =>
                         idx === index ? { ...obj, [property]: value } : obj
                     );
+                    if (!currentObjects[index]) {
+                        nextObjects[index] = { ...DEFAULT_SCENE_OBJECT, [property]: value };
+                    }
                     useConfigStore.getState().setConfig({ ...config, objects: nextObjects });
 
-                    const objectLabel = results.masks[index]?.promptObject?.trim() || `object ${index + 1}`;
-                    editTracker.trackEdit(`objects[${index}].${property}`, target[property as keyof typeof target], value, index, objectLabel);
+                    if (targetMask?.mask_id && OBJECT_METADATA_FIELDS.has(property)) {
+                        segmentationStore.updateMaskMetadata(targetMask.mask_id, {
+                            [property]: String(value),
+                        });
+                    } else {
+                        const objectLabel = results.masks[index]?.promptObject?.trim() || `object ${index + 1}`;
+                        editTracker.trackEdit(
+                            `objects[${index}].${property}`,
+                            target[property as keyof typeof target],
+                            value,
+                            index,
+                            objectLabel
+                        );
+                    }
                 }
                 break;
             }
@@ -997,6 +1141,8 @@ export const useChatStore = create<ChatState>()(
                     configStore.sceneConfig
                 );
 
+                // Build modification prompt strictly from this execution's edits.
+                editTracker.clearEdits();
                 applyPlanSteps(steps);
                 const modificationPrompt = editTracker.getModificationPrompt();
                 const hasConfigDelta = !areInputsEqual(baseConfig, planConfig);
