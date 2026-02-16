@@ -152,14 +152,6 @@ def create_app() -> FastAPI:
         f"Static files mounted at /outputs -> {settings.outputs_dir} (with CORS)"
     )
 
-    if settings.examples_dir.exists():
-        app.mount(
-            "/examples", CORSStaticFiles(directory=str(settings.examples_dir)), name="examples"
-        )
-        logger.info(
-            f"Static files mounted at /examples -> {settings.examples_dir} (with CORS)"
-        )
-
     return app
 
 
