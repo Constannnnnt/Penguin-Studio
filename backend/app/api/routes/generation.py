@@ -8,9 +8,11 @@ refining images with structured prompts, and managing generation history.
 import asyncio
 import json
 import uuid
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -512,8 +514,6 @@ async def segment_generation(
         image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
 
         # Create file-like objects for segmentation service
-        from fastapi import UploadFile
-
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
