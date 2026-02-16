@@ -40,3 +40,28 @@ async def glob_async(path: Path, pattern: str) -> List[Path]:
     """Glob a directory asynchronously."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, list, path.glob(pattern))
+
+
+def validate_path(base_dir: Path, sub_path: str) -> Path:
+    """
+    Validate that a path constructed from sub_path is within base_dir.
+
+    Args:
+        base_dir: The base directory to restrict access to.
+        sub_path: The sub-path to join with base_dir.
+
+    Returns:
+        The resolved path if valid.
+
+    Raises:
+        ValueError: If the resolved path is outside base_dir.
+    """
+    # Join the paths
+    full_path = (base_dir / sub_path).resolve()
+    resolved_base = base_dir.resolve()
+
+    # Check if full_path starts with resolved_base
+    if not full_path.is_relative_to(resolved_base):
+        raise ValueError("Path traversal attempt")
+
+    return full_path
