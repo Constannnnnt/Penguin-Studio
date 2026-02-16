@@ -225,6 +225,7 @@ export type AspectRatio =
 export interface SceneObject {
   description: string;
   location: LocationOption;
+  relationship?: string;
   relative_size: SizeOption;
   shape_and_color: string;
   texture?: string;
@@ -304,8 +305,18 @@ export interface SceneConfiguration {
 
 export interface PlanStep {
   tool_name: string;
-  tool_input: Record<string, any>;
+  tool_input: Record<string, unknown>;
   step_description: string;
+}
+
+export interface GenerationDraft {
+  main_subject: string;
+  background_setting: string;
+  style_or_medium: string;
+  lighting: string;
+  composition?: string;
+  extra_details?: string;
+  polished_prompt?: string;
 }
 
 export interface AgentMessage {
@@ -313,6 +324,9 @@ export interface AgentMessage {
   role: 'user' | 'agent';
   content: string;
   plan?: PlanStep[];
+  generation_draft?: GenerationDraft;
+  initial_generation_draft?: GenerationDraft;
+  source_query?: string;
   timestamp: Date;
   status?: 'thinking' | 'suggested' | 'executing' | 'completed' | 'failed' | 'awaiting_input';
 }

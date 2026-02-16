@@ -168,12 +168,10 @@ export const useGeneration = () => {
    * 
    * @param config - Current config with user modifications
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight", "make it warmer")
-   * @param originalStructuredPrompt - Optional original structured prompt for modification mode
    */
   const refineImage = async (
     config: PenguinConfig,
-    modificationPrompt?: string,
-    originalStructuredPrompt?: Record<string, unknown>
+    modificationPrompt?: string
   ): Promise<void> => {
     if (lastSeedRef.current === null) {
       console.warn('[Generation] No seed available for refinement');
@@ -193,8 +191,7 @@ export const useGeneration = () => {
       const response: GenerationResponse = await apiClient.refineImage(
         config,
         lastSeedRef.current,
-        modificationPrompt,
-        originalStructuredPrompt
+        modificationPrompt
       );
 
       if (response.status === 'pending' || response.status === 'processing') {
@@ -214,7 +211,7 @@ export const useGeneration = () => {
   /**
    * Set seed from loaded generation
    */
-  const setSeed = useCallback((seed: number): void => {
+  const setSeed = useCallback((seed: number | null): void => {
     lastSeedRef.current = seed;
   }, []);
 
