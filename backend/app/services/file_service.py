@@ -11,7 +11,6 @@ from loguru import logger
 from PIL import Image
 
 from app.config import settings
-from app.utils.filesystem import safe_join
 
 
 class FileService:
@@ -34,7 +33,7 @@ class FileService:
     async def save_upload(self, file: UploadFile, result_id: str) -> Path:
         """Save uploaded file with unique identifier."""
         try:
-            result_dir = safe_join(self.uploads_dir, result_id)
+            result_dir = self.uploads_dir / result_id
             result_dir.mkdir(parents=True, exist_ok=True)
 
             file_extension = Path(file.filename or "image.png").suffix
@@ -53,12 +52,15 @@ class FileService:
             raise RuntimeError(f"Failed to save uploaded file: {e}") from e
 
     async def save_mask(
-        self, mask_array: torch.Tensor, result_id: str, mask_index: int,
-        output_dir: Optional[Path] = None
+        self,
+        mask_array: torch.Tensor,
+        result_id: str,
+        mask_index: int,
+        output_dir: Optional[Path] = None,
     ) -> str:
         """Save mask as PNG and return URL."""
         try:
-            result_dir = output_dir or safe_join(self.outputs_dir, result_id)
+            result_dir = output_dir or (self.outputs_dir / result_id)
             result_dir.mkdir(parents=True, exist_ok=True)
 
             mask_filename = f"mask_{mask_index}.png"
@@ -103,10 +105,17 @@ class FileService:
 
     def get_result_path(self, result_id: str, filename: str) -> Path:
         """Get path for result file."""
-        return safe_join(self.outputs_dir, result_id, filename)
+        return self.outputs_dir / result_id / filename
 
     async def cleanup_old_results(self, max_age_hours: Optional[int] = None) -> int:
         """Delete result files older than specified age."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self._cleanup_old_results_sync, max_age_hours
+        )
+
+    def _cleanup_old_results_sync(self, max_age_hours: Optional[int] = None) -> int:
+        """Synchronous implementation of cleanup logic."""
         max_age = max_age_hours or settings.cleanup_age_hours
         cutoff_time = time.time() - (max_age * 3600)
         deleted_count = 0
@@ -123,18 +132,13 @@ class FileService:
                     try:
                         dir_mtime = result_dir.stat().st_mtime
                         if dir_mtime < cutoff_time:
-                            loop = asyncio.get_event_loop()
-                            await loop.run_in_executor(
-                                None, self._remove_directory, result_dir
-                            )
+                            self._remove_directory(result_dir)
                             deleted_count += 1
                             logger.info(
                                 f"Deleted old result directory: {result_dir.name}"
                             )
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to delete directory {result_dir}: {e}"
-                        )
+                        logger.warning(f"Failed to delete directory {result_dir}: {e}")
 
             logger.info(
                 f"Cleanup completed: deleted {deleted_count} result directories "
