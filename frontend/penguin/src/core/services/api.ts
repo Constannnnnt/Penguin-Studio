@@ -158,6 +158,7 @@ class PenguinApiClient {
       objects: config.objects.map((obj) => ({
         ...obj,
         description: sanitizeInput(obj.description),
+        relationship: obj.relationship ? sanitizeInput(obj.relationship) : undefined,
         shape_and_color: sanitizeInput(obj.shape_and_color),
         texture: obj.texture ? sanitizeInput(obj.texture) : undefined,
         appearance_details: obj.appearance_details
@@ -211,7 +212,7 @@ class PenguinApiClient {
       objects: config.objects.map((obj) => ({
         description: obj.description,
         location: obj.location,
-        relationship: "",
+        relationship: obj.relationship || "",
         relative_size: obj.relative_size,
         shape_and_color: obj.shape_and_color,
         texture: obj.texture || "",
@@ -306,13 +307,11 @@ class PenguinApiClient {
    * @param config - Current PenguinConfig with user modifications
    * @param seed - Original seed for consistency
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight")
-   * @param originalStructuredPrompt - Optional original structured prompt (if provided, uses modification mode)
    */
   async refineImage(
     config: PenguinConfig,
     seed: number,
-    modificationPrompt?: string,
-    originalStructuredPrompt?: Record<string, unknown>
+    modificationPrompt?: string
   ): Promise<GenerationResponse> {
     const validation = validateConfig(config);
     if (!validation.valid) {
@@ -334,9 +333,9 @@ class PenguinApiClient {
     // Build refine request
     // If modificationPrompt is provided, use the Bria modification pattern:
     // - prompt = modification description (e.g., "add sunlight")
-    // - structured_prompt = original or current structured prompt
+    // - structured_prompt = current structured prompt from latest config
     const refineRequest: Record<string, unknown> = {
-      structured_prompt: originalStructuredPrompt || structuredPrompt,
+      structured_prompt: structuredPrompt,
       seed,
       aspect_ratio: config.aspect_ratio || "1:1",
       resolution: 1024,
@@ -345,7 +344,11 @@ class PenguinApiClient {
     // Add modification prompt if provided
     if (modificationPrompt) {
       const sanitizedModification = sanitizeInput(modificationPrompt).trim();
-      if (sanitizedModification) {
+      const invalidPrompt =
+        !sanitizedModification ||
+        sanitizedModification === '[object Object]' ||
+        sanitizedModification === '{}';
+      if (!invalidPrompt) {
         refineRequest.modification_prompt = sanitizedModification;
       }
     }
@@ -655,7 +658,7 @@ class PenguinApiClient {
 
           // Normalize the result to ensure it matches SemanticParsingResponse structure
           // Backend might return flat values, but frontend expects ParsedValue wrappers
-          const normalizeValue = <T>(val: any, defaultVal?: T): ParsedValue<T> => {
+          const normalizeValue = <T>(val: unknown, defaultVal?: T): ParsedValue<T> => {
             if (val && typeof val === 'object' && 'value' in val) {
               return val as ParsedValue<T>;
             }

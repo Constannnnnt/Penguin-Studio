@@ -8,6 +8,10 @@ import { useSegmentationStore } from '@/features/segmentation/store/segmentation
 import { useImageEditStore } from '@/features/imageEdit/store/imageEditStore';
 import { editTracker } from '@/shared/lib/editTracker';
 import type {
+    ColorScheme,
+    CompositionType,
+    GenerationDraft,
+    MoodType,
     PlanStep,
     AgentMessage as Message,
     LightingDirectionValue,
@@ -15,6 +19,15 @@ import type {
     SceneConfiguration,
     SceneObject,
 } from '@/core/types';
+import {
+    buildPolishedPrompt,
+    normalizeGenerationDraft,
+} from '../lib/generationDraft';
+
+type PendingGenerationPolish = Record<
+    string,
+    { autoGenerate: boolean; fallbackPrompt: string }
+>;
 
 interface ChatState {
     messages: Message[];
@@ -23,11 +36,20 @@ interface ChatState {
     isConnected: boolean;
     awaitingInput: boolean;
     pendingQuery: string | null;
+    pendingGenerationPolish: PendingGenerationPolish;
 
     // Actions
     sendMessage: (query: string) => void;
-    executePlan: (msgId: string, overrides?: PlanStep[]) => void;
-    updatePlanStep: (msgId: string, stepIdx: number, updatedInput: any) => void;
+    executePlan: (msgId: string, overrides?: PlanStep[], stepIdx?: number) => void;
+    executeGenerationDraft: (msgId: string) => void;
+    polishGenerationDraft: (msgId: string, autoGenerate?: boolean) => void;
+    resetGenerationDraft: (msgId: string) => void;
+    updatePlanStep: (
+        msgId: string,
+        stepIdx: number,
+        updatedInput: Record<string, unknown>
+    ) => void;
+    updateGenerationDraft: (msgId: string, updatedDraft: GenerationDraft) => void;
     connect: () => void;
     disconnect: () => void;
 }
@@ -125,6 +147,91 @@ const DEFAULT_SCENE_OBJECT: SceneObject = {
     orientation: 'front-facing',
 };
 
+const COMPOSITION_OPTIONS: CompositionType[] = [
+    'centered',
+    'rule-of-thirds',
+    'diagonal',
+    'symmetrical',
+    'asymmetrical',
+];
+const COLOR_SCHEME_OPTIONS: ColorScheme[] = [
+    'vibrant',
+    'muted',
+    'monochrome',
+    'warm',
+    'cool',
+    'pastel',
+    'cinematic',
+];
+const MOOD_OPTIONS: MoodType[] = [
+    'neutral',
+    'cheerful',
+    'dramatic',
+    'serene',
+    'mysterious',
+];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+const canonicalizeToolName = (toolName: string): string => {
+    const normalized = (toolName || '').trim().toLowerCase();
+    const aliases: Record<string, string> = {
+        object_selection: 'select_object',
+        update_camera: 'update_photographic',
+        update_photography: 'update_photographic',
+        update_lighting_conditions: 'update_lighting',
+        update_scene_background: 'update_background',
+    };
+    return aliases[normalized] || normalized;
+};
+
+const asCompositionType = (
+    value: unknown,
+    fallback: CompositionType
+): CompositionType => {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim().toLowerCase() as CompositionType;
+    return COMPOSITION_OPTIONS.includes(normalized) ? normalized : fallback;
+};
+
+const asColorScheme = (value: unknown, fallback: ColorScheme): ColorScheme => {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim().toLowerCase() as ColorScheme;
+    return COLOR_SCHEME_OPTIONS.includes(normalized) ? normalized : fallback;
+};
+
+const asMoodType = (value: unknown, fallback: MoodType): MoodType => {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim().toLowerCase() as MoodType;
+    return MOOD_OPTIONS.includes(normalized) ? normalized : fallback;
+};
+
+const toPlanSteps = (input: unknown): PlanStep[] => {
+    if (!Array.isArray(input)) return [];
+
+    const steps: PlanStep[] = [];
+    for (const rawStep of input) {
+        if (!isRecord(rawStep)) continue;
+        const toolName = typeof rawStep.tool_name === 'string' ? rawStep.tool_name : '';
+        if (!toolName) continue;
+
+        const toolInput = isRecord(rawStep.tool_input) ? rawStep.tool_input : {};
+        const stepDescription =
+            typeof rawStep.step_description === 'string' && rawStep.step_description.trim()
+                ? rawStep.step_description
+                : `Apply ${toolName.replace(/_/g, ' ')}.`;
+
+        steps.push({
+            tool_name: canonicalizeToolName(toolName),
+            tool_input: toolInput,
+            step_description: stepDescription,
+        });
+    }
+
+    return steps;
+};
+
 const derivePlanConfig = (
     steps: PlanStep[],
     baseConfig: PenguinConfig,
@@ -142,8 +249,9 @@ const derivePlanConfig = (
 
     steps.forEach((step) => {
         const input = step.tool_input || {};
+        const canonicalToolName = canonicalizeToolName(step.tool_name);
 
-        switch (step.tool_name) {
+        switch (canonicalToolName) {
             case 'update_lighting': {
                 if (input.conditions !== undefined) {
                     sceneConfig.lighting.conditions = String(input.conditions);
@@ -205,15 +313,27 @@ const derivePlanConfig = (
             }
             case 'update_aesthetics': {
                 if (input.composition !== undefined) {
-                    sceneConfig.aesthetics.composition = String(input.composition);
+                    sceneConfig.aesthetics.composition = asCompositionType(
+                        input.composition,
+                        sceneConfig.aesthetics.composition
+                    );
                 }
                 if (input.color_scheme !== undefined) {
-                    sceneConfig.aesthetics.color_scheme = String(input.color_scheme);
+                    sceneConfig.aesthetics.color_scheme = asColorScheme(
+                        input.color_scheme,
+                        sceneConfig.aesthetics.color_scheme
+                    );
                 }
                 if (input.mood_atmosphere !== undefined) {
-                    sceneConfig.aesthetics.mood_atmosphere = String(input.mood_atmosphere);
+                    sceneConfig.aesthetics.mood_atmosphere = asMoodType(
+                        input.mood_atmosphere,
+                        sceneConfig.aesthetics.mood_atmosphere
+                    );
                 } else if (input.mood !== undefined) {
-                    sceneConfig.aesthetics.mood_atmosphere = String(input.mood);
+                    sceneConfig.aesthetics.mood_atmosphere = asMoodType(
+                        input.mood,
+                        sceneConfig.aesthetics.mood_atmosphere
+                    );
                 }
                 break;
             }
@@ -241,7 +361,8 @@ const derivePlanConfig = (
 
                 if (index < 0) break;
                 ensureObject(index);
-                (config.objects[index] as Record<string, unknown>)[property] = input.value;
+                const objectEntry = config.objects[index] as unknown as Record<string, unknown>;
+                objectEntry[property] = input.value;
                 break;
             }
             default:
@@ -262,7 +383,8 @@ const derivePlanConfig = (
         config.style_medium = sceneConfig.aesthetics.style_medium;
     }
     if (sceneConfig.aesthetics?.aesthetic_style) {
-        config.artistic_style = sceneConfig.aesthetics.aesthetic_style;
+        config.artistic_style =
+            sceneConfig.aesthetics.aesthetic_style as PenguinConfig['artistic_style'];
     }
 
     return { config, sceneConfig };
@@ -276,8 +398,9 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
 
     steps.forEach((step) => {
         const input = step.tool_input || {};
+        const canonicalToolName = canonicalizeToolName(step.tool_name);
 
-        switch (step.tool_name) {
+        switch (canonicalToolName) {
             case 'update_lighting': {
                 const { updateSceneConfig, sceneConfig } = useConfigStore.getState();
                 if (input.conditions !== undefined) {
@@ -431,7 +554,7 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
     });
 };
 
-const areInputsEqual = (a: any, b: any): boolean => {
+const areInputsEqual = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
     if (a === null || b === null || a === undefined || b === undefined) return false;
     if (typeof a !== typeof b) return false;
@@ -446,6 +569,8 @@ const areInputsEqual = (a: any, b: any): boolean => {
         return true;
     }
 
+    if (!isRecord(a) || !isRecord(b)) return false;
+
     const keysA = Object.keys(a);
     const keysB = Object.keys(b);
     if (keysA.length !== keysB.length) return false;
@@ -454,6 +579,66 @@ const areInputsEqual = (a: any, b: any): boolean => {
         if (!areInputsEqual(a[key], b[key])) return false;
     }
     return true;
+};
+
+const triggerGenerationFromPrompt = (prompt: string): void => {
+    const workspaceHandlers = useLayoutStore.getState().workspaceHandlers;
+    if (workspaceHandlers?.handleGenerateFromPrompt) {
+        workspaceHandlers.handleGenerateFromPrompt(prompt);
+        return;
+    }
+    workspaceHandlers?.handleGenerate?.(prompt);
+};
+
+const buildAgentImageContext = (): { seed: number; structured_prompt: Record<string, unknown> | null } => {
+    const configStore = useConfigStore.getState();
+    const fileSystemStore = useFileSystemStore.getState();
+    const segmentationState = useSegmentationStore.getState();
+
+    const hasVisualContext = Boolean(
+        fileSystemStore.selectedFileUrl ||
+        fileSystemStore.currentGenerationId ||
+        segmentationState.results?.original_image_url
+    );
+
+    const fallbackStructuredPrompt = (() => {
+        const shortDescription = String(configStore.config.short_description || '').trim();
+        const backgroundSetting = String(
+            configStore.sceneConfig.background_setting || configStore.config.background_setting || ''
+        ).trim();
+        const objects = Array.isArray(configStore.config.objects) ? configStore.config.objects : [];
+        const hasContext =
+            shortDescription.length > 0 ||
+            backgroundSetting.length > 0 ||
+            objects.length > 0;
+
+        if (!hasContext) {
+            return null;
+        }
+
+        return {
+            short_description: shortDescription,
+            objects,
+            background_setting: backgroundSetting,
+            lighting: configStore.sceneConfig.lighting,
+            aesthetics: configStore.sceneConfig.aesthetics,
+            photographic_characteristics: configStore.sceneConfig.photographic_characteristics,
+            style_medium: configStore.config.style_medium,
+            artistic_style: configStore.config.artistic_style,
+        };
+    })();
+
+    return {
+        seed: hasVisualContext ? (configStore.sceneConfig.seed || fileSystemStore.currentSeed || 0) : 0,
+        structured_prompt:
+            hasVisualContext
+                ? (
+                    configStore.rawStructuredPrompt ||
+                    fileSystemStore.originalStructuredPrompt ||
+                    fallbackStructuredPrompt
+                )
+                : null,
+    };
 };
 
 export const useChatStore = create<ChatState>()(
@@ -472,53 +657,89 @@ export const useChatStore = create<ChatState>()(
             isConnected: false,
             awaitingInput: false,
             pendingQuery: null,
+            pendingGenerationPolish: {},
 
             connect: () => {
                 if (get().isConnected) return;
                 
                 wsService.connect();
                 
-                const handleAnalysis = (message: any) => {
-                    if (message.type === 'analysis') {
-                        const payload = message.data || {};
-                        const isGeneration = payload.intent === 'generation';
-                        const clarificationPrompt = [
-                            payload.explanation || 'I can help with a new generation.',
-                            'To continue, please clarify the main subject, the background/setting, and the style or lighting you want.'
-                        ]
-                            .filter(Boolean)
-                            .join(' ');
+                const handleAnalysis = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'analysis') {
+                        return;
+                    }
 
-                        set({
-                            sessionId: payload.session_id,
-                            messages: [
-                                ...get().messages,
-                                {
-                                    id: Date.now().toString(),
-                                    role: 'agent',
-                                    content: isGeneration ? clarificationPrompt : payload.explanation,
-                                    plan: isGeneration ? undefined : payload.plan,
-                                    timestamp: new Date(),
-                                    status: isGeneration ? 'awaiting_input' : 'suggested'
-                                }
-                            ],
-                            isTyping: false,
-                            awaitingInput: isGeneration,
-                            pendingQuery: isGeneration ? get().pendingQuery : null
-                        });
+                    const payload = isRecord(message.data) ? message.data : {};
+                    const suggestedPlan = toPlanSteps(payload.plan);
+                    const hasSuggestedPlan = suggestedPlan.length > 0;
+                    const isGeneration = payload.intent === 'generation' && !hasSuggestedPlan;
+                    const pendingQuery = get().pendingQuery || '';
+                    const generationDraft = isGeneration
+                        ? normalizeGenerationDraft(payload.generation_draft, pendingQuery)
+                        : undefined;
 
+                    const generationMessage = [
+                        typeof payload.explanation === 'string'
+                            ? payload.explanation
+                            : 'I prepared an initial generation draft from your request.',
+                        'Adjust the values, then click "Rethink My Prompt" to reconstruct the final prompt.'
+                    ]
+                        .filter(Boolean)
+                        .join(' ');
+
+                    set({
+                        sessionId:
+                            typeof payload.session_id === 'string'
+                                ? payload.session_id
+                                : null,
+                        messages: [
+                            ...get().messages,
+                            {
+                                id: Date.now().toString(),
+                                role: 'agent',
+                                content:
+                                    isGeneration
+                                        ? generationMessage
+                                        : (
+                                            typeof payload.explanation === 'string'
+                                                ? payload.explanation
+                                                : 'I prepared a refinement plan for your request.'
+                                        ),
+                                plan: hasSuggestedPlan ? suggestedPlan : undefined,
+                                generation_draft: generationDraft,
+                                initial_generation_draft: generationDraft
+                                    ? { ...generationDraft }
+                                    : undefined,
+                                source_query: isGeneration ? pendingQuery : undefined,
+                                timestamp: new Date(),
+                                status: isGeneration ? 'awaiting_input' : 'suggested'
+                            }
+                        ],
+                        isTyping: false,
+                        awaitingInput: isGeneration,
+                        pendingQuery: isGeneration ? pendingQuery : null
+                    });
+                };
+
+                const handleProgress = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'progress') {
+                        return;
+                    }
+
+                    const payload = isRecord(message.data) ? message.data : {};
+                    const progressMessage =
+                        typeof payload.message === 'string' ? payload.message : '';
+                    if (progressMessage) {
+                        console.log('[AgentChat] Progress:', progressMessage);
                     }
                 };
 
-                const handleProgress = (message: any) => {
-                    if (message.type === 'progress') {
-                        console.log('[AgentChat] Progress:', message.data.message);
+                const handleExecutionComplete = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'execution_complete') {
+                        return;
                     }
-                };
 
-                const handleExecutionComplete = (message: any) => {
-                    if (message.type === 'execution_complete') {
-                        const payload = message.data || {};
+                    const payload = isRecord(message.data) ? message.data : {};
                         set({
                             messages: [
                                 ...get().messages,
@@ -531,39 +752,183 @@ export const useChatStore = create<ChatState>()(
                                 }
                             ]
                         });
-                        
-                        const results = payload.results;
-                        const lastResult = results[results.length - 1]?.result;
-                        if (lastResult?.image_url) {
+
+                        const results = Array.isArray(payload.results) ? payload.results : [];
+                        const lastEntry = results.length > 0 ? results[results.length - 1] : null;
+                        const lastResult = isRecord(lastEntry) && isRecord(lastEntry.result)
+                            ? lastEntry.result
+                            : null;
+
+                        if (lastResult && typeof lastResult.image_url === 'string') {
                             const configStore = useConfigStore.getState();
-                            if (lastResult.structured_prompt) {
+                            if (isRecord(lastResult.structured_prompt)) {
                                 configStore.updateConfigFromStructuredPrompt(lastResult.structured_prompt);
                             }
                         }
+                };
+
+                const handleGenerationPolished = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'generation_polished') {
+                        return;
+                    }
+
+                    const payload = isRecord(message.data) ? message.data : {};
+                    const msgId = typeof payload.msg_id === 'string' ? payload.msg_id : '';
+                    if (!msgId) return;
+
+                    const state = get();
+                    const target = state.messages.find((item) => item.id === msgId);
+                    const fallbackQuery =
+                        (typeof target?.source_query === 'string' && target.source_query.trim())
+                            ? target.source_query
+                            : (state.pendingQuery || '');
+
+                    const polishedDraft = normalizeGenerationDraft(payload.generation_draft, fallbackQuery);
+                    const polishedPrompt = polishedDraft.polished_prompt || buildPolishedPrompt(polishedDraft);
+                    const autoGenerate = Boolean(payload.auto_generate);
+
+                    const nextPending = { ...state.pendingGenerationPolish };
+                    delete nextPending[msgId];
+
+                    set({
+                        pendingGenerationPolish: nextPending,
+                        awaitingInput: !autoGenerate,
+                        isTyping: false,
+                        messages: state.messages.map((item) =>
+                            item.id === msgId
+                                ? {
+                                    ...item,
+                                    generation_draft: { ...polishedDraft, polished_prompt: polishedPrompt },
+                                    status: autoGenerate ? ('executing' as const) : ('awaiting_input' as const),
+                                }
+                                : item
+                        ),
+                    });
+
+                    if (autoGenerate) {
+                        triggerGenerationFromPrompt(polishedPrompt);
+                        set({
+                            messages: get().messages.map((item) =>
+                                item.id === msgId ? { ...item, status: 'completed' as const } : item
+                            ),
+                        });
                     }
                 };
 
-                const handleError = (message: any) => {
-                    if (message.type === 'error') {
-                        set({
-                            messages: [
-                                ...get().messages,
-                                {
-                                    id: Date.now().toString(),
-                                    role: 'agent',
-                                    content: `Sorry, I encountered an error: ${message.data.error}`,
-                                    timestamp: new Date(),
-                                    status: 'failed'
-                                }
-                            ],
-                            isTyping: false
-                        });
+                const handleGenerationPolishFailed = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'generation_polish_failed') {
+                        return;
                     }
+
+                    const payload = isRecord(message.data) ? message.data : {};
+                    const msgId = typeof payload.msg_id === 'string' ? payload.msg_id : '';
+                    if (!msgId) return;
+
+                    const state = get();
+                    const pending = state.pendingGenerationPolish[msgId];
+                    const autoGenerate = pending?.autoGenerate ?? Boolean(payload.auto_generate);
+                    const target = state.messages.find((item) => item.id === msgId);
+                    const draft = target?.generation_draft;
+                    const fallbackPrompt =
+                        pending?.fallbackPrompt ||
+                        (draft ? buildPolishedPrompt(draft) : '');
+
+                    const nextPending = { ...state.pendingGenerationPolish };
+                    delete nextPending[msgId];
+
+                    if (autoGenerate && fallbackPrompt) {
+                        triggerGenerationFromPrompt(fallbackPrompt);
+                    }
+
+                    set({
+                        pendingGenerationPolish: nextPending,
+                        awaitingInput: !autoGenerate,
+                        isTyping: false,
+                        messages: state.messages.map((item) =>
+                            item.id === msgId
+                                ? {
+                                    ...item,
+                                    generation_draft: item.generation_draft
+                                        ? { ...item.generation_draft, polished_prompt: fallbackPrompt }
+                                        : item.generation_draft,
+                                    status: autoGenerate ? ('completed' as const) : ('awaiting_input' as const),
+                                }
+                                : item
+                        ),
+                    });
+                };
+
+                const handleError = (message: unknown) => {
+                    if (!isRecord(message) || message.type !== 'error') {
+                        return;
+                    }
+
+                    const payload = isRecord(message.data) ? message.data : {};
+                    const errorText =
+                        typeof payload.error === 'string' ? payload.error : 'Unknown error';
+
+                    if (
+                        errorText.toLowerCase().includes('unknown agentic sub_action') &&
+                        errorText.toLowerCase().includes('polish_generation')
+                    ) {
+                        const state = get();
+                        const pendingEntries = Object.entries(state.pendingGenerationPolish);
+                        const lastPending = pendingEntries[pendingEntries.length - 1];
+                        if (lastPending) {
+                            const [msgId, pending] = lastPending;
+                            const fallbackPrompt = pending.fallbackPrompt;
+                            const nextPending = { ...state.pendingGenerationPolish };
+                            delete nextPending[msgId];
+
+                            if (pending.autoGenerate && fallbackPrompt) {
+                                triggerGenerationFromPrompt(fallbackPrompt);
+                            }
+
+                            set({
+                                pendingGenerationPolish: nextPending,
+                                awaitingInput: !pending.autoGenerate,
+                                isTyping: false,
+                                messages: state.messages.map((item) =>
+                                    item.id === msgId
+                                        ? {
+                                            ...item,
+                                            generation_draft: item.generation_draft
+                                                ? {
+                                                    ...item.generation_draft,
+                                                    polished_prompt: fallbackPrompt,
+                                                }
+                                                : item.generation_draft,
+                                            status: pending.autoGenerate
+                                                ? ('completed' as const)
+                                                : ('awaiting_input' as const),
+                                        }
+                                        : item
+                                ),
+                            });
+                            return;
+                        }
+                    }
+
+                    set({
+                        messages: [
+                            ...get().messages,
+                            {
+                                id: Date.now().toString(),
+                                role: 'agent',
+                                content: `Sorry, I encountered an error: ${errorText}`,
+                                timestamp: new Date(),
+                                status: 'failed'
+                            }
+                        ],
+                        isTyping: false
+                    });
                 };
 
                 wsService.on('analysis', handleAnalysis);
                 wsService.on('progress', handleProgress);
                 wsService.on('execution_complete', handleExecutionComplete);
+                wsService.on('generation_polished', handleGenerationPolished);
+                wsService.on('generation_polish_failed', handleGenerationPolishFailed);
                 wsService.on('error', handleError);
 
                 set({ isConnected: true });
@@ -599,14 +964,7 @@ export const useChatStore = create<ChatState>()(
                     awaitingInput: false,
                     pendingQuery: combinedQuery
                 });
-
-                const configStore = useConfigStore.getState();
-                const fileSystemStore = useFileSystemStore.getState();
-                
-                const imageContext = {
-                    seed: configStore.sceneConfig.seed || fileSystemStore.currentSeed || 0,
-                    structured_prompt: configStore.rawStructuredPrompt || fileSystemStore.originalStructuredPrompt || null
-                };
+                const imageContext = buildAgentImageContext();
 
                 wsService.send('agentic', {
                     sub_action: 'analyze',
@@ -616,30 +974,51 @@ export const useChatStore = create<ChatState>()(
                 });
             },
 
-            executePlan: (msgId: string, overrides?: PlanStep[]) => {
+            executePlan: (msgId: string, overrides?: PlanStep[], stepIdx?: number) => {
                 const { messages } = get();
                 const msg = messages.find(m => m.id === msgId);
-                const steps = overrides || msg?.plan;
-                if (!steps || steps.length === 0) return;
+                const sourceSteps = overrides || msg?.plan;
+                if (!sourceSteps || sourceSteps.length === 0) return;
+
+                const hasSingleStepRequest = typeof stepIdx === 'number' && Number.isInteger(stepIdx);
+                const selectedStep = hasSingleStepRequest ? sourceSteps[stepIdx as number] : undefined;
+                const steps = selectedStep ? [selectedStep] : sourceSteps;
+                if (steps.length === 0) return;
 
                 set({
                     messages: messages.map(m => m.id === msgId ? { ...m, status: 'executing' as const } : m)
                 });
 
                 const configStore = useConfigStore.getState();
+                const baseConfig = configStore.config;
                 const { config: planConfig } = derivePlanConfig(
                     steps,
-                    configStore.config,
+                    baseConfig,
                     configStore.sceneConfig
                 );
 
                 applyPlanSteps(steps);
                 const modificationPrompt = editTracker.getModificationPrompt();
+                const hasConfigDelta = !areInputsEqual(baseConfig, planConfig);
+                const serverRefineTools = new Set([
+                    'update_background',
+                    'update_lighting',
+                    'update_photographic',
+                    'update_aesthetics',
+                    'adjust_object_property',
+                ]);
+                const needsServerRefine = steps.some((step) =>
+                    serverRefineTools.has(canonicalizeToolName(String(step.tool_name || '')))
+                );
+                const hasModificationPrompt =
+                    typeof modificationPrompt === 'string' && modificationPrompt.trim().length > 0;
                 const workspaceHandlers = useLayoutStore.getState().workspaceHandlers;
-                if (workspaceHandlers?.handleRefineWithConfig) {
-                    workspaceHandlers.handleRefineWithConfig(planConfig, modificationPrompt || undefined);
-                } else {
-                    workspaceHandlers?.handleRefine?.(modificationPrompt || undefined);
+                if (needsServerRefine && (hasConfigDelta || hasModificationPrompt)) {
+                    if (workspaceHandlers?.handleRefineWithConfig) {
+                        workspaceHandlers.handleRefineWithConfig(planConfig, modificationPrompt || undefined);
+                    } else {
+                        workspaceHandlers?.handleRefine?.(modificationPrompt || undefined);
+                    }
                 }
 
                 set({
@@ -648,7 +1027,130 @@ export const useChatStore = create<ChatState>()(
                 });
             },
 
-            updatePlanStep: (msgId: string, stepIdx: number, updatedInput: any) => {
+            polishGenerationDraft: (msgId: string, autoGenerate = false) => {
+                if (!get().isConnected) {
+                    get().connect();
+                }
+                const { messages } = get();
+                const msg = messages.find((item) => item.id === msgId);
+                const draft = msg?.generation_draft;
+                if (!draft) return;
+
+                const polishedPrompt = buildPolishedPrompt(draft);
+                const query =
+                    (typeof msg.source_query === 'string' && msg.source_query.trim())
+                        ? msg.source_query.trim()
+                        : (get().pendingQuery || '').trim();
+                const imageContext = buildAgentImageContext();
+                const safeQuery = query || polishedPrompt;
+
+                set({
+                    messages: messages.map((item) =>
+                        item.id === msgId
+                            ? {
+                                ...item,
+                                generation_draft: { ...draft, polished_prompt: polishedPrompt },
+                                status: 'executing' as const,
+                            }
+                            : item
+                    ),
+                    awaitingInput: false,
+                    isTyping: false,
+                    pendingGenerationPolish: {
+                        ...get().pendingGenerationPolish,
+                        [msgId]: {
+                            autoGenerate,
+                            fallbackPrompt: polishedPrompt,
+                        },
+                    },
+                });
+
+                wsService.send('agentic', {
+                    sub_action: 'polish_generation',
+                    query: safeQuery,
+                    generation_draft: draft,
+                    image_context: imageContext,
+                    msg_id: msgId,
+                    auto_generate: autoGenerate,
+                });
+            },
+
+            executeGenerationDraft: (msgId: string) => {
+                const { messages } = get();
+                const msg = messages.find((item) => item.id === msgId);
+                const draft = msg?.generation_draft;
+                if (!draft) return;
+
+                const polishedPrompt = draft.polished_prompt || buildPolishedPrompt(draft);
+
+                set({
+                    messages: messages.map((item) =>
+                        item.id === msgId
+                            ? {
+                                ...item,
+                                generation_draft: { ...draft, polished_prompt: polishedPrompt },
+                                status: 'executing' as const,
+                            }
+                            : item
+                    ),
+                    awaitingInput: false,
+                    isTyping: false,
+                });
+
+                triggerGenerationFromPrompt(polishedPrompt);
+
+                set({
+                    messages: get().messages.map((item) =>
+                        item.id === msgId ? { ...item, status: 'completed' as const } : item
+                    ),
+                });
+            },
+
+            resetGenerationDraft: (msgId: string) => {
+                set((state) => {
+                    let changed = false;
+                    const nextMessages = state.messages.map((msg) => {
+                        if (msg.id !== msgId || !msg.generation_draft) {
+                            return msg;
+                        }
+
+                        const resetTo = msg.initial_generation_draft
+                            ? { ...msg.initial_generation_draft }
+                            : normalizeGenerationDraft(msg.generation_draft, msg.source_query || '');
+
+                        const nextDraft = {
+                            ...resetTo,
+                            polished_prompt: buildPolishedPrompt(resetTo),
+                        };
+
+                        if (areInputsEqual(msg.generation_draft, nextDraft)) {
+                            return msg;
+                        }
+
+                        changed = true;
+                        return {
+                            ...msg,
+                            generation_draft: nextDraft,
+                            status: 'awaiting_input' as const,
+                        };
+                    });
+
+                    if (!changed) {
+                        return state;
+                    }
+
+                    return {
+                        messages: nextMessages,
+                        awaitingInput: true,
+                    };
+                });
+            },
+
+            updatePlanStep: (
+                msgId: string,
+                stepIdx: number,
+                updatedInput: Record<string, unknown>
+            ) => {
                 set((state) => {
                     let didChange = false;
                     const nextMessages = state.messages.map((msg) => {
@@ -663,6 +1165,28 @@ export const useChatStore = create<ChatState>()(
                             return { ...msg, plan: newPlan };
                         }
                         return msg;
+                    });
+                    if (!didChange) return state;
+                    return { messages: nextMessages };
+                });
+            },
+
+            updateGenerationDraft: (msgId: string, updatedDraft: GenerationDraft) => {
+                set((state) => {
+                    let didChange = false;
+                    const nextMessages = state.messages.map((msg) => {
+                        if (msg.id !== msgId) {
+                            return msg;
+                        }
+                        const nextDraft = {
+                            ...updatedDraft,
+                            polished_prompt: buildPolishedPrompt(updatedDraft),
+                        };
+                        if (areInputsEqual(msg.generation_draft, nextDraft)) {
+                            return msg;
+                        }
+                        didChange = true;
+                        return { ...msg, generation_draft: nextDraft };
                     });
                     if (!didChange) return state;
                     return { messages: nextMessages };
