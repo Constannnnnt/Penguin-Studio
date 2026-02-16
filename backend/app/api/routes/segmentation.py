@@ -5,13 +5,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 from app.api.dependencies import get_file_service, get_sam3_model, get_segmentation_service
-from app.config import settings
 from app.models.sam3_model import SAM3Model
 from app.models.schemas import (
-    ErrorResponse,
     FileNode,
     FileValidation,
     SceneMetadata,
@@ -175,7 +174,7 @@ async def segment_image(
 
         if not FileValidation.validate_image_type(image.content_type, image.filename or ""):
             raise ValidationException(
-                f"Invalid image format. Allowed formats: PNG, JPG, JPEG",
+                "Invalid image format. Allowed formats: PNG, JPG, JPEG",
                 details={
                     "received_content_type": image.content_type,
                     "filename": image.filename,
@@ -186,7 +185,7 @@ async def segment_image(
         image_content = await image.read()
         if not FileValidation.validate_file_size(len(image_content)):
             raise ValidationException(
-                f"Image file size exceeds maximum allowed size",
+                "Image file size exceeds maximum allowed size",
                 details={
                     "file_size_bytes": len(image_content),
                     "max_size_bytes": FileValidation.MAX_FILE_SIZE_BYTES,
@@ -273,7 +272,7 @@ async def get_result(
 
         if not result_dir.exists():
             raise NotFoundException(
-                f"Result not found",
+                "Result not found",
                 details={"result_id": result_id},
             )
 
@@ -311,7 +310,7 @@ async def get_library(
     example files and generated outputs.
     """
     try:
-        tree = _build_library_tree(file_service)
+        tree = await run_in_threadpool(_build_library_tree, file_service)
         return tree
     except Exception as e:
         logger.exception(f"Failed to build library tree: {e}")
