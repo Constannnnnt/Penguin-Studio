@@ -20,7 +20,7 @@ from app.models.schemas import (
 from app.services.file_service import FileService
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
-from app.utils.filesystem import write_json_async
+from app.utils.filesystem import write_json_async, safe_join
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -41,13 +41,18 @@ def _get_secure_result_dir(file_service: FileService, result_id: str) -> Path:
     Resolve result directory and ensure it is within safe outputs directory.
     Raises NotFoundException if path traversal detected or directory does not exist.
     """
-    result_dir = (file_service.outputs_dir / result_id).resolve()
-    outputs_dir_resolved = file_service.outputs_dir.resolve()
-
-    if not result_dir.is_relative_to(outputs_dir_resolved) or not result_dir.exists():
+    try:
+        result_dir = safe_join(file_service.outputs_dir, result_id)
+    except ValueError:
         raise NotFoundException(
             "Result not found", details={"result_id": result_id}
         )
+
+    if not result_dir.exists():
+        raise NotFoundException(
+            "Result not found", details={"result_id": result_id}
+        )
+
     return result_dir
 
 
