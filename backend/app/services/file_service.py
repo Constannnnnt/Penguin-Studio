@@ -114,7 +114,7 @@ class FileService:
         deleted_count = 0
 
         try:
-            for directory in [self.uploads_dir]:
+            for directory in [self.uploads_dir, self.outputs_dir]:
                 if not directory.exists():
                     continue
 

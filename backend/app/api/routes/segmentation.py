@@ -5,13 +5,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 from app.api.dependencies import get_file_service, get_sam3_model, get_segmentation_service
-from app.config import settings
 from app.models.sam3_model import SAM3Model
 from app.models.schemas import (
-    ErrorResponse,
     FileNode,
     FileValidation,
     SceneMetadata,
@@ -20,6 +19,7 @@ from app.models.schemas import (
 from app.services.file_service import FileService
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
+from app.utils.filesystem import write_json_async, safe_join
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -33,6 +33,26 @@ router = APIRouter(prefix="/api/v1", tags=["segmentation"])
 def _format_path(*parts: str) -> str:
     path = "/".join(part.strip("/") for part in parts if part)
     return f"/{path}" if not path.startswith("/") else path
+
+
+def _get_secure_result_dir(file_service: FileService, result_id: str) -> Path:
+    """
+    Resolve result directory and ensure it is within safe outputs directory.
+    Raises NotFoundException if path traversal detected or directory does not exist.
+    """
+    try:
+        result_dir = safe_join(file_service.outputs_dir, result_id)
+    except ValueError:
+        raise NotFoundException(
+            "Result not found", details={"result_id": result_id}
+        )
+
+    if not result_dir.exists():
+        raise NotFoundException(
+            "Result not found", details={"result_id": result_id}
+        )
+
+    return result_dir
 
 
 def _build_file_node(
@@ -141,60 +161,60 @@ async def segment_image(
 ) -> SegmentationResponse:
     """
     Segment an image using SAM3 model.
-    
+
     Upload an image file and optionally provide metadata or text prompts
     for segmentation. The service will detect objects and return segmentation
     masks with bounding boxes and metadata.
-    
+
     Args:
         image: Image file (PNG, JPG, JPEG format, max 10MB)
         metadata: Optional JSON file with object descriptions
         prompts: Optional comma-separated text prompts for detection
-        
+
     Returns:
         SegmentationResponse with result ID, image URLs, and mask metadata
-        
+
     Raises:
         HTTPException: 400 for validation errors, 500 for processing errors
     """
     request_id = str(uuid.uuid4())
-    
+
     try:
         logger.info(
             f"Received segmentation request: request_id={request_id}, "
             f"image={image.filename}, has_metadata={metadata is not None}, "
             f"has_prompts={prompts is not None}"
         )
-        
+
         if not image.content_type:
             raise ValidationException(
                 "Image content type is required",
                 details={"filename": image.filename},
             )
-        
+
         if not FileValidation.validate_image_type(image.content_type, image.filename or ""):
             raise ValidationException(
-                f"Invalid image format. Allowed formats: PNG, JPG, JPEG",
+                "Invalid image format. Allowed formats: PNG, JPG, JPEG",
                 details={
                     "received_content_type": image.content_type,
                     "filename": image.filename,
                     "allowed_types": list(FileValidation.ALLOWED_IMAGE_TYPES),
                 },
             )
-        
+
         image_content = await image.read()
         if not FileValidation.validate_file_size(len(image_content)):
             raise ValidationException(
-                f"Image file size exceeds maximum allowed size",
+                "Image file size exceeds maximum allowed size",
                 details={
                     "file_size_bytes": len(image_content),
                     "max_size_bytes": FileValidation.MAX_FILE_SIZE_BYTES,
                     "max_size_mb": FileValidation.MAX_FILE_SIZE_BYTES / (1024 * 1024),
                 },
             )
-        
+
         await image.seek(0)
-        
+
         if metadata:
             if metadata.content_type != "application/json":
                 raise ValidationException(
@@ -204,7 +224,7 @@ async def segment_image(
                         "expected_content_type": "application/json",
                     },
                 )
-            
+
             metadata_content = await metadata.read()
             try:
                 json.loads(metadata_content)
@@ -214,26 +234,26 @@ async def segment_image(
                     details={"json_error": str(e)},
                 )
             await metadata.seek(0)
-        
+
         prompt_list: Optional[List[str]] = None
         if prompts:
             prompt_list = [p.strip() for p in prompts.split(",") if p.strip()]
             if not prompt_list:
                 raise ValidationException("Prompts cannot be empty if provided")
-        
+
         result = await segmentation_service.process_segmentation(
             image_file=image,
             metadata_file=metadata,
             prompts=prompt_list,
         )
-        
+
         logger.info(
             f"Segmentation completed: request_id={request_id}, "
             f"result_id={result.result_id}, masks={len(result.masks)}"
         )
-        
+
         return result
-        
+
     except (ValidationException, NotFoundException, ProcessingException, ServiceUnavailableException):
         raise
     except ValueError as e:
@@ -254,41 +274,35 @@ async def get_result(
 ) -> SegmentationResponse:
     """
     Retrieve previously processed segmentation result.
-    
+
     Args:
         result_id: Unique identifier for the segmentation result
-        
+
     Returns:
         SegmentationResponse with the stored result
-        
+
     Raises:
         HTTPException: 404 if result not found, 500 for other errors
     """
     try:
         logger.info(f"Retrieving result: result_id={result_id}")
-        
+
         file_service = segmentation_service.file_service
-        result_dir = file_service.outputs_dir / result_id
-        
-        if not result_dir.exists():
-            raise NotFoundException(
-                f"Result not found",
-                details={"result_id": result_id},
-            )
-        
+        result_dir = _get_secure_result_dir(file_service, result_id)
+
         original_image_path = result_dir / "original.png"
         if not original_image_path.exists():
             raise NotFoundException(
                 "Original image not found for result",
                 details={"result_id": result_id},
             )
-        
+
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail="Result retrieval not yet fully implemented. "
                    "Results are currently only available immediately after processing.",
         )
-        
+
     except (NotFoundException, HTTPException):
         raise
     except Exception as e:
@@ -310,7 +324,7 @@ async def get_library(
     example files and generated outputs.
     """
     try:
-        tree = _build_library_tree(file_service)
+        tree = await run_in_threadpool(_build_library_tree, file_service)
         return tree
     except Exception as e:
         logger.exception(f"Failed to build library tree: {e}")
@@ -332,17 +346,10 @@ async def save_result_metadata(
     The payload mirrors the example JSON format (see backend/examples/*.json).
     """
     try:
-        result_dir = file_service.outputs_dir / result_id
-        if not result_dir.exists():
-            raise NotFoundException(
-                "Result not found", details={"result_id": result_id}
-            )
-
+        result_dir = _get_secure_result_dir(file_service, result_id)
         result_dir.mkdir(parents=True, exist_ok=True)
         metadata_path = result_dir / "metadata.json"
-        metadata_path.write_text(
-            json.dumps(metadata.model_dump(), indent=2, ensure_ascii=False)
-        )
+        await write_json_async(metadata_path, metadata.model_dump(), indent=2)
 
         logger.info(
             f"Saved metadata for result_id={result_id} to {metadata_path.as_posix()}"
@@ -368,35 +375,35 @@ async def health_check(
 ) -> Dict[str, Any]:
     """
     Check service and model health status.
-    
+
     Returns health information including model readiness, device configuration,
     and system status.
-    
+
     Returns:
         Dictionary with health status information
     """
     try:
         health_status = sam3_model.get_health_status()
-        
+
         overall_status = "healthy" if health_status["model_loaded"] else "unhealthy"
-        
+
         response = {
             "status": overall_status,
             "service": "SAM3 Segmentation Service",
             "model": health_status,
         }
-        
+
         logger.debug(f"Health check: status={overall_status}")
-        
+
         if not health_status["model_loaded"]:
             raise ServiceUnavailableException(
                 "SAM3 model is not loaded",
                 retry_after=30,
                 details=health_status,
             )
-        
+
         return response
-        
+
     except ServiceUnavailableException:
         raise
     except Exception as e:
@@ -412,10 +419,10 @@ async def health_check(
 async def get_metrics() -> Dict[str, Any]:
     """
     Get application metrics and performance statistics.
-    
+
     Returns metrics including request counts, success/error rates,
     and average processing time.
-    
+
     Returns:
         Dictionary containing application metrics:
         - requests_total: Total number of requests processed
@@ -430,11 +437,11 @@ async def get_metrics() -> Dict[str, Any]:
     try:
         metrics_service = get_metrics_service()
         metrics = metrics_service.get_metrics()
-        
+
         logger.debug(f"Metrics retrieved: {metrics}")
-        
+
         return metrics
-        
+
     except Exception as e:
         logger.exception(f"Failed to retrieve metrics: {e}")
         raise ProcessingException(

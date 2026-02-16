@@ -4,6 +4,7 @@ import { Wand2, Sparkles, MessageSquare } from 'lucide-react';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { LoadingSpinner } from '@/shared/components/LoadingSpinner';
 import { getShortcutDisplay } from '@/shared/hooks/useKeyboardShortcuts';
 
 export type PromptMode = 'generate' | 'edit';
@@ -97,7 +98,7 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
               }}
               placeholder={placeholderText}
               rows={2}
-              aria-describedby="prompt-help"
+              aria-label={placeholderText}
               aria-required="true"
               className="resize-none border-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm py-2 px-1 placeholder:text-muted-foreground/50 transition-all duration-200"
             />
@@ -171,7 +172,7 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
                     }`}
                   aria-label={`${buttonLabel} image`}
                 >
-                  {buttonIcon}
+                  {isLoading ? <LoadingSpinner size="sm" /> : buttonIcon}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">

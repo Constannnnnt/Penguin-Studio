@@ -7,12 +7,12 @@ from app.main import app
 def test_endpoints():
     """Verify all endpoints are registered correctly."""
     client = TestClient(app)
-    
+
     logger.info("Testing endpoint registration...")
-    
+
     routes = [route.path for route in app.routes]
     logger.info(f"Registered routes: {routes}")
-    
+
     expected_routes = [
         "/api/v1/segment",
         "/api/v1/results/{result_id}",
@@ -20,20 +20,20 @@ def test_endpoints():
         "/ws/segment",
         "/outputs",
     ]
-    
+
     for route in expected_routes:
         if route in routes:
             logger.info(f"✓ Route registered: {route}")
         else:
             logger.error(f"✗ Route missing: {route}")
-    
+
     logger.info("\nTesting OpenAPI documentation...")
     response = client.get("/docs")
     if response.status_code == 200:
         logger.info("✓ OpenAPI docs accessible at /docs")
     else:
         logger.error(f"✗ OpenAPI docs failed: {response.status_code}")
-    
+
     logger.info("\nEndpoint verification complete!")
 
 

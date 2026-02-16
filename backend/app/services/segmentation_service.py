@@ -651,8 +651,8 @@ class SegmentationService:
             "giant", "dwarf", "elf", "fairy", "ghost", "vampire", "zombie", "robot", "alien",
             "witch", "sorcerer", "mage", "hero", "villain", "god", "goddess", "spirit",
             # Animals
-            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear", 
-            "elephant", "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin", 
+            "dog", "cat", "bird", "horse", "cow", "sheep", "fish", "lion", "tiger", "bear",
+            "elephant", "rabbit", "mouse", "deer", "wolf", "fox", "monkey", "gorilla", "penguin",
             "duck", "chicken", "eagle", "owl", "snake", "frog", "turtle", "dolphin", "whale",
             "butterfly", "bee", "spider", "ant", "dragon", "phoenix",
             # Body parts
@@ -661,16 +661,16 @@ class SegmentationService:
             # Plants/Nature
             "flower", "flowers", "rose", "petal", "petals", "leaf", "leaves", "tree", "trees",
             "plant", "plants", "grass", "bush", "vine", "blossom", "bloom", "bud",
-            "rock", "stone", "mountain", "river", "lake", "ocean", "beach", "forest", 
+            "rock", "stone", "mountain", "river", "lake", "ocean", "beach", "forest",
             "cloud", "clouds", "sun", "moon", "star", "stars", "sky",
             # Vehicles
-            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane", 
+            "car", "bus", "truck", "van", "motorcycle", "bike", "bicycle", "train", "plane",
             "boat", "ship", "helicopter", "spacecraft", "rocket", "submarine", "vehicle",
             # Furniture
-            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet", 
+            "chair", "table", "desk", "sofa", "couch", "bed", "lamp", "shelf", "cabinet",
             "drawer", "bench", "stool", "throne", "seat",
             # Food/Drink
-            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread", 
+            "apple", "orange", "banana", "pizza", "burger", "sandwich", "cake", "bread",
             "fruit", "vegetable", "meat", "cheese", "wine", "beer", "water", "coffee",
             # Weapons/Tools
             "sword", "axe", "knife", "gun", "bow", "arrow", "shield", "spear", "hammer",
@@ -680,24 +680,24 @@ class SegmentationService:
             "watch", "earring", "earrings", "mask", "cape", "cloak", "jewelry",
             "shirt", "dress", "pants", "shoes", "jacket", "coat", "robe", "armor", "gown",
             # Objects
-            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone", 
+            "ball", "box", "bag", "bottle", "cup", "glass", "plate", "bowl", "book", "phone",
             "computer", "laptop", "camera", "clock", "key", "door", "window", "mirror",
             "candle", "torch", "flag", "banner", "sign", "poster", "picture", "frame",
             "gem", "gemstone", "jewel", "crystal", "orb", "sphere", "cube",
             # Buildings/Structures
-            "house", "building", "tower", "bridge", "road", "street", "path", "castle", 
+            "house", "building", "tower", "bridge", "road", "street", "path", "castle",
             "temple", "church", "palace", "wall", "gate", "arch", "column", "pillar",
             # Abstract but visible
             "light", "shadow", "glow", "aura", "flame", "fire", "smoke", "mist", "fog",
         }
-        
+
         # Words that are definitely modifiers (adjectives, adverbs)
         modifiers = {
             # Size
             "small", "large", "big", "tiny", "huge", "tall", "short", "long", "wide", "narrow",
             "massive", "miniature", "giant", "little",
             # Colors
-            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver", 
+            "red", "blue", "green", "yellow", "black", "white", "brown", "golden", "silver",
             "orange", "pink", "purple", "crimson", "scarlet", "dark", "light", "bright",
             "colorful", "pale", "vivid", "vibrant", "muted", "pastel",
             # Age/Time
@@ -725,10 +725,10 @@ class SegmentationService:
             "predominantly", "slightly", "somewhat", "very", "quite", "rather",
             "freshly", "newly", "recently", "slowly", "quickly", "gently",
         }
-        
+
         # FIRST: Isolate the main subject phrase (before prepositions/subordinate clauses)
         # Remove articles first
-        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any ", 
+        articles = ["a ", "an ", "the ", "this ", "that ", "some ", "any ",
                     "pair of ", "set of ", "group of ", "bunch of "]
         clean_text = text
         for article in articles:
@@ -740,7 +740,7 @@ class SegmentationService:
         # Order matters - try more specific patterns first
         prep_separators = [
             ", her ", ", his ", ", its ", ", their ",  # Possessive subordinate clauses
-            " with ", " on ", " in ", " at ", " by ", " near ", 
+            " with ", " on ", " in ", " at ", " by ", " near ",
             " wearing ", " holding ", " carrying ", " featuring ",
         ]
         main_phrase = clean_text
