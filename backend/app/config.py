@@ -69,12 +69,5 @@ class Settings(BaseSettings):
         default=None, description="Google AI API key for Gemini/ADK"
     )
 
-    # API Authentication
-    api_key: Optional[str] = Field(
-        default=None, description="API Key for authentication. If not set, a default insecure key will be used."
-    )
-
-    examples_dir: Path = Field(default=Path("examples"), description="Examples directory")
-
 
 settings = Settings()
