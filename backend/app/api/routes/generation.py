@@ -289,6 +289,14 @@ async def refine_image(
         # Parse structured prompt
         structured_prompt = StructuredPrompt(**request.structured_prompt)
 
+        modification_prompt = request.modification_prompt
+        if isinstance(modification_prompt, str):
+            cleaned_modification = modification_prompt.strip()
+            if cleaned_modification in {"", "[object Object]", "{}"}:
+                modification_prompt = None
+            else:
+                modification_prompt = cleaned_modification
+
         # Build parameters
         parameters = GenerationParameters(
             aspect_ratio=request.aspect_ratio,
@@ -300,7 +308,7 @@ async def refine_image(
         result = await bria_service.refine_image(
             structured_prompt=structured_prompt,
             seed=request.seed,
-            modification_prompt=request.modification_prompt,
+            modification_prompt=modification_prompt,
             parameters=parameters,
         )
 

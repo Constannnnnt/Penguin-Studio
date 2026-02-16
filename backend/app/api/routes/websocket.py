@@ -266,7 +266,21 @@ async def _process_websocket_agentic(
     """
     Process agentic commands (analyze, execute) via WebSocket.
     """
-    sub_action = message.get("sub_action")
+    raw_sub_action = message.get("sub_action")
+    sub_action = (
+        str(raw_sub_action).strip().lower()
+        if raw_sub_action is not None
+        else ""
+    )
+    sub_action_aliases = {
+        "polish-generation": "polish_generation",
+        "polishgeneration": "polish_generation",
+        "polish_prompt": "polish_generation",
+        "rethink_prompt": "polish_generation",
+        "rethink_generation": "polish_generation",
+        "rethink-prompt": "polish_generation",
+    }
+    sub_action = sub_action_aliases.get(sub_action, sub_action)
     session_id = message.get("session_id")
 
     try:
@@ -294,6 +308,11 @@ async def _process_websocket_agentic(
                     "plan": [
                         step.model_dump() for step in (session.analysis.plan or [])
                     ],
+                    "generation_draft": (
+                        session.analysis.generation_draft.model_dump()
+                        if session.analysis.generation_draft
+                        else None
+                    ),
                 },
                 event_type="analysis",
             )
@@ -335,6 +354,61 @@ async def _process_websocket_agentic(
                 },
                 event_type="execution_complete",
             )
+
+        elif sub_action == "polish_generation":
+            query = message.get("query")
+            generation_draft = message.get("generation_draft")
+            image_context = message.get("image_context")
+            msg_id = message.get("msg_id")
+            auto_generate = bool(message.get("auto_generate", False))
+
+            if not isinstance(query, str) or not query.strip():
+                await ws_manager.send_error(
+                    client_id, "Missing query for generation polishing"
+                )
+                return
+            if not isinstance(generation_draft, dict):
+                await ws_manager.send_error(
+                    client_id, "Missing generation_draft for generation polishing"
+                )
+                return
+
+            await ws_manager.send_progress(
+                client_id, 30, "Polishing generation prompt..."
+            )
+            try:
+                polished = await orchestrator.polish_generation_draft(
+                    query=query,
+                    generation_draft=generation_draft,
+                    image_context=image_context
+                    if isinstance(image_context, dict)
+                    else None,
+                )
+
+                await ws_manager.send_result(
+                    client_id,
+                    {
+                        "type": "generation_polished",
+                        "msg_id": msg_id,
+                        "generation_draft": polished,
+                        "auto_generate": auto_generate,
+                    },
+                    event_type="generation_polished",
+                )
+            except Exception as exc:
+                logger.exception(
+                    f"Generation polishing failed for client_id={client_id}: {exc}"
+                )
+                await ws_manager.send_result(
+                    client_id,
+                    {
+                        "type": "generation_polish_failed",
+                        "msg_id": msg_id,
+                        "auto_generate": auto_generate,
+                        "error": str(exc),
+                    },
+                    event_type="generation_polish_failed",
+                )
 
         else:
             await ws_manager.send_error(
