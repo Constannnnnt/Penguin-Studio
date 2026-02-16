@@ -114,6 +114,10 @@ Refinement planning policy:
 - tool_input must match the tool schema and required fields.
 - Keep steps concrete and executable. Avoid vague tool_input.
 - Use select_object before object-specific changes when object targeting is unclear.
+- For adjust_object_property:
+  - Prefer property=\"description\" for semantic replacement requests like \"change girl to man\".
+  - Include at least one target hint: mask_id, object_index/index, or object_name.
+  - If exact mask_id is unknown, use object_name (for example, \"girl\") and optionally object_index.
 
 UI-compatible tool_input conventions (important):
 - update_lighting:
@@ -420,6 +424,62 @@ Return EXACT schema:
                 and isinstance(tool_input.get("mood"), str)
             ):
                 tool_input["mood_atmosphere"] = tool_input["mood"].strip().lower()
+
+        if canonical_tool == "adjust_object_property":
+            property_aliases = {
+                "appearance": "appearance_details",
+                "details": "appearance_details",
+                "color": "shape_and_color",
+                "shape": "shape_and_color",
+                "size": "relative_size",
+                "scale": "relative_size",
+                "position": "location",
+                "placement": "location",
+                "angle": "orientation",
+                "direction": "orientation",
+                "gender": "description",
+                "identity": "description",
+                "person": "description",
+                "character": "description",
+                "subject": "description",
+            }
+
+            raw_property = tool_input.get("property")
+            if isinstance(raw_property, str):
+                normalized_property = raw_property.strip().lower()
+                tool_input["property"] = property_aliases.get(
+                    normalized_property, normalized_property
+                )
+
+            if "value" in tool_input and tool_input.get("value") is not None:
+                tool_input["value"] = str(tool_input.get("value")).strip()
+
+            raw_mask_id = tool_input.get("mask_id")
+            if raw_mask_id is not None:
+                cleaned_mask_id = str(raw_mask_id).strip()
+                tool_input["mask_id"] = cleaned_mask_id
+                if not cleaned_mask_id:
+                    tool_input.pop("mask_id", None)
+
+            if "object_index" in tool_input:
+                try:
+                    tool_input["object_index"] = int(tool_input["object_index"])
+                except Exception:
+                    tool_input.pop("object_index", None)
+
+            if "index" in tool_input:
+                try:
+                    tool_input["index"] = int(tool_input["index"])
+                except Exception:
+                    tool_input.pop("index", None)
+
+            if not isinstance(tool_input.get("object_name"), str):
+                if isinstance(tool_input.get("prompt"), str):
+                    tool_input["object_name"] = tool_input["prompt"].strip()
+            elif not tool_input["object_name"].strip():
+                tool_input.pop("object_name", None)
+            else:
+                tool_input["object_name"] = tool_input["object_name"].strip()
 
         return PlanStep(
             tool_name=canonical_tool,
