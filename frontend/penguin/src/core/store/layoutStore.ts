@@ -13,6 +13,7 @@ export interface LayoutState {
   activeMode: LayoutMode;
   workspaceHandlers?: {
     handleGenerate?: (promptOverride?: string) => void;
+    handleGenerateFromPrompt?: (prompt: string) => void;
     handleRefine?: (promptOverride?: string) => void;
     handleRefineWithConfig?: (configOverride: unknown, promptOverride?: string, structuredOverride?: unknown) => void;
   };
@@ -25,6 +26,7 @@ export interface LayoutState {
   setActiveMode: (mode: LayoutMode) => void;
   setWorkspaceHandlers: (handlers?: {
     handleGenerate?: (promptOverride?: string) => void;
+    handleGenerateFromPrompt?: (prompt: string) => void;
     handleRefine?: (promptOverride?: string) => void;
     handleRefineWithConfig?: (configOverride: unknown, promptOverride?: string, structuredOverride?: unknown) => void;
   }) => void;
@@ -57,7 +59,7 @@ const sanitizePersistedState = (state?: Partial<PersistedLayoutState>): Persiste
   };
 };
 
-const migrateLayoutState = (persistedState: any, version: number): PersistedLayoutState => {
+const migrateLayoutState = (persistedState: unknown, version: number): PersistedLayoutState => {
   if (!persistedState) {
     return sanitizePersistedState();
   }
@@ -130,7 +132,7 @@ export const useLayoutStore = create<LayoutState>()(
       {
         name: 'penguin-layout-storage',
         version: CURRENT_VERSION,
-        migrate: (persistedState: any, version: number) => {
+        migrate: (persistedState: unknown, version: number) => {
           return migrateLayoutState(persistedState, version);
         },
         partialize: (state) => ({

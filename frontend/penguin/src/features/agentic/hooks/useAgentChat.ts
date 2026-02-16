@@ -10,7 +10,11 @@ export const useAgentChat = () => {
         isTyping,
         sendMessage,
         executePlan,
+        executeGenerationDraft,
+        polishGenerationDraft,
+        resetGenerationDraft,
         updatePlanStep,
+        updateGenerationDraft,
         connect
     } = useChatStore();
     
@@ -24,6 +28,10 @@ export const useAgentChat = () => {
         isTyping,
         sendMessage,
         executePlan,
-        updatePlanStep
+        executeGenerationDraft,
+        polishGenerationDraft,
+        resetGenerationDraft,
+        updatePlanStep,
+        updateGenerationDraft
     };
 };

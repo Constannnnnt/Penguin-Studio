@@ -1,74 +1,304 @@
 import React from 'react';
-import { FormProvider, useForm, FieldRenderer, defaultWidgets } from '@fibo-ui/ui';
+import { FieldRenderer, defaultWidgets } from '@fibo-ui/ui';
 import type { WidgetRegistry } from '@fibo-ui/ui';
+import type { FieldSchema } from '@fibo-ui/core';
 import { getToolSchema } from './agentToolSchemas';
-import type { EditorSchema, FormConfig } from '@fibo-ui/core';
 import { PerformantInput } from '@/shared/components/ui/performant-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { LightingDirectionControl } from '@/features/scene/components/LightingDirectionControl';
+import { CameraGuideViewport } from '@/shared/components/camera/CameraGuideViewport';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PlanSlider } from './PlanSlider';
+import type { LightingDirectionValue, PlanStep } from '@/core/types';
 
-const SliderAdapter = ({ value, onChange, schema, label }: any) => (
+type ToolInput = Record<string, unknown>;
+
+interface WidgetAdapterProps {
+  value: unknown;
+  onChange: (value: unknown) => void;
+  schema: FieldSchema;
+  label?: string;
+}
+
+const DEFAULT_LIGHTING_DIRECTION: LightingDirectionValue = {
+  x: 50,
+  y: 50,
+  rotation: 0,
+  tilt: 0,
+};
+
+const canonicalizeToolName = (toolName: string): string => {
+  const normalizedToolName = (toolName || '').trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    update_camera: 'update_photographic',
+    update_photography: 'update_photographic',
+    update_lighting_conditions: 'update_lighting',
+    update_scene_background: 'update_background',
+  };
+  return aliases[normalizedToolName] || normalizedToolName;
+};
+
+const TOOL_TITLES: Record<string, string> = {
+  update_background: 'Background Settings',
+  update_lighting: 'Lighting Settings',
+  update_photographic: 'Camera Settings',
+  update_aesthetics: 'Aesthetic Settings',
+  select_object: 'Object Selection',
+  adjust_object_property: 'Object Properties',
+  adjust_object_image_edit: 'Object Image Edit',
+};
+
+const TOOL_DESCRIPTIONS: Record<string, string> = {
+  update_lighting: 'Set lighting condition, direction, and shadow intensity.',
+  update_photographic: 'Set angle, lens, depth of field, and focus sharpness.',
+};
+
+const toTitleCase = (value: string): string =>
+  value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const getToolTitle = (toolName: string): string => {
+  const canonicalToolName = canonicalizeToolName(toolName);
+  return TOOL_TITLES[canonicalToolName] || toTitleCase(canonicalToolName);
+};
+
+const getToolDescription = (toolName: string): string | null => {
+  const canonicalToolName = canonicalizeToolName(toolName);
+  return TOOL_DESCRIPTIONS[canonicalToolName] || null;
+};
+
+const getFieldTitle = (key: string, fieldSchema: FieldSchema): string => {
+  const schemaLabel = (fieldSchema as unknown as { label?: unknown }).label;
+  if (typeof schemaLabel === 'string' && schemaLabel.trim()) {
+    return schemaLabel;
+  }
+  return toTitleCase(key);
+};
+
+const getFieldDescription = (fieldSchema: FieldSchema): string | null => {
+  const schemaDescription = (fieldSchema as unknown as { description?: unknown }).description;
+  if (typeof schemaDescription === 'string' && schemaDescription.trim()) {
+    return schemaDescription;
+  }
+  return null;
+};
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toStringValue = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return '';
+};
+
+const asLightingDirection = (value: unknown): LightingDirectionValue => {
+  if (!value || typeof value !== 'object') return DEFAULT_LIGHTING_DIRECTION;
+  const raw = value as Partial<LightingDirectionValue>;
+  return {
+    x: toNumber(raw.x, DEFAULT_LIGHTING_DIRECTION.x),
+    y: toNumber(raw.y, DEFAULT_LIGHTING_DIRECTION.y),
+    rotation: toNumber(raw.rotation, DEFAULT_LIGHTING_DIRECTION.rotation),
+    tilt: toNumber(raw.tilt, DEFAULT_LIGHTING_DIRECTION.tilt),
+  };
+};
+
+const parseLightingDirectionString = (value: string): LightingDirectionValue | null => {
+  const pattern = /(?:^|[,\s])(?<key>x|y|rotation|tilt)\s*[:=]\s*(?<value>-?\d+(?:\.\d+)?)/gi;
+  const next: LightingDirectionValue = { ...DEFAULT_LIGHTING_DIRECTION };
+  let match: RegExpExecArray | null;
+  let hasAny = false;
+  while ((match = pattern.exec(value)) !== null) {
+    const key = match.groups?.key as keyof LightingDirectionValue | undefined;
+    const rawValue = match.groups?.value;
+    if (!key || rawValue === undefined) continue;
+    const num = Number(rawValue);
+    if (!Number.isNaN(num)) {
+      next[key] = num;
+      hasAny = true;
+    }
+  }
+  return hasAny ? next : null;
+};
+
+const normalizePlanToolInput = (toolName: string, toolInput: ToolInput): ToolInput => {
+  const canonicalToolName = canonicalizeToolName(toolName);
+  const next: ToolInput = { ...(toolInput || {}) };
+
+  if (canonicalToolName === 'update_lighting') {
+    if (typeof next.conditions === 'string') {
+      next.conditions = next.conditions.trim().toLowerCase();
+    }
+
+    if (typeof next.shadows === 'string') {
+      const parsed = Number(next.shadows);
+      if (Number.isFinite(parsed)) {
+        next.shadows = parsed;
+      }
+    }
+
+    if (typeof next.direction === 'string') {
+      const parsed = parseLightingDirectionString(next.direction);
+      if (parsed) {
+        next.direction = parsed;
+      }
+    }
+
+    if (!next.direction && (
+      next.direction_x !== undefined ||
+      next.direction_y !== undefined ||
+      next.rotation !== undefined ||
+      next.tilt !== undefined
+    )) {
+      next.direction = {
+        x: toNumber(next.direction_x, DEFAULT_LIGHTING_DIRECTION.x),
+        y: toNumber(next.direction_y, DEFAULT_LIGHTING_DIRECTION.y),
+        rotation: toNumber(next.rotation, DEFAULT_LIGHTING_DIRECTION.rotation),
+        tilt: toNumber(next.tilt, DEFAULT_LIGHTING_DIRECTION.tilt),
+      };
+    }
+  }
+
+  if (canonicalToolName === 'update_photographic') {
+    const cameraMap: Record<string, string> = {
+      'eye level': 'eye-level',
+      'eye-level': 'eye-level',
+      'bird\'s eye': 'overhead',
+      overhead: 'overhead',
+      'low angle': 'low-angle',
+      'low-angle': 'low-angle',
+      'high angle': 'high-angle',
+      'high-angle': 'high-angle',
+      'worm\'s eye': 'low-angle',
+    };
+    if (typeof next.camera_angle === 'string') {
+      const key = next.camera_angle.trim().toLowerCase();
+      next.camera_angle = cameraMap[key] || key;
+    }
+
+    if (typeof next.lens_focal_length === 'string') {
+      const lens = next.lens_focal_length.trim().toLowerCase();
+      next.lens_focal_length = lens;
+    }
+  }
+
+  if (canonicalToolName === 'update_aesthetics') {
+    if (typeof next.composition === 'string') {
+      next.composition = next.composition.trim().toLowerCase().replace(/\s+/g, '-');
+    }
+    if (typeof next.color_scheme === 'string') {
+      next.color_scheme = next.color_scheme.trim().toLowerCase();
+    }
+    if (typeof next.mood_atmosphere === 'string') {
+      next.mood_atmosphere = next.mood_atmosphere.trim().toLowerCase();
+    }
+    if (typeof next.mood === 'string' && !next.mood_atmosphere) {
+      next.mood_atmosphere = next.mood.trim().toLowerCase();
+    }
+  }
+
+  return next;
+};
+
+const SliderAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange, schema }) => {
+  const defaultValue =
+    schema && typeof schema.default === 'number' ? schema.default : 0;
+  const min =
+    schema && schema.type === 'number' && typeof schema.min === 'number'
+      ? schema.min
+      : undefined;
+  const max =
+    schema && schema.type === 'number' && typeof schema.max === 'number'
+      ? schema.max
+      : undefined;
+  const step =
+    schema && schema.type === 'number' && typeof schema.step === 'number'
+      ? schema.step
+      : undefined;
+
+  return (
   <div className="space-y-2 mb-4">
-    {label && <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</label>}
     <PlanSlider
-      value={value ?? schema.default ?? 0}
-      onValueChange={onChange}
-      min={schema.min}
-      max={schema.max}
-      step={schema.step}
+      value={toNumber(value, defaultValue)}
+      onValueChange={(nextValue) => onChange(nextValue)}
+      min={min}
+      max={max}
+      step={step}
+    />
+  </div>
+  );
+};
+
+const InputAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => (
+  <div className="space-y-2 mb-4">
+    <PerformantInput
+      value={toStringValue(value)}
+      onValueCommit={(nextValue) => onChange(nextValue)}
+      className="h-8 bg-background/40 text-[11px]"
     />
   </div>
 );
 
-const InputAdapter = ({ value, onChange, schema, label }: any) => (
+const TextareaAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => (
   <div className="space-y-2 mb-4">
-    {label && <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</label>}
-    <PerformantInput value={value} onValueCommit={onChange} className="h-8 bg-background/40 text-[11px]" />
+    <Textarea
+      value={toStringValue(value)}
+      onChange={(e) => onChange(e.target.value)}
+      className="bg-background/40 text-[11px]"
+    />
   </div>
 );
 
-const TextareaAdapter = ({ value, onChange, schema, label }: any) => (
-  <div className="space-y-2 mb-4">
-    {label && <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">{label}</label>}
-    <Textarea value={value} onChange={(e) => onChange(e.target.value)} className="bg-background/40 text-[11px]" />
-  </div>
-);
+const SelectAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange, schema }) => {
+  const rawOptions =
+    schema && schema.type === 'string' && Array.isArray(schema.enum) ? schema.enum : [];
+  const currentValue = toStringValue(value).trim();
+  const options = [...rawOptions];
+  if (
+    currentValue &&
+    !options.some((opt) => String(opt).toLowerCase() === currentValue.toLowerCase())
+  ) {
+    options.unshift(currentValue);
+  }
 
-const SelectAdapter = ({ value, onChange, schema, label }: any) => (
+  return (
   <div className="space-y-2 mb-4">
-    {label && <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</label>}
-    <Select value={value} onValueChange={onChange}>
+    <Select value={toStringValue(value)} onValueChange={(nextValue) => onChange(nextValue)}>
       <SelectTrigger className="h-9 text-[11px] studio-blur bg-background/40">
         <SelectValue placeholder="Select" />
       </SelectTrigger>
       <SelectContent className="industrial-panel">
-        {schema.enum?.map((opt: string) => (
+        {options.map((opt) => (
           <SelectItem key={opt} value={opt}>{opt}</SelectItem>
         ))}
       </SelectContent>
     </Select>
   </div>
-);
+  );
+};
 
-const LightingDirectionAdapter = ({ value, onChange, schema, label }: any) => (
+const LightingDirectionAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => (
   <div className="space-y-2 mb-4">
-    {label && <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{label}</label>}
-    <LightingDirectionControl value={value} onChange={onChange} compact />
+    <LightingDirectionControl
+      value={asLightingDirection(value)}
+      onChange={(nextDirection) => onChange(nextDirection)}
+      compact
+    />
   </div>
 );
 
-const BackgroundPickerAdapter = ({ value, onChange, schema, label }: any) => {
+const BackgroundPickerAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => {
   const options = ['studio', 'outdoor', 'urban', 'interior'];
-  const safeValue = value || '';
+  const safeValue = toStringValue(value);
 
   return (
     <div className="space-y-4 mb-4">
-      {label && <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/60">{label}</label>}
       <div className="grid grid-cols-4 gap-2">
         {options.map((s) => (
           <button
@@ -84,21 +314,24 @@ const BackgroundPickerAdapter = ({ value, onChange, schema, label }: any) => {
   );
 };
 
+const asWidget = (component: React.FC<WidgetAdapterProps>) =>
+  component as unknown as WidgetRegistry[string];
+
 const customWidgets: WidgetRegistry = {
-  'slider': SliderAdapter,
-  'text': InputAdapter,
-  'textarea': TextareaAdapter,
-  'select': SelectAdapter,
-  'lighting-direction': LightingDirectionAdapter,
-  'background-picker': BackgroundPickerAdapter,
+  'slider': asWidget(SliderAdapter),
+  'text': asWidget(InputAdapter),
+  'textarea': asWidget(TextareaAdapter),
+  'select': asWidget(SelectAdapter),
+  'lighting-direction': asWidget(LightingDirectionAdapter),
+  'background-picker': asWidget(BackgroundPickerAdapter),
 };
 
 const registry = { ...defaultWidgets, ...customWidgets };
 
 interface InteractiveParameterEditorProps {
-  steps: any[];
-  onUpdateStep: (idx: number, toolInput: any) => void;
-  onExecute: (idx: number) => void;
+  steps: PlanStep[];
+  onUpdateStep: (idx: number, toolInput: ToolInput) => void;
+  onExecute: (idx?: number) => void;
   disabled?: boolean;
   status?: string;
 }
@@ -157,6 +390,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                 <AnimatePresence mode="popLayout" initial={false}>
                   {steps.map((step, idx) => {
                     const isStepExpanded = expandedSteps[idx];
+                    const stepTitle = getToolTitle(step.tool_name);
                     return (
                       <motion.div
                         key={idx}
@@ -175,7 +409,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                               {idx + 1}.
                             </span>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              {step.tool_name}
+                              {stepTitle}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
@@ -222,6 +456,16 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                   })}
                 </AnimatePresence>
               </div>
+              {!isLocked && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => onExecute()}
+                    className="w-full rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-primary transition-colors hover:bg-primary/15"
+                  >
+                    Execute Full Plan
+                  </button>
+                </div>
+              )}
             </CardContent>
           </motion.div>
         )}
@@ -232,8 +476,8 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
 
 interface ToolParameterEditorProps {
   toolName: string;
-  toolInput: any;
-  onUpdate: (toolInput: any) => void;
+  toolInput: ToolInput;
+  onUpdate: (toolInput: ToolInput) => void;
   disabled?: boolean;
 }
 
@@ -243,9 +487,31 @@ const ToolParameterEditor: React.FC<ToolParameterEditorProps> = ({
   onUpdate,
   disabled = false,
 }) => {
-  const schema = getToolSchema(toolName);
+  const canonicalToolName = canonicalizeToolName(toolName);
+  const toolTitle = getToolTitle(toolName);
+  const toolDescription = getToolDescription(toolName);
+  const schema = getToolSchema(toolName, toolInput);
+  const safeInput = React.useMemo(
+    () => normalizePlanToolInput(toolName, toolInput || {}),
+    [toolInput, toolName]
+  );
+  const schemaEntries = Object.entries(schema || {});
+  const visibleSchemaEntries = schemaEntries.filter(([, fieldSchema]) => {
+    return !(fieldSchema as unknown as { hidden?: boolean }).hidden;
+  });
 
-  if (!schema || Object.keys(schema).length === 0) {
+  const hydratedInput = React.useMemo(() => {
+    const next: ToolInput = { ...safeInput };
+    visibleSchemaEntries.forEach(([key, fieldSchema]) => {
+      const schemaWithDefault = fieldSchema as unknown as { default?: unknown };
+      if (next[key] === undefined && schemaWithDefault.default !== undefined) {
+        next[key] = schemaWithDefault.default;
+      }
+    });
+    return next;
+  }, [safeInput, visibleSchemaEntries]);
+
+  if (visibleSchemaEntries.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border/60 bg-background/50 px-3 py-2 text-[11px] text-muted-foreground">
         No parameters for {toolName}
@@ -253,26 +519,61 @@ const ToolParameterEditor: React.FC<ToolParameterEditorProps> = ({
     );
   }
 
-  const config: FormConfig = {
-    initialData: toolInput,
-    onChange: onUpdate,
-  };
-
-  const form = useForm(config);
-
   return (
     <div className="space-y-4 mt-3">
-      {Object.entries(schema).map(([key, fieldSchema]) => (
-        <FieldRenderer
-          key={key}
-          path={key}
-          schema={fieldSchema}
-          value={form.data[key as keyof typeof form.data]}
-          onChange={(value) => form.setField(key, value)}
-          registry={registry}
-          disabled={disabled}
+      {(canonicalToolName === 'update_photographic' || canonicalToolName === 'update_lighting') ? (
+        <div
+          className="rounded-md border border-primary/15 bg-primary/5 px-3 py-2"
+          aria-label={`${toolTitle} section`}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-primary/80">
+            {toolTitle}
+          </p>
+          {toolDescription ? (
+            <p className="mt-1 text-[10px] text-muted-foreground">{toolDescription}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canonicalToolName === 'update_photographic' ? (
+        <CameraGuideViewport
+          cameraAngle={hydratedInput.camera_angle}
+          lensFocalLength={hydratedInput.lens_focal_length}
+          depthOfField={hydratedInput.depth_of_field}
+          focus={hydratedInput.focus}
+          compact
         />
-      ))}
+      ) : null}
+      {visibleSchemaEntries.map(([key, fieldSchema]) => {
+        const fieldTitle = getFieldTitle(key, fieldSchema);
+        const fieldDescription = getFieldDescription(fieldSchema);
+        return (
+          <div
+            key={key}
+            className="rounded-md border border-border/40 bg-background/25 px-3 py-2"
+            aria-label={`${fieldTitle} control`}
+          >
+            <div className="mb-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.13em] text-muted-foreground">
+                {fieldTitle}
+              </p>
+              {fieldDescription ? (
+                <p className="mt-1 text-[10px] text-muted-foreground/80">{fieldDescription}</p>
+              ) : null}
+            </div>
+            <FieldRenderer
+              path={key}
+              schema={fieldSchema}
+              value={hydratedInput[key as keyof typeof hydratedInput]}
+              onChange={(value) =>
+                onUpdate(normalizePlanToolInput(toolName, { ...hydratedInput, [key]: value }))
+              }
+              registry={registry}
+              disabled={disabled}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };

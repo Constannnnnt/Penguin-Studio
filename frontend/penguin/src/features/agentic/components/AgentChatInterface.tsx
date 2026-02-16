@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { User, Bot } from 'lucide-react';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { InteractiveParameterEditor } from './InteractiveParameterEditor';
+import { GenerationClarificationEditor } from './GenerationClarificationEditor';
 import { useAgentChat, type Message } from '../hooks/useAgentChat';
 import { PanelHeader } from '@/shared/components/layout/PanelHeader';
 import { ModeToggle } from '@/shared/components/layout/ModeToggle';
@@ -11,7 +12,11 @@ export const AgentChatInterface: React.FC = () => {
         messages,
         isTyping,
         executePlan,
-        updatePlanStep
+        executeGenerationDraft,
+        polishGenerationDraft,
+        resetGenerationDraft,
+        updatePlanStep,
+        updateGenerationDraft,
     } = useAgentChat();
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -23,8 +28,8 @@ export const AgentChatInterface: React.FC = () => {
         }
     }, [messages, isTyping]);
 
-    const handleExecutePlan = (msgId: string) => {
-        executePlan(msgId);
+    const handleExecutePlan = (msgId: string, stepIdx?: number) => {
+        executePlan(msgId, undefined, stepIdx);
     };
 
     return (
@@ -60,7 +65,18 @@ export const AgentChatInterface: React.FC = () => {
                                     <InteractiveParameterEditor
                                         steps={msg.plan}
                                         onUpdateStep={(idx, input) => updatePlanStep(msg.id, idx, input)}
-                                        onExecute={() => handleExecutePlan(msg.id)}
+                                        onExecute={(idx) => handleExecutePlan(msg.id, idx)}
+                                        status={msg.status}
+                                    />
+                                )}
+
+                                {msg.generation_draft && (
+                                    <GenerationClarificationEditor
+                                        draft={msg.generation_draft}
+                                        onUpdate={(draft) => updateGenerationDraft(msg.id, draft)}
+                                        onRethink={() => polishGenerationDraft(msg.id, false)}
+                                        onReset={() => resetGenerationDraft(msg.id)}
+                                        onGenerate={() => executeGenerationDraft(msg.id)}
                                         status={msg.status}
                                     />
                                 )}

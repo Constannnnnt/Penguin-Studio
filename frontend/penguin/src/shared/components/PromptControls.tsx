@@ -165,7 +165,7 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={onGenerate}
+                  onClick={() => onGenerate()}
                   disabled={isDisabled}
                   size="icon"
                   className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${!isDisabled ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90' : 'bg-muted/50 cursor-not-allowed opacity-50'

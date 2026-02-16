@@ -5,7 +5,7 @@ import { ImageViewer } from '@/features/imageEdit/components/ImageViewer';
 import type { PromptMode } from '@/shared/components/PromptControls';
 import { ErrorOverlay } from '@/shared/components/ErrorOverlay';
 import { useConfigStore } from '@/features/scene/store/configStore';
-import type { PenguinConfig, SceneConfiguration } from '@/core/types';
+import type { PenguinConfig, SceneConfiguration, SceneObject } from '@/core/types';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { useGeneration } from '@/shared/hooks/useGeneration';
 import { useDebounce } from '@/shared/hooks/useDebounce';
@@ -20,11 +20,12 @@ const MaskViewer = lazy(() => import('@/features/segmentation/components/MaskVie
 const PromptControls = lazy(() => import('@/shared/components/PromptControls').then(module => ({ default: module.PromptControls })));
 
 export interface WorkspacePanelRef {
-  handleGenerate: (promptOverride?: string) => void;
-  handleRefine: (promptOverride?: string) => void;
+  handleGenerate: (promptOverride?: unknown) => void;
+  handleGenerateFromPrompt: (prompt: string) => void;
+  handleRefine: (promptOverride?: unknown) => void;
   handleRefineWithConfig: (
     configOverride: PenguinConfig,
-    promptOverride?: string,
+    promptOverride?: unknown,
     structuredOverride?: Record<string, unknown>
   ) => void;
 }
@@ -40,6 +41,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const setWorkspaceHandlers = useLayoutStore((state) => state.setWorkspaceHandlers);
   const activeMode = useLayoutStore((state) => state.activeMode);
   const selectedFileUrl = useFileSystemStore((state) => state.selectedFileUrl);
+  const currentGenerationId = useFileSystemStore((state) => state.currentGenerationId);
+  const setOriginalStructuredPrompt = useFileSystemStore((state) => state.setOriginalStructuredPrompt);
   const sendAgentMessage = useChatStore((state) => state.sendMessage);
   const isAgentTyping = useChatStore((state) => state.isTyping);
   const connectAgent = useChatStore((state) => state.connect);
@@ -57,9 +60,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   // Track if user has manually edited the prompt in edit mode (to avoid overwriting their changes)
   const userEditedPromptRef = useRef(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const metadataInputRef = useRef<HTMLInputElement>(null);
-
   const { generateImage, refineImage, setSeed, clearGeneratedImage, isLoading, generatedImage, error } = useGeneration();
   const currentSeed = useFileSystemStore((state) => state.currentSeed);
   const originalStructuredPrompt = useFileSystemStore((state) => state.originalStructuredPrompt);
@@ -76,7 +76,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const isSegmenting = useSegmentationStore((state) => state.isProcessing);
   const segmentationError = useSegmentationStore((state) => state.error);
   const segmentationErrorCode = useSegmentationStore((state) => state.errorCode);
-  const uploadImage = useSegmentationStore((state) => state.uploadImage);
   const selectMask = useSegmentationStore((state) => state.selectMask);
   const hoverMask = useSegmentationStore((state) => state.hoverMask);
   const retryLastOperation = useSegmentationStore((state) => state.retryLastOperation);
@@ -227,6 +226,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   const refineImageRef = useRef(refineImage);
   const libraryImageRef = useRef<string | null>(null);
   const originalStructuredPromptRef = useRef<Record<string, unknown> | null>(originalStructuredPrompt);
+  const selectedFileUrlRef = useRef<string | null>(selectedFileUrl);
+  const currentGenerationIdRef = useRef<string | null>(currentGenerationId);
+  const segmentationResultsRef = useRef(segmentationResults);
 
   useEffect(() => {
     configRef.current = config;
@@ -256,10 +258,61 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     originalStructuredPromptRef.current = originalStructuredPrompt;
   }, [originalStructuredPrompt]);
 
-  const handleGenerate = (promptOverride?: string): void => {
+  useEffect(() => {
+    selectedFileUrlRef.current = selectedFileUrl;
+  }, [selectedFileUrl]);
+
+  useEffect(() => {
+    currentGenerationIdRef.current = currentGenerationId;
+  }, [currentGenerationId]);
+
+  useEffect(() => {
+    segmentationResultsRef.current = segmentationResults;
+  }, [segmentationResults]);
+
+  const hasVisualContext = (): boolean => {
+    const hasSegmentationImage = !!segmentationResultsRef.current?.original_image_url;
+    return Boolean(
+      generatedImageRef.current ||
+      libraryImageRef.current ||
+      selectedFileUrlRef.current ||
+      currentGenerationIdRef.current ||
+      hasSegmentationImage
+    );
+  };
+
+  const normalizePromptOverride = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '[object Object]') return undefined;
+    return trimmed;
+  };
+
+  const resolveGenerationPrompt = (
+    promptOverride?: unknown,
+    configOverride?: PenguinConfig
+  ): string => {
+    const candidate = normalizePromptOverride(promptOverride) || '';
+    if (candidate) return candidate;
+
+    if (configOverride?.short_description?.trim()) {
+      return configOverride.short_description.trim();
+    }
+
+    const local = (localPromptRef.current || '').trim();
+    if (local) return local;
+
+    const configShort = (configRef.current?.short_description || '').trim();
+    if (configShort) return configShort;
+
+    return 'A cinematic product photo scene';
+  };
+
+  const handleGenerate = (promptOverride?: unknown): void => {
+    const normalizedOverride = normalizePromptOverride(promptOverride);
     if (promptMode === 'generate') {
       // Generate mode: uses just the text prompt (simple text-to-image)
-      const rawPrompt = promptOverride ?? localPromptRef.current;
+      const rawPrompt = normalizedOverride ?? localPromptRef.current;
       const prompt =
         typeof rawPrompt === 'string' && rawPrompt !== '[object Object]'
           ? rawPrompt
@@ -273,8 +326,55 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
       generateImageRef.current?.(prompt);
     } else {
       // Edit mode: uses the modification prompt (user can edit the auto-generated one)
-      handleRefine(promptOverride);
+      handleRefine(normalizedOverride);
     }
+  };
+
+  const handleGenerateFromPrompt = (prompt: string): void => {
+    const resolved = resolveGenerationPrompt(prompt, configRef.current);
+    generateImageRef.current?.(resolved);
+  };
+
+  const buildObjectsFromSegmentationMetadata = (
+    baseObjects: SceneObject[]
+  ): SceneObject[] => {
+    const masks = segmentationResultsRef.current?.masks;
+    if (!masks || masks.length === 0) {
+      return baseObjects;
+    }
+
+    const nextObjects = [...baseObjects];
+
+    masks.forEach((mask, index) => {
+      const meta = mask.objectMetadata;
+      if (!meta) return;
+
+      const existing = nextObjects[index];
+      const fallback: SceneObject = {
+        description: mask.promptObject || `object ${index + 1}`,
+        location: 'center',
+        relative_size: 'medium',
+        shape_and_color: '',
+        orientation: 'front-facing',
+      };
+
+      const base = existing ? { ...existing } : fallback;
+      const updated: SceneObject = {
+        ...base,
+        description: meta.description || base.description,
+        location: (meta.location || base.location) as SceneObject['location'],
+        relationship: meta.relationship || base.relationship,
+        relative_size: (meta.relative_size || base.relative_size) as SceneObject['relative_size'],
+        shape_and_color: meta.shape_and_color || base.shape_and_color,
+        texture: meta.texture || base.texture,
+        appearance_details: meta.appearance_details || base.appearance_details,
+        orientation: (meta.orientation || base.orientation) as SceneObject['orientation'],
+      };
+
+      nextObjects[index] = updated;
+    });
+
+    return nextObjects;
   };
 
   const buildRefineConfig = (
@@ -329,13 +429,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
         baseConfig.style_medium || baseSceneConfig.aesthetics.style_medium || 'photograph',
       artistic_style:
         baseConfig.artistic_style || baseSceneConfig.aesthetics.aesthetic_style || 'realistic',
-      objects: Array.isArray(baseConfig.objects) ? baseConfig.objects : [],
+      objects: buildObjectsFromSegmentationMetadata(
+        Array.isArray(baseConfig.objects) ? baseConfig.objects : []
+      ),
     };
   };
 
-  const handleRefine = (promptOverride?: string): void => {
+  const handleRefine = (promptOverride?: unknown): void => {
+    const normalizedOverride = normalizePromptOverride(promptOverride);
+    if (!hasVisualContext()) {
+      generateImageRef.current?.(resolveGenerationPrompt(normalizedOverride, configRef.current));
+      return;
+    }
+
     // In edit mode, use the user's prompt (which may be the auto-generated one or their edits)
-    const modificationPrompt = promptOverride ?? localPromptRef.current;
+    const modificationPrompt = normalizedOverride ?? localPromptRef.current;
 
     const { config: storeConfig, sceneConfig, rawStructuredPrompt } = useConfigStore.getState();
     const fallbackStructured = originalStructuredPromptRef.current || rawStructuredPrompt || null;
@@ -344,11 +452,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     // Refine uses:
     // - Current config (with user modifications)
     // - Modification prompt (natural language description of changes)
-    // - Original structured prompt (baseline for Bria's modification mode)
     refineImageRef.current?.(
       mergedConfig,
-      modificationPrompt || undefined,
-      fallbackStructured || undefined
+      modificationPrompt || undefined
     );
 
     // Clear edits after refine (they've been applied)
@@ -359,10 +465,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
   const handleRefineWithConfig = (
     configOverride: PenguinConfig,
-    promptOverride?: string,
+    promptOverride?: unknown,
     structuredOverride?: Record<string, unknown>
   ): void => {
-    const modificationPrompt = promptOverride ?? localPromptRef.current;
+    const normalizedOverride = normalizePromptOverride(promptOverride);
+    if (!hasVisualContext()) {
+      generateImageRef.current?.(resolveGenerationPrompt(normalizedOverride, configOverride));
+      return;
+    }
+
+    const modificationPrompt = normalizedOverride ?? localPromptRef.current;
     const { sceneConfig, rawStructuredPrompt } = useConfigStore.getState();
     const fallbackStructured =
       structuredOverride || originalStructuredPromptRef.current || rawStructuredPrompt || null;
@@ -370,8 +482,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
     refineImageRef.current?.(
       mergedConfig,
-      modificationPrompt || undefined,
-      fallbackStructured || undefined
+      modificationPrompt || undefined
     );
 
     editTracker.clearEdits();
@@ -424,15 +535,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     handlePromptChange(value);
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const metadataFile = metadataInputRef.current?.files?.[0];
-    await uploadImage(file, metadataFile, localPrompt || shortDescription);
-    setViewMode('segmented');
-  };
-
   const handleMaskHover = (maskId: string | null): void => {
     hoverMask(maskId);
   };
@@ -447,15 +549,31 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
   useImperativeHandle(ref, () => ({
     handleGenerate,
+    handleGenerateFromPrompt,
     handleRefine,
     handleRefineWithConfig,
-  }), []);
+  }), [handleGenerate, handleGenerateFromPrompt, handleRefine, handleRefineWithConfig]);
 
   useEffect(() => {
     const handlers = {
-      handleGenerate,
-      handleRefine,
-      handleRefineWithConfig,
+      handleGenerate: (promptOverride?: string) => handleGenerate(promptOverride),
+      handleGenerateFromPrompt: (prompt: string) => handleGenerateFromPrompt(prompt),
+      handleRefine: (promptOverride?: string) => handleRefine(promptOverride),
+      handleRefineWithConfig: (
+        configOverride: unknown,
+        promptOverride?: string,
+        structuredOverride?: unknown
+      ) => {
+        const safeConfig =
+          (configOverride && typeof configOverride === 'object'
+            ? configOverride
+            : configRef.current) as PenguinConfig;
+        const safeStructured =
+          structuredOverride && typeof structuredOverride === 'object'
+            ? (structuredOverride as Record<string, unknown>)
+            : undefined;
+        handleRefineWithConfig(safeConfig, promptOverride, safeStructured);
+      },
     };
     setWorkspaceHandlers(handlers);
     return () => {
@@ -479,10 +597,32 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
 
   // Set seed when loading a generation from library
   useEffect(() => {
-    if (currentSeed !== null) {
-      setSeed(currentSeed);
-    }
+    setSeed(currentSeed ?? null);
   }, [currentSeed, setSeed]);
+
+  // Clear stale refinement context when no visual context exists
+  useEffect(() => {
+    const hasVisual =
+      !!generatedImage ||
+      !!libraryImage ||
+      !!selectedFileUrl ||
+      !!currentGenerationId ||
+      !!segmentationResults?.original_image_url;
+
+    if (!hasVisual && !isLoading) {
+      setSeed(null);
+      setOriginalStructuredPrompt(null);
+    }
+  }, [
+    generatedImage,
+    libraryImage,
+    selectedFileUrl,
+    currentGenerationId,
+    segmentationResults?.original_image_url,
+    isLoading,
+    setSeed,
+    setOriginalStructuredPrompt,
+  ]);
 
   // Clear library image when a new generation completes
   // This ensures the new generated image is shown instead of the old library selection
@@ -633,7 +773,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
             <PromptControls
               prompt={promptValue}
               onPromptChange={handleUnifiedPromptChange}
-              onGenerate={handleGenerate}
+              onGenerate={() => handleGenerate()}
               isLoading={isLoading}
               mode={promptMode}
               onModeChange={activeMode === 'edit' ? handleModeChange : undefined}
