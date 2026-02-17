@@ -20,6 +20,7 @@ from app.services.file_service import FileService
 from app.services.metrics_service import get_metrics_service
 from app.services.segmentation_service import SegmentationService
 from app.utils.filesystem import write_json_async, safe_join
+from app.utils.validation import validate_upload_file_size
 from app.utils.exceptions import (
     NotFoundException,
     ProcessingException,
@@ -202,18 +203,8 @@ async def segment_image(
                 },
             )
 
-        image_content = await image.read()
-        if not FileValidation.validate_file_size(len(image_content)):
-            raise ValidationException(
-                "Image file size exceeds maximum allowed size",
-                details={
-                    "file_size_bytes": len(image_content),
-                    "max_size_bytes": FileValidation.MAX_FILE_SIZE_BYTES,
-                    "max_size_mb": FileValidation.MAX_FILE_SIZE_BYTES / (1024 * 1024),
-                },
-            )
-
-        await image.seek(0)
+        # Validate file size with chunked reading to prevent memory exhaustion
+        await validate_upload_file_size(image, FileValidation.MAX_FILE_SIZE_BYTES)
 
         if metadata:
             if metadata.content_type != "application/json":
