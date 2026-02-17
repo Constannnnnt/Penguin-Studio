@@ -9,14 +9,15 @@ import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_segmentation_service
 from app.config import settings
-from app.utils.filesystem import glob_async, read_json_async, write_json_async
+from app.utils.filesystem import glob_async, read_json_async, write_json_async, safe_join
 from app.services.bria_service import (
     BriaService,
     GenerationParameters,
@@ -116,6 +117,30 @@ def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Generation failed",
         )
+
+
+def _get_secure_generation_dir(generation_id: str) -> Path:
+    """
+    Resolve generation directory and ensure it is within safe outputs directory.
+    Raises HTTPException 404 if path traversal detected or directory does not exist.
+    """
+    try:
+        generation_dir = safe_join(settings.outputs_dir, generation_id)
+    except ValueError:
+        # Path traversal detected
+        logger.warning(f"Path traversal attempt blocked: {generation_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generation not found: {generation_id}",
+        )
+
+    if not generation_dir.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generation not found: {generation_id}",
+        )
+
+    return generation_dir
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -362,16 +387,7 @@ async def get_generation(
     Returns:
         GenerateResponse with generation details
     """
-    from app.config import settings
-    import json
-
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     try:
         # Load metadata
@@ -493,13 +509,7 @@ async def segment_generation(
     """
     from io import BytesIO
 
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     image_path = generation_dir / "generated.png"
     if not image_path.exists():
@@ -520,8 +530,6 @@ async def segment_generation(
         image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
 
         # Create file-like objects for segmentation service
-        from fastapi import UploadFile
-
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
@@ -596,13 +604,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     # Check for image
     image_path = generation_dir / "generated.png"
@@ -689,13 +691,7 @@ async def save_prompt_version(
     """
     from datetime import datetime
 
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     # Generate timestamped filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
