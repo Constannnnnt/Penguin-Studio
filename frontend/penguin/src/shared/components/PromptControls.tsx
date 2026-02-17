@@ -164,19 +164,27 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
           {showGenerateAction && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  onClick={() => onGenerate()}
-                  disabled={isDisabled}
-                  size="icon"
-                  className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${!isDisabled ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90' : 'bg-muted/50 cursor-not-allowed opacity-50'
-                    }`}
-                  aria-label={`${buttonLabel} image`}
-                >
-                  {isLoading ? <LoadingSpinner size="sm" /> : buttonIcon}
-                </Button>
+                <span className="inline-block outline-none rounded-lg" tabIndex={isDisabled ? 0 : -1}>
+                  <Button
+                    onClick={() => onGenerate()}
+                    disabled={isDisabled}
+                    size="icon"
+                    className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${!isDisabled ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90' : 'bg-muted/50 cursor-not-allowed opacity-50 pointer-events-none'
+                      }`}
+                    aria-label={`${buttonLabel} image`}
+                  >
+                    {isLoading ? <LoadingSpinner size="sm" /> : buttonIcon}
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs font-semibold">{buttonLabel} <span className="text-[10px] opacity-70 font-normal ml-1">({generateShortcut})</span></p>
+                {isLoading ? (
+                  <p className="text-xs font-semibold">Generating...</p>
+                ) : isDisabled ? (
+                  <p className="text-xs font-semibold text-destructive">Enter at least 10 characters</p>
+                ) : (
+                  <p className="text-xs font-semibold">{buttonLabel} <span className="text-[10px] opacity-70 font-normal ml-1">({generateShortcut})</span></p>
+                )}
               </TooltipContent>
             </Tooltip>
           )}
