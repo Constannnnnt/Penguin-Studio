@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api", tags=["generation"])
 
 class GenerateRequest(BaseModel):
     """Request schema for image generation."""
-    prompt: Optional[str] = Field(None, description="Text prompt for generation")
+    prompt: Optional[str] = Field(None, description="Text prompt for generation", max_length=5000)
     images: Optional[List[str]] = Field(None, description="Reference image URLs or base64")
     structured_prompt: Optional[Dict[str, Any]] = Field(None, description="Structured prompt")
     aspect_ratio: str = Field("1:1", description="Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4)")
@@ -50,7 +50,7 @@ class RefineRequest(BaseModel):
     """Request schema for image refinement."""
     structured_prompt: Dict[str, Any] = Field(..., description="Updated structured prompt")
     seed: int = Field(..., description="Original seed for consistency")
-    modification_prompt: Optional[str] = Field(None, description="Optional prompt describing modification (e.g., 'add sunlight')")
+    modification_prompt: Optional[str] = Field(None, description="Optional prompt describing modification (e.g., 'add sunlight')", max_length=1000)
     aspect_ratio: str = Field("1:1", description="Aspect ratio")
     resolution: int = Field(1024, description="Resolution")
 
@@ -76,10 +76,10 @@ class CacheStatusResponse(BaseModel):
 
 class StructuredPromptRequest(BaseModel):
     """Request schema for structured prompt generation."""
-    prompt: Optional[str] = Field(None, description="Text prompt")
+    prompt: Optional[str] = Field(None, description="Text prompt", max_length=5000)
     images: Optional[List[str]] = Field(None, description="Reference image URLs")
     structured_prompt: Optional[Dict[str, Any]] = Field(None, description="Existing structured prompt to refine")
-    modification_prompt: Optional[str] = Field(None, description="Modification prompt (e.g., 'add sunlight')")
+    modification_prompt: Optional[str] = Field(None, description="Modification prompt (e.g., 'add sunlight')", max_length=1000)
 
 
 class StructuredPromptResponse(BaseModel):
@@ -491,7 +491,7 @@ async def generation_health(
 @router.post("/segment-generation/{generation_id}")
 async def segment_generation(
     generation_id: str,
-    prompts: Optional[str] = None,
+    prompts: Optional[str] = Query(None, max_length=5000),
     segmentation_service: SegmentationService = Depends(get_segmentation_service),
 ) -> Dict[str, Any]:
     """
