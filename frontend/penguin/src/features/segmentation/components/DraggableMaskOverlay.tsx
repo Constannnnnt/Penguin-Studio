@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { MaskMetadata, BoundingBox } from '@/features/segmentation/store/segmentationStore';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { combineImageEditFilters, constrainBoundingBox } from '@/shared/lib/maskUtils';
@@ -50,8 +51,10 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   containerSize,
   disableTooltip = false,
 }) => {
+  // Use targeted selectors to prevent unnecessary re-renders when other store parts change
+  const manipState = useSegmentationStore((state) => state.maskManipulation.get(mask.mask_id));
+
   const {
-    maskManipulation,
     startDragMask,
     updateMaskPosition,
     endDragMask,
@@ -64,9 +67,23 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     endRotateMask,
     flipMaskHorizontal,
     flipMaskVertical,
-  } = useSegmentationStore();
+  } = useSegmentationStore(
+    useShallow((state) => ({
+      startDragMask: state.startDragMask,
+      updateMaskPosition: state.updateMaskPosition,
+      endDragMask: state.endDragMask,
+      startResizeMask: state.startResizeMask,
+      updateMaskSize: state.updateMaskSize,
+      endResizeMask: state.endResizeMask,
+      toggleRotationMode: state.toggleRotationMode,
+      startRotateMask: state.startRotateMask,
+      updateMaskRotation: state.updateMaskRotation,
+      endRotateMask: state.endRotateMask,
+      flipMaskHorizontal: state.flipMaskHorizontal,
+      flipMaskVertical: state.flipMaskVertical,
+    }))
+  );
 
-  const manipState = maskManipulation.get(mask.mask_id);
   const scale = displayScale > 0 ? displayScale : 1;
   const bbox = manipState?.currentBoundingBox || mask.bounding_box;
   const displayBBox = React.useMemo(() => ({
@@ -409,7 +426,7 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
     }
   }, []);
 
-  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || rotatingRef.current || manipState?.isDragging || manipState?.isResizing || manipState?.isRotating;
+  const isCurrentlyManipulating = draggingRef.current || resizingRef.current || rotatingRef.current || manipState?.isDragging || manipState?.isResizing || manipState?.isRotating || false;
   // Use refs for manipulation state checks to avoid re-renders
   const isGloballyManipulatingRef = React.useRef(false);
   isGloballyManipulatingRef.current = isCurrentlyManipulating;
@@ -520,10 +537,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   // The mask visual layer is positioned at (-displayBBox.x1, -displayBBox.y1) and covers the full container
   // The actual mask content is at the original bbox position within this layer
   // For flip to work around the mask's center, we use transformOrigin
-  
-  // Calculate the center of the current bounding box (where the mask appears)
-  const bboxCenterX = (displayBBox.x1 + displayBBox.x2) / 2;
-  const bboxCenterY = (displayBBox.y1 + displayBBox.y2) / 2;
   
   // The mask visual style will use this center as transform origin
   const maskTransformStr = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
