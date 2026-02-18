@@ -8,6 +8,7 @@ import { PanelHeader } from './PanelHeader';
 import { ModeToggle } from './ModeToggle';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components/ui/tabs';
 import { Button } from '@/shared/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { ImageControlsTab } from '@/features/imageEdit/components/ImageControlsTab';
 import { ObjectsTab } from '@/features/objects/components/ObjectsTab';
 import { SceneTab } from '@/features/scene/components/SceneTab';
@@ -128,6 +129,15 @@ export const ControlsPanel: React.FC = () => {
     }
   }, [handleSaveMetadata, workspaceHandlers]);
 
+  const getRefineDisabledReason = () => {
+    if (isSavingMetadata) return "Saving changes...";
+    if (!segmentationResults) return "No objects detected to refine.";
+    if (activeControlsTab === 'image') return "Refinement is not available in Image mode.";
+    if (!workspaceHandlers?.handleRefine) return "Refinement is unavailable.";
+    return null;
+  };
+
+  const disabledReason = getRefineDisabledReason();
 
   const SceneTabContent = SceneTab;
 
@@ -140,15 +150,43 @@ export const ControlsPanel: React.FC = () => {
           <div className="flex items-center gap-4">
             <ModeToggle />
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleRefineAndSave}
-                disabled={isSavingMetadata || !segmentationResults || !workspaceHandlers?.handleRefine || activeControlsTab === 'image'}
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {isSavingMetadata ? 'Saving...' : 'Refine'}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {disabledReason ? (
+                      <span
+                        tabIndex={0}
+                        className="inline-block cursor-not-allowed rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleRefineAndSave}
+                          disabled={true}
+                          className="pointer-events-none"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          {isSavingMetadata ? 'Saving...' : 'Refine'}
+                        </Button>
+                      </span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleRefineAndSave}
+                      >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Refine
+                      </Button>
+                    )}
+                  </TooltipTrigger>
+                  {disabledReason && (
+                    <TooltipContent side="bottom" align="end">
+                      <p>{disabledReason}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         }
