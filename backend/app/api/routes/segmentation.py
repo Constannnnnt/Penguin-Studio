@@ -156,7 +156,7 @@ def _build_library_tree(file_service: FileService) -> FileNode:
 async def segment_image(
     image: UploadFile = File(..., description="Image file (PNG, JPG, JPEG)"),
     metadata: Optional[UploadFile] = File(None, description="Optional JSON metadata file"),
-    prompts: Optional[str] = Form(None, description="Optional comma-separated text prompts"),
+    prompts: Optional[str] = Form(None, description="Optional comma-separated text prompts", max_length=5000),
     segmentation_service: SegmentationService = Depends(get_segmentation_service),
 ) -> SegmentationResponse:
     """
