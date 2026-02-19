@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -30,6 +31,25 @@ class FileService:
             f"outputs={self.outputs_dir}"
         )
 
+    async def save_upload_to_path(self, file: UploadFile, path: Path) -> None:
+        """
+        Stream upload to disk to avoid memory exhaustion.
+
+        Uses shutil.copyfileobj to stream the file content efficiently
+        without loading the entire file into memory.
+        """
+        try:
+            await asyncio.to_thread(self._stream_to_file, file, path)
+            logger.debug(f"Streamed upload to {path}")
+        except Exception as e:
+            logger.exception(f"Failed to stream upload to {path}: {e}")
+            raise RuntimeError(f"Failed to save uploaded file: {e}") from e
+
+    def _stream_to_file(self, file: UploadFile, path: Path) -> None:
+        """Synchronous helper to stream file using shutil.copyfileobj."""
+        with path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
     async def save_upload(self, file: UploadFile, result_id: str) -> Path:
         """Save uploaded file with unique identifier."""
         try:
@@ -39,12 +59,9 @@ class FileService:
             file_extension = Path(file.filename or "image.png").suffix
             file_path = result_dir / f"original{file_extension}"
 
-            content = await file.read()
+            await self.save_upload_to_path(file, file_path)
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, file_path.write_bytes, content)
-
-            logger.info(f"Saved upload to {file_path} ({len(content)} bytes)")
+            logger.info(f"Saved upload to {file_path}")
             return file_path
 
         except Exception as e:
@@ -83,8 +100,7 @@ class FileService:
             rgba[..., 3] = mask_np  # alpha
             mask_image = Image.fromarray(rgba, mode="RGBA")
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, mask_image.save, mask_path)
+            await asyncio.to_thread(mask_image.save, mask_path)
 
             # Generate URL based on the actual output directory
             if output_dir:
@@ -125,9 +141,8 @@ class FileService:
                     try:
                         dir_mtime = result_dir.stat().st_mtime
                         if dir_mtime < cutoff_time:
-                            loop = asyncio.get_event_loop()
-                            await loop.run_in_executor(
-                                None, self._remove_directory, result_dir
+                            await asyncio.to_thread(
+                                self._remove_directory, result_dir
                             )
                             deleted_count += 1
                             logger.info(

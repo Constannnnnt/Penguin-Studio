@@ -202,18 +202,19 @@ async def segment_image(
                 },
             )
 
-        image_content = await image.read()
-        if not FileValidation.validate_file_size(len(image_content)):
+        # Efficiently check file size without loading into memory
+        file_size = await run_in_threadpool(image.file.seek, 0, 2)
+        await run_in_threadpool(image.file.seek, 0)
+
+        if not FileValidation.validate_file_size(file_size):
             raise ValidationException(
                 "Image file size exceeds maximum allowed size",
                 details={
-                    "file_size_bytes": len(image_content),
+                    "file_size_bytes": file_size,
                     "max_size_bytes": FileValidation.MAX_FILE_SIZE_BYTES,
                     "max_size_mb": FileValidation.MAX_FILE_SIZE_BYTES / (1024 * 1024),
                 },
             )
-
-        await image.seek(0)
 
         if metadata:
             if metadata.content_type != "application/json":

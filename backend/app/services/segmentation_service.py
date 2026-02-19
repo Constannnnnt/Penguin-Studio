@@ -79,9 +79,7 @@ class SegmentationService:
             # If custom output_dir, save image there; otherwise use default
             if output_dir:
                 image_path = output_dir / "original.png"
-                content = await image_file.read()
-                await image_file.seek(0)
-                image_path.write_bytes(content)
+                await self.file_service.save_upload_to_path(image_file, image_path)
             else:
                 image_path = await self.file_service.save_upload(image_file, result_id)
 

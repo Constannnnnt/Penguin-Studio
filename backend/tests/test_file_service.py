@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import io
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 import torch
@@ -32,7 +33,17 @@ class TestFileService:
         """Create a mock UploadFile."""
         mock_file = Mock()
         mock_file.filename = "test_image.png"
-        mock_file.read = AsyncMock(return_value=b"fake image data")
+
+        # Mock underlying file object for shutil.copyfileobj
+        file_obj = io.BytesIO(b"fake image data")
+        mock_file.file = file_obj
+
+        # Mock read to behave like async read
+        async def async_read():
+            file_obj.seek(0)
+            return file_obj.read()
+
+        mock_file.read = AsyncMock(side_effect=async_read)
         return mock_file
 
     def test_initialization(self, file_service, temp_dirs):
@@ -79,6 +90,7 @@ class TestFileService:
 
         mock_file = Mock()
         mock_file.filename = "test_image.jpg"
+        mock_file.file = io.BytesIO(b"fake jpeg data")
         mock_file.read = AsyncMock(return_value=b"fake jpeg data")
 
         file_path = await file_service.save_upload(mock_file, result_id)
@@ -228,7 +240,11 @@ class TestFileService:
 
         mock_file = Mock()
         mock_file.filename = "test.png"
-        mock_file.read = AsyncMock(side_effect=IOError("Read failed"))
+
+        # Mock file object that raises error on read
+        mock_file_obj = Mock()
+        mock_file_obj.read.side_effect = IOError("Read failed")
+        mock_file.file = mock_file_obj
 
         with pytest.raises(RuntimeError) as exc_info:
             await file_service.save_upload(mock_file, result_id)
