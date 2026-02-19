@@ -17,7 +17,7 @@
 2. Modify scene configuration (lighting direction, shadows, camera angle, etc.)
 3. Manipulate object masks (drag, resize, rotate, flip)
 4. System tracks all edits and generates modification prompt
-5. Click Refine to apply changes while preserving composition via seed
+5. Click Refine to run edit workflow (`/api/edit`) while preserving composition via seed
 
 ### Segment Images
 
@@ -61,7 +61,8 @@
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                        API Routes                               │    │
 │  │  /api/generate      - Text-to-image generation                  │    │
-│  │  /api/refine        - Image refinement with modification prompt │    │
+│  │  /api/edit          - Canonical image edit/refinement workflow  │    │
+│  │  /api/refine        - Legacy alias to /api/edit                │    │
 │  │  /api/segment       - Upload and segment image                  │    │
 │  │  /api/segment-generation/{id} - Segment existing generation     │    │
 │  │  /api/load-generation/{id}    - Load generation with masks      │    │
@@ -101,7 +102,7 @@ penguin-studio/
 │   ├── app/
 │   │   ├── api/                   # REST API layer
 │   │   │   ├── routes/
-│   │   │   │   ├── generation.py  # /generate, /refine, /load-generation
+│   │   │   │   ├── generation.py  # /generate, /edit, /refine(alias), /load-generation
 │   │   │   │   ├── segmentation.py# /segment endpoints
 │   │   │   │   ├── scene_parsing.py # /parse-scene
 │   │   │   │   └── websocket.py   # Real-time progress
@@ -245,16 +246,17 @@ penguin-studio/
 
 ### BriaService
 
-Handles all communication with Bria's image generation API.
+Handles all communication with Bria's image generation/edit APIs.
 
 **Responsibilities:**
 
 - Generate images from text prompts or structured prompts
-- Refine images using modification prompts + seed
+- Edit/refine images using Bria `/v2/image/edit`
 - Generate structured prompts without image (VLM bridge)
 - Request retry with exponential backoff
 - Rate limiting (1 request/second minimum)
 - Result caching (24-hour TTL)
+- Shared HTTP connection pooling (single AsyncClient) for lower latency and fewer socket churn issues
 - Save generations to disk
 
 **Key Methods:**
