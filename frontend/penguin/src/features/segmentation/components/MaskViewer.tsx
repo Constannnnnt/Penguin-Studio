@@ -561,7 +561,7 @@ export const MaskViewer: React.FC<MaskViewerProps> = React.memo(({
                 }}
                 onMouseEnter={() => undefined}
                 onMouseLeave={() => undefined}
-                imageContainerRef={overlayRef as React.RefObject<HTMLElement>}
+                imageContainerRef={overlayRef}
                 displayScale={layout.scale}
                 maskColor={color}
                 containerSize={{ width: layout.width, height: layout.height }}

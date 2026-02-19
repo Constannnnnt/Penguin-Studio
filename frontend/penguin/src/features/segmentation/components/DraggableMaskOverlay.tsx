@@ -14,7 +14,7 @@ interface DraggableMaskOverlayProps {
   onClick: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
-  imageContainerRef?: React.RefObject<HTMLElement>;
+  imageContainerRef?: React.RefObject<HTMLElement | null>;
   /**
    * Display scale between the logical image coordinates and the rendered pixels.
    * Defaults to 1 (no scaling).
@@ -138,16 +138,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   // Use ref to always have latest rotation value for event handlers
   const currentRotationRef = React.useRef(currentRotation);
   currentRotationRef.current = currentRotation;
-  
-  // Debug rotation state
-  // React.useEffect(() => {
-  //   console.log('[MaskOverlay] Rotation state:', { 
-  //     maskId: mask.mask_id, 
-  //     currentRotation, 
-  //     isRotationMode,
-  //     transformRotation: transform?.rotation 
-  //   });
-  // }, [mask.mask_id, currentRotation, isRotationMode, transform?.rotation]);
 
   const handleDoubleClick = (e: React.MouseEvent): void => {
     e.stopPropagation();
@@ -191,7 +181,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
         const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
         
         const startRot = currentRotationRef.current;
-        // console.log('[MaskOverlay] Starting rotation with currentRotation:', startRot);
         
         rotatingRef.current = true;
         rotateSessionRef.current = {
@@ -492,17 +481,10 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   const flipH = transform?.flipHorizontal ?? false;
   const flipV = transform?.flipVertical ?? false;
 
-  // Debug: log flip state changes
-  // React.useEffect(() => {
-  //   console.log(`[MaskOverlay] ${mask.mask_id} flip state: H=${flipH}, V=${flipV}, rotation=${currentRotation}`);
-  // }, [mask.mask_id, flipH, flipV, currentRotation]);
-
   // Build rotation transform for the container (rotation only)
   const containerTransform = currentRotation !== 0 
     ? `rotate(${currentRotation}deg)`
     : undefined;
-  
-  // console.log(`[MaskOverlay] ${mask.mask_id} containerTransform:`, containerTransform, 'currentRotation:', currentRotation);
 
   const style: React.CSSProperties = {
     position: 'absolute',
@@ -544,8 +526,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
   // Flip transform string - applied separately with center origin
   const flipScaleX = flipH ? -1 : 1;
   const flipScaleY = flipV ? -1 : 1;
-  
-  // console.log('[MaskOverlay] maskTransform:', maskTransformStr, 'flipH:', flipH, 'flipV:', flipV, 'bboxCenter:', bboxCenterX, bboxCenterY);
 
   // Flip wrapper style - flips around the center of the bounding box
   const flipWrapperStyle: React.CSSProperties = {
@@ -657,7 +637,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
                 onPointerDown={(e) => { 
                   e.stopPropagation(); 
                   e.preventDefault();
-                  // console.log('[MaskOverlay] Flip H clicked for', mask.mask_id);
                   flipMaskHorizontal(mask.mask_id); 
                 }}
                 data-mask-interactive="true"
@@ -679,7 +658,6 @@ export const DraggableMaskOverlay: React.FC<DraggableMaskOverlayProps> = React.m
                 onPointerDown={(e) => { 
                   e.stopPropagation(); 
                   e.preventDefault();
-                  // console.log('[MaskOverlay] Flip V clicked for', mask.mask_id);
                   flipMaskVertical(mask.mask_id); 
                 }}
                 data-mask-interactive="true"

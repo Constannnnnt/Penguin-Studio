@@ -4,6 +4,7 @@ import { handleSegmentationError, type SegmentationErrorCode } from '@/shared/li
 import { MetadataUpdater } from '@/shared/lib/metadataUpdater';
 import { announceManipulation, announceSelection } from '@/shared/lib/screenReaderAnnouncements';
 import { debounceWithCancel } from '@/shared/lib/debounce';
+import { editTracker } from '@/shared/lib/editTracker';
 
 export interface BoundingBox {
   x1: number;
@@ -389,7 +390,6 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            // console.log('[Segmentation] Upload successful:', results.result_id);
 
             const { useFileSystemStore } = await import('@/core/store/fileSystemStore');
             await useFileSystemStore.getState().addSegmentedImage(
@@ -472,7 +472,6 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            // console.log('[Segmentation] Example segmentation successful:', resultsWithMetadata.result_id);
 
             const { useFileSystemStore } = await import('@/core/store/fileSystemStore');
             await useFileSystemStore.getState().addSegmentedImage(
@@ -557,7 +556,6 @@ export const useSegmentationStore = create<SegmentationState>()(
               errorCode: null,
             });
 
-            // console.log('[Segmentation] Generation segmentation successful:', generationId);
 
           } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
@@ -635,7 +633,6 @@ export const useSegmentationStore = create<SegmentationState>()(
       retryLastOperation: async () => {
         const { lastOperation } = get();
         if (lastOperation) {
-          // console.log('[Segmentation] Retrying last operation');
           await lastOperation();
         } else {
           console.warn('[Segmentation] No operation to retry');
@@ -793,53 +790,50 @@ export const useSegmentationStore = create<SegmentationState>()(
         const manipState = state.maskManipulation.get(maskId);
         if (state.results && manipState && imageSize) {
           if (mask) {
-            // Import and use MetadataUpdater
-            import('@/shared/lib/metadataUpdater').then(({ MetadataUpdater }) => {
-              const updater = new MetadataUpdater();
-              
-              // Update relative_size metadata
-              const relative_size = updater.updateRelativeSizeMetadata(
-                manipState.currentBoundingBox,
-                imageSize
-              );
-              
-              // Recalculate area_pixels and area_percentage
-              const width = manipState.currentBoundingBox.x2 - manipState.currentBoundingBox.x1;
-              const height = manipState.currentBoundingBox.y2 - manipState.currentBoundingBox.y1;
-              const area_pixels = Math.round(width * height);
-              const area_percentage = (area_pixels / (imageSize.width * imageSize.height)) * 100;
-              
-              // Update the mask metadata with new size information
-              get().updateMaskMetadata(maskId, {
-                relative_size,
-              });
-              
-              // Update the mask's bounding_box, area_pixels, and area_percentage in results
-              const currentState = get();
-              if (currentState.results) {
-                const maskIndex = currentState.results.masks.findIndex(m => m.mask_id === maskId);
-                if (maskIndex !== -1) {
-                  const updatedMasks = [...currentState.results.masks];
-                  updatedMasks[maskIndex] = {
-                    ...updatedMasks[maskIndex],
-                    bounding_box: { ...manipState.currentBoundingBox },
-                    area_pixels,
-                    area_percentage,
-                    centroid: [
-                      (manipState.currentBoundingBox.x1 + manipState.currentBoundingBox.x2) / 2,
-                      (manipState.currentBoundingBox.y1 + manipState.currentBoundingBox.y2) / 2,
-                    ],
-                  };
-                  
-                  set({
-                    results: {
-                      ...currentState.results,
-                      masks: updatedMasks,
-                    },
-                  });
-                }
-              }
+            const updater = new MetadataUpdater();
+
+            // Update relative_size metadata
+            const relative_size = updater.updateRelativeSizeMetadata(
+              manipState.currentBoundingBox,
+              imageSize
+            );
+
+            // Recalculate area_pixels and area_percentage
+            const width = manipState.currentBoundingBox.x2 - manipState.currentBoundingBox.x1;
+            const height = manipState.currentBoundingBox.y2 - manipState.currentBoundingBox.y1;
+            const area_pixels = Math.round(width * height);
+            const area_percentage = (area_pixels / (imageSize.width * imageSize.height)) * 100;
+
+            // Update the mask metadata with new size information
+            get().updateMaskMetadata(maskId, {
+              relative_size,
             });
+
+            // Update the mask's bounding_box, area_pixels, and area_percentage in results
+            const currentState = get();
+            if (currentState.results) {
+              const maskIndex = currentState.results.masks.findIndex(m => m.mask_id === maskId);
+              if (maskIndex !== -1) {
+                const updatedMasks = [...currentState.results.masks];
+                updatedMasks[maskIndex] = {
+                  ...updatedMasks[maskIndex],
+                  bounding_box: { ...manipState.currentBoundingBox },
+                  area_pixels,
+                  area_percentage,
+                  centroid: [
+                    (manipState.currentBoundingBox.x1 + manipState.currentBoundingBox.x2) / 2,
+                    (manipState.currentBoundingBox.y1 + manipState.currentBoundingBox.y2) / 2,
+                  ],
+                };
+
+                set({
+                  results: {
+                    ...currentState.results,
+                    masks: updatedMasks,
+                  },
+                });
+              }
+            }
           }
         }
       },
@@ -1059,100 +1053,97 @@ export const useSegmentationStore = create<SegmentationState>()(
         
         // Track edits for the edit prompt
         // Use promptObject (short noun) as the label - do NOT fall back to long description
-        import('@/shared/lib/editTracker').then(({ editTracker }) => {
-          // Prefer promptObject (short noun), fall back to generic label
-          const promptObj = mask.promptObject?.trim();
-          // Use promptObject or generic "object N" - never use long description
-          const objectLabel = promptObj || `object ${maskIndex + 1}`;
-          
-          // Track description changes
-          if (metadata.description !== undefined && metadata.description !== oldMetadata?.description) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].description`,
-              oldMetadata?.description,
-              metadata.description,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track location changes
-          if (metadata.location !== undefined && metadata.location !== oldMetadata?.location) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].location`,
-              oldMetadata?.location,
-              metadata.location,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track size changes
-          if (metadata.relative_size !== undefined && metadata.relative_size !== oldMetadata?.relative_size) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].relative_size`,
-              oldMetadata?.relative_size,
-              metadata.relative_size,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track orientation changes
-          if (metadata.orientation !== undefined && metadata.orientation !== oldMetadata?.orientation) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].orientation`,
-              oldMetadata?.orientation,
-              metadata.orientation,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track shape_and_color changes
-          if (metadata.shape_and_color !== undefined && metadata.shape_and_color !== oldMetadata?.shape_and_color) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].shape_and_color`,
-              oldMetadata?.shape_and_color,
-              metadata.shape_and_color,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track texture changes
-          if (metadata.texture !== undefined && metadata.texture !== oldMetadata?.texture) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].texture`,
-              oldMetadata?.texture,
-              metadata.texture,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track appearance_details changes
-          if (metadata.appearance_details !== undefined && metadata.appearance_details !== oldMetadata?.appearance_details) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].appearance_details`,
-              oldMetadata?.appearance_details,
-              metadata.appearance_details,
-              maskIndex,
-              objectLabel
-            );
-          }
-          
-          // Track relationship changes
-          if (metadata.relationship !== undefined && metadata.relationship !== oldMetadata?.relationship) {
-            editTracker.trackEdit(
-              `objects[${maskIndex}].relationship`,
-              oldMetadata?.relationship,
-              metadata.relationship,
-              maskIndex,
-              objectLabel
-            );
-          }
-        });
+        const promptObj = mask.promptObject?.trim();
+        // Use promptObject or generic "object N" - never use long description
+        const objectLabel = promptObj || `object ${maskIndex + 1}`;
+
+        // Track description changes
+        if (metadata.description !== undefined && metadata.description !== oldMetadata?.description) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].description`,
+            oldMetadata?.description,
+            metadata.description,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track location changes
+        if (metadata.location !== undefined && metadata.location !== oldMetadata?.location) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].location`,
+            oldMetadata?.location,
+            metadata.location,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track size changes
+        if (metadata.relative_size !== undefined && metadata.relative_size !== oldMetadata?.relative_size) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].relative_size`,
+            oldMetadata?.relative_size,
+            metadata.relative_size,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track orientation changes
+        if (metadata.orientation !== undefined && metadata.orientation !== oldMetadata?.orientation) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].orientation`,
+            oldMetadata?.orientation,
+            metadata.orientation,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track shape_and_color changes
+        if (metadata.shape_and_color !== undefined && metadata.shape_and_color !== oldMetadata?.shape_and_color) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].shape_and_color`,
+            oldMetadata?.shape_and_color,
+            metadata.shape_and_color,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track texture changes
+        if (metadata.texture !== undefined && metadata.texture !== oldMetadata?.texture) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].texture`,
+            oldMetadata?.texture,
+            metadata.texture,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track appearance_details changes
+        if (metadata.appearance_details !== undefined && metadata.appearance_details !== oldMetadata?.appearance_details) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].appearance_details`,
+            oldMetadata?.appearance_details,
+            metadata.appearance_details,
+            maskIndex,
+            objectLabel
+          );
+        }
+
+        // Track relationship changes
+        if (metadata.relationship !== undefined && metadata.relationship !== oldMetadata?.relationship) {
+          editTracker.trackEdit(
+            `objects[${maskIndex}].relationship`,
+            oldMetadata?.relationship,
+            metadata.relationship,
+            maskIndex,
+            objectLabel
+          );
+        }
         
         return {
           results: {
@@ -1241,8 +1232,6 @@ export const useSegmentationStore = create<SegmentationState>()(
       flipMaskHorizontal: (maskId: string) => {
         const state = get();
         const mask = state.results?.masks.find(m => m.mask_id === maskId);
-        const currentFlipH = state.maskManipulation.get(maskId)?.transform.flipHorizontal ?? false;
-        // console.log('[Store] flipMaskHorizontal called for', maskId, 'current:', currentFlipH, 'new:', !currentFlipH);
         
         set((state) => {
           const newManipulation = new Map(state.maskManipulation);
@@ -1267,17 +1256,15 @@ export const useSegmentationStore = create<SegmentationState>()(
           // Use promptObject (short noun) as the label - do NOT fall back to long description
           const promptObj = mask.promptObject?.trim();
           const objectLabel = promptObj || `object ${maskIndex + 1}`;
-          import('@/shared/lib/editTracker').then(({ editTracker }) => {
-            const manipState = get().maskManipulation.get(maskId);
-            const isFlipped = manipState?.transform.flipHorizontal ?? false;
-            editTracker.trackEdit(
-              `objects[${maskIndex}].flip`,
-              null,
-              isFlipped ? 'flipped horizontally' : 'normal',
-              maskIndex,
-              objectLabel
-            );
-          });
+          const manipState = get().maskManipulation.get(maskId);
+          const isFlipped = manipState?.transform.flipHorizontal ?? false;
+          editTracker.trackEdit(
+            `objects[${maskIndex}].flip`,
+            null,
+            isFlipped ? 'flipped horizontally' : 'normal',
+            maskIndex,
+            objectLabel
+          );
         }
       },
 
@@ -1308,17 +1295,15 @@ export const useSegmentationStore = create<SegmentationState>()(
           // Use promptObject (short noun) as the label - do NOT fall back to long description
           const promptObj = mask.promptObject?.trim();
           const objectLabel = promptObj || `object ${maskIndex + 1}`;
-          import('@/shared/lib/editTracker').then(({ editTracker }) => {
-            const manipState = get().maskManipulation.get(maskId);
-            const isFlipped = manipState?.transform.flipVertical ?? false;
-            editTracker.trackEdit(
-              `objects[${maskIndex}].flip`,
-              null,
-              isFlipped ? 'flipped vertically' : 'normal',
-              maskIndex,
-              objectLabel
-            );
-          });
+          const manipState = get().maskManipulation.get(maskId);
+          const isFlipped = manipState?.transform.flipVertical ?? false;
+          editTracker.trackEdit(
+            `objects[${maskIndex}].flip`,
+            null,
+            isFlipped ? 'flipped vertically' : 'normal',
+            maskIndex,
+            objectLabel
+          );
         }
       },
     }),

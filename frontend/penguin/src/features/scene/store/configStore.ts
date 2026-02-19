@@ -15,6 +15,7 @@ import type {
   ArtisticStyle,
 } from '@/core/types';
 import { editTracker } from '@/shared/lib/editTracker';
+import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 
 // ============================================================================
 // Default Configuration
@@ -337,21 +338,15 @@ export const useConfigStore = create<ConfigState>()(
           set((state) => {
             // Track object edit
             const oldValue = state.config.objects[index]?.[field as keyof SceneObject];
-            
-            // Try to get promptObject from segmentation store for better edit labels
-            // Import dynamically to avoid circular dependency
-            import('@/features/segmentation/store/segmentationStore').then(({ useSegmentationStore }) => {
-              const segState = useSegmentationStore.getState();
-              const mask = segState.results?.masks[index];
-              // Use promptObject (short noun) - do NOT fall back to long description
-              const promptObj = mask?.promptObject?.trim();
-              const objectLabel = promptObj || `object ${index + 1}`;
-              editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
-            }).catch(() => {
-              // Fallback if import fails - use generic label
-              const objectLabel = `object ${index + 1}`;
-              editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
-            });
+
+            const segState = useSegmentationStore.getState();
+            const mask = segState.results?.masks[index];
+            const objectLabel =
+              mask?.label?.trim() ||
+              mask?.promptObject?.trim() ||
+              mask?.objectMetadata?.description?.trim() ||
+              `object ${index + 1}`;
+            editTracker.trackEdit(`objects[${index}].${field}`, oldValue, value, index, objectLabel);
 
             return {
               config: {
@@ -381,6 +376,18 @@ export const useConfigStore = create<ConfigState>()(
           }),
 
         /**
+         * Clears the seed from sceneConfig to prevent stale seed values
+         * from leaking when switching away from generated images.
+         */
+        clearSeed: () =>
+          set((state) => ({
+            sceneConfig: {
+              ...state.sceneConfig,
+              seed: undefined,
+            },
+          })),
+
+        /**
          * Applies semantic parsing results to enhanced configuration
          */
         applySemanticParsing: (parsedData: SemanticParsingResponse) =>
@@ -388,6 +395,7 @@ export const useConfigStore = create<ConfigState>()(
             sceneConfig: {
               background_setting: parsedData.background_setting,
               aspect_ratio: state.sceneConfig.aspect_ratio,
+              seed: state.sceneConfig.seed,
               photographic_characteristics: {
                 camera_angle: parsedData.photographic_characteristics.camera_angle.value,
                 lens_focal_length: parsedData.photographic_characteristics.lens_focal_length.value,
@@ -447,7 +455,6 @@ export const useConfigStore = create<ConfigState>()(
                 coerceText(value, coerceText(fallback, ''));
 
             // Log the incoming short_description
-            // console.log('[ConfigStore] updateConfigFromStructuredPrompt - short_description:', sp.short_description);
 
             // Clear previous edits and set new baseline for edit tracking
             editTracker.clearEdits();
@@ -564,6 +571,29 @@ export const useConfigStore = create<ConfigState>()(
         name: 'penguin-config-storage',
         version: 1,
         migrate: (persistedState: any) => sanitizePersistedConfig(persistedState),
+        onRehydrateStorage: () => (state) => {
+          // On page reload, fileSystemStore doesn't persist, so selectedFile is null.
+          // Clear scene-specific config (objects, description) to avoid stale context
+          // leaking into agent prompts when no image is open.
+          if (!state) return;
+          const { useFileSystemStore } = require('@/core/store/fileSystemStore');
+          const fsState = useFileSystemStore.getState();
+          if (!fsState.selectedFile && !fsState.currentGenerationId) {
+            state.config = {
+              ...state.config,
+              short_description: '',
+              objects: [],
+              background_setting: '',
+              context: undefined,
+            };
+            state.rawStructuredPrompt = null;
+            state.sceneConfig = {
+              ...state.sceneConfig,
+              seed: undefined,
+              background_setting: '',
+            };
+          }
+        },
       }
     ),
     {

@@ -26,14 +26,13 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
   // Refs for stable access in event handlers
   const valueRef = React.useRef<LightingDirectionValue>(value);
-  const commitTimeoutRef = React.useRef<NodeJS.Timeout>();
+  const commitTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [localValue, setLocalValue] = React.useState<LightingDirectionValue>(value);
 
   const [isDragging, setIsDragging] = React.useState(false);
   const [isRotating, setIsRotating] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState<{ x: number; y: number } | null>(null);
   const [rotationStart, setRotationStart] = React.useState<{
     angle: number;
     rotation: number;
@@ -41,7 +40,6 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
   } | null>(null);
 
   // Sync local value with prop value when not dragging
-  // Moved this AFTER state declarations to avoid ReferenceError
   React.useEffect(() => {
     if (!isDragging && !isRotating) {
       setLocalValue(value);
@@ -134,11 +132,8 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
     const rect = containerRef.current.getBoundingClientRect();
     containerRectRef.current = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-    const startX = event.clientX - rect.left;
-    const startY = event.clientY - rect.top;
 
     setIsDragging(true);
-    setDragStart({ x: startX, y: startY }); // Not actually used in calculation logic but keeps state valid
 
     flashlightRef.current?.focus();
   }, [disabled]);
@@ -227,7 +222,6 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
     setIsDragging(false);
     setIsRotating(false);
-    setDragStart(null);
     setRotationStart(null);
     // Clear cached rect
     containerRectRef.current = null;
@@ -267,7 +261,7 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
     // Actually, best to use functional update logic to be safe, BUT we need the RESULT to commit.
     // So let's use valueRef.current as base.
 
-    let baseValue = valueRef.current;
+    const baseValue = valueRef.current;
     let newValue = { ...baseValue };
     let handled = true;
     const step = event.shiftKey ? 10 : 1;
@@ -354,14 +348,6 @@ export const LightingDirectionControl = React.memo<LightingDirectionControlProps
 
   return (
     <div className={cn(compact ? 'space-y-2' : 'space-y-4', className)}>
-      {/* Label */}
-      {/* <Label
-        id={labelId}
-        className="block text-sm sm:text-base font-medium"
-      >
-        {label}
-      </Label> */}
-
       {/* Interactive Area */}
       <div
         ref={containerRef}
