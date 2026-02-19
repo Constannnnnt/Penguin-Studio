@@ -30,33 +30,34 @@ export const useGeneration = () => {
     structuredPromptData: Record<string, unknown> | undefined
   ): Promise<void> => {
     try {
-      // 1. Parse structured prompt and update scene config (like upload process)
-      if (structuredPromptData) {
+      // Run parse/config sync and segmentation in parallel to reduce perceived latency.
+      const parsePromise = (async () => {
+        if (!structuredPromptData) return;
         try {
           // Use semantic parsing to convert Bria's structured prompt to scene config
           const parsedConfig = await apiClient.parseSceneMetadata(structuredPromptData);
           const configStore = useConfigStore.getState();
-          
+
           // Apply parsed config to scene config (for scene panel)
           configStore.applySemanticParsing(parsedConfig);
-          
+
           // Also update the main config with raw structured prompt data
           configStore.updateConfigFromStructuredPrompt(structuredPromptData);
-          
-          // console.log('[Generation] Config updated from structured prompt');
         } catch (parseErr) {
           console.warn('[Generation] Failed to parse structured prompt:', parseErr);
           // Fallback: just update raw config
           const configStore = useConfigStore.getState();
           configStore.updateConfigFromStructuredPrompt(structuredPromptData);
         }
-      }
+      })();
 
-      // 2. Trigger segmentation on the generated image
+      // Trigger segmentation on the generated image
       const segmentationStore = useSegmentationStore.getState();
-      await segmentationStore.segmentGeneration(generationId);
+      const segmentPromise = segmentationStore.segmentGeneration(generationId);
 
-      // 3. Refresh the library to show the new generation
+      await Promise.all([parsePromise, segmentPromise]);
+
+      // Refresh the library to show the new generation
       const fileSystemStore = useFileSystemStore.getState();
       await fileSystemStore.refreshFileTree();
 
@@ -74,6 +75,7 @@ export const useGeneration = () => {
       setGeneratedImage(response.image_url);
       setError(null);
       lastGenerationIdRef.current = response.id;
+      const fileSystemStore = useFileSystemStore.getState();
       
       if (response.seed !== undefined) {
         lastSeedRef.current = response.seed;
@@ -81,11 +83,13 @@ export const useGeneration = () => {
         if (sceneConfig.seed !== response.seed) {
           setSceneConfig({ ...sceneConfig, seed: response.seed });
         }
+        fileSystemStore.setCurrentGenerationContext(response.id, response.seed);
+      } else {
+        fileSystemStore.setCurrentGenerationContext(response.id, fileSystemStore.currentSeed);
       }
       if (response.structured_prompt) {
         setStructuredPrompt(response.structured_prompt);
         // Store original structured prompt for refinement (critical for immediate refine after generate)
-        const fileSystemStore = useFileSystemStore.getState();
         fileSystemStore.setOriginalStructuredPrompt(response.structured_prompt);
       }
 
@@ -97,6 +101,34 @@ export const useGeneration = () => {
       showError('Failed', 'Generation error');
     }
   }, [runPostGenerationPipeline]);
+
+  const resolveRefineSeed = useCallback((): number | null => {
+    const coerceSeed = (value: unknown): number | null => {
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
+    const { sceneConfig } = useConfigStore.getState();
+    const fileSystemState = useFileSystemStore.getState();
+    const trackedSeed = coerceSeed(lastSeedRef.current);
+    const sceneSeed = coerceSeed(sceneConfig.seed);
+    const fileSeed = coerceSeed(fileSystemState.currentSeed);
+
+    // If user loaded a different generation, prefer the loaded generation seed.
+    if (
+      fileSystemState.currentGenerationId &&
+      lastGenerationIdRef.current &&
+      fileSystemState.currentGenerationId !== lastGenerationIdRef.current
+    ) {
+      return fileSeed ?? sceneSeed ?? trackedSeed;
+    }
+
+    return trackedSeed ?? sceneSeed ?? fileSeed;
+  }, []);
 
   /**
    * Poll for generation completion
@@ -170,14 +202,17 @@ export const useGeneration = () => {
    * @param sourceImage - Source image URL/base64 for edit endpoint
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight", "make it warmer")
    * @param mask - Optional mask URL/base64 for localized edits
+   * @param structuredPromptBase - Optional full structured prompt baseline to preserve rich fields
    */
   const refineImage = async (
     config: PenguinConfig,
     sourceImage: string,
     modificationPrompt?: string,
-    mask?: string
+    mask?: string,
+    structuredPromptBase?: Record<string, unknown>
   ): Promise<void> => {
-    if (lastSeedRef.current === null) {
+    const refineSeed = resolveRefineSeed();
+    if (refineSeed === null) {
       console.warn('[Generation] No seed available for refinement');
       setError('Generate an image first');
       showError('Refine Failed', 'No seed available. Generate an image first or load a generation with a seed.');
@@ -199,16 +234,20 @@ export const useGeneration = () => {
     try {
       const response: GenerationResponse = await apiClient.refineImage(
         config,
-        lastSeedRef.current,
+        refineSeed,
         sourceImage,
         modificationPrompt,
-        mask
+        mask,
+        undefined,
+        structuredPromptBase
       );
+      const normalizedResponse =
+        response.seed === undefined ? { ...response, seed: refineSeed } : response;
 
-      if (response.status === 'pending' || response.status === 'processing') {
-        await pollGeneration(response.id);
+      if (normalizedResponse.status === 'pending' || normalizedResponse.status === 'processing') {
+        await pollGeneration(normalizedResponse.id);
       } else {
-        await handleResponse(response);
+        await handleResponse(normalizedResponse);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Refinement failed';

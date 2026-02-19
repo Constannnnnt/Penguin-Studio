@@ -88,7 +88,7 @@ const FIELD_DESCRIPTIONS: Record<string, (oldVal: unknown, newVal: unknown) => s
 const describeObjectEdit = (
   objectIndex: number,
   field: string,
-  oldValue: unknown,
+  _oldValue: unknown,
   newValue: unknown,
   objectLabel?: string
 ): string => {
@@ -129,18 +129,6 @@ const describeObjectEdit = (
 };
 
 /**
- * Get nested value from object using dot notation path
- */
-const getNestedValue = (obj: Record<string, unknown>, path: string): unknown => {
-  return path.split('.').reduce((current: unknown, key) => {
-    if (current && typeof current === 'object') {
-      return (current as Record<string, unknown>)[key];
-    }
-    return undefined;
-  }, obj);
-};
-
-/**
  * Compare two values for equality (handles objects)
  */
 const valuesEqual = (a: unknown, b: unknown): boolean => {
@@ -171,7 +159,6 @@ export const createEditTracker = (): {
   };
 
   const notifyListeners = (): void => {
-    // console.log('[EditTracker] Notifying listeners, count:', state.listeners.size, 'edits:', state.edits.length);
     state.listeners.forEach(listener => listener());
   };
 

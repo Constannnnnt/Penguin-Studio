@@ -2,13 +2,16 @@ import * as React from 'react';
 import { Slider } from '@/shared/components/ui/slider';
 import { cn } from '@/shared/lib/utils';
 
-interface PerformantSliderProps extends React.ComponentProps<typeof Slider> {
-    value: number;
-    onValueChange: (value: number) => void;
-    /**
-     * Optional: Display the current value on hover
-     */
-    showValueOnHover?: boolean;
+interface PerformantSliderProps extends Omit<
+  React.ComponentProps<typeof Slider>,
+  'value' | 'defaultValue' | 'onValueChange' | 'onValueCommit'
+> {
+  value: number;
+  onValueChange: (value: number) => void;
+  /**
+   * Optional: Display the current value on hover
+   */
+  showValueOnHover?: boolean;
 }
 
 export const PerformantSlider: React.FC<PerformantSliderProps> = ({
