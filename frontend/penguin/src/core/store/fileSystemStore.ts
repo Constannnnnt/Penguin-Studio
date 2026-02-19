@@ -29,11 +29,15 @@ export interface FileSystemState {
 
   loadFileTree: () => Promise<void>;
   selectFile: (node: FileNode) => void;
-  loadGeneration: (generationId: string) => Promise<void>;
+  loadGeneration: (
+    generationId: string,
+    options?: { selectedNode?: FileNode }
+  ) => Promise<void>;
   toggleFolder: (path: string) => void;
   refreshFileTree: () => Promise<void>;
   addSegmentedImage: (resultId: string, imageUrl: string, timestamp: string) => Promise<void>;
   setOriginalStructuredPrompt: (prompt: Record<string, unknown> | null) => void;
+  setCurrentGenerationContext: (generationId: string | null, seed: number | null) => void;
 }
 
 const DEFAULT_ROOT_DIRECTORY: FileNode = {
@@ -41,6 +45,28 @@ const DEFAULT_ROOT_DIRECTORY: FileNode = {
   path: '/',
   type: 'directory',
   children: [],
+};
+
+const extractGenerationContextFromNode = (
+  node: FileNode
+): { generationId: string; selectedMaskId?: string } | null => {
+  const normalizedPath = (node.path || '').replace(/\\/g, '/');
+  const pathMatch = normalizedPath.match(/^\/results\/([^/]+)\/(.+)$/i);
+  if (!pathMatch) return null;
+
+  const generationId = pathMatch[1]?.trim();
+  const filename = pathMatch[2]?.trim();
+  if (!generationId) return null;
+
+  let selectedMaskId: string | undefined;
+  if (filename) {
+    const maskMatch = filename.match(/^mask_(\d+)\.(png|jpg|jpeg|webp)$/i);
+    if (maskMatch) {
+      selectedMaskId = `mask_${maskMatch[1]}`;
+    }
+  }
+
+  return { generationId, selectedMaskId };
 };
 
 export const useFileSystemStore = create<FileSystemState>()(
@@ -86,26 +112,22 @@ export const useFileSystemStore = create<FileSystemState>()(
       selectFile: (node: FileNode) => {
         if (node.type !== 'file') return;
 
+        const generationContext = extractGenerationContextFromNode(node);
+        if (generationContext?.generationId) {
+          get().loadGeneration(generationContext.generationId, { selectedNode: node });
+          return;
+        }
+
         const absoluteUrl = node.url
           ? (node.url.startsWith('http') ? node.url : `${env.apiBaseUrl}${node.url}`)
           : null;
 
-        // Check if this is a base image in a generation folder (outputs/*)
-        const pathParts = node.path.split('/');
-        const isGeneratedImage =
-          (node.name === 'generated.png' || node.name === 'original.png') && pathParts.length >= 2;
-        
-        if (isGeneratedImage) {
-          // Extract generation ID from path (e.g., /outputs/gen_123/generated.png -> gen_123)
-          const generationId = pathParts[pathParts.length - 2];
-          if (generationId) {
-            get().loadGeneration(generationId);
-            return;
-          }
-        }
-
         const segmentationStore = useSegmentationStore.getState();
         segmentationStore.clearResults();
+
+        // Clear stale seed from prior generation to prevent it leaking
+        const configStore = useConfigStore.getState();
+        configStore.clearSeed();
 
         set({
           selectedFile: node.path,
@@ -116,7 +138,10 @@ export const useFileSystemStore = create<FileSystemState>()(
         });
       },
 
-      loadGeneration: async (generationId: string) => {
+      loadGeneration: async (
+        generationId: string,
+        options?: { selectedNode?: FileNode }
+      ) => {
         set({ isLoadingGeneration: true });
 
         try {
@@ -185,6 +210,26 @@ export const useFileSystemStore = create<FileSystemState>()(
             } as SegmentationResponse;
 
             segmentationStore.setResults(segmentationResults);
+
+            const selectedNode = options?.selectedNode;
+            if (selectedNode) {
+              const selectedNodeUrl = selectedNode.url
+                ? (selectedNode.url.startsWith('http')
+                    ? selectedNode.url
+                    : `${env.apiBaseUrl}${selectedNode.url}`)
+                : '';
+              const normalizedSelectedUrl = selectedNodeUrl.replace(/\\/g, '/');
+              const matchedMask = segmentationResults.masks.find((mask) => {
+                const normalizedMaskUrl = mask.mask_url.replace(/\\/g, '/');
+                return (
+                  normalizedMaskUrl.endsWith(`/${selectedNode.name}`) ||
+                  normalizedMaskUrl === normalizedSelectedUrl
+                );
+              });
+              segmentationStore.selectMask(matchedMask?.mask_id || null);
+            } else {
+              segmentationStore.selectMask(null);
+            }
           } else {
             segmentationStore.clearResults();
           }
@@ -277,6 +322,13 @@ export const useFileSystemStore = create<FileSystemState>()(
 
       setOriginalStructuredPrompt: (prompt: Record<string, unknown> | null) => {
         set({ originalStructuredPrompt: prompt });
+      },
+
+      setCurrentGenerationContext: (generationId: string | null, seed: number | null) => {
+        set({
+          currentGenerationId: generationId,
+          currentSeed: seed,
+        });
       },
     }),
     {

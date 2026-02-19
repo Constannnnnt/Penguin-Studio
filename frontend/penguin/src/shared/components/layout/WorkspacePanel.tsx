@@ -15,6 +15,7 @@ import { useFileSystemStore } from '@/core/store/fileSystemStore';
 import { useLayoutStore } from '@/core/store/layoutStore';
 import { editTracker } from '@/shared/lib/editTracker';
 import { useChatStore } from '@/features/agentic/store/chatStore';
+import { env } from '@/shared/lib/env';
 
 const MaskViewer = lazy(() => import('@/features/segmentation/components/MaskViewer').then(module => ({ default: module.MaskViewer })));
 const PromptControls = lazy(() => import('@/shared/components/PromptControls').then(module => ({ default: module.PromptControls })));
@@ -471,11 +472,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
   };
 
   const resolveRefineSourceImage = (): string | null => {
+    const generationOutputUrl = currentGenerationIdRef.current
+      ? `${env.apiBaseUrl}/outputs/${currentGenerationIdRef.current}/generated.png`
+      : null;
+
     const candidates = [
       generatedImageRef.current,
       libraryImageRef.current,
       segmentationResultsRef.current?.original_image_url,
       selectedFileUrlRef.current,
+      generationOutputUrl,
     ];
 
     for (const candidate of candidates) {
@@ -565,7 +571,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
       mergedConfig,
       sourceImage,
       modificationPrompt || undefined,
-      selectedMaskUrl
+      selectedMaskUrl,
+      fallbackStructured || undefined
     );
 
     // Clear edits after refine (they've been applied)
@@ -603,7 +610,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
       mergedConfig,
       sourceImage,
       modificationPrompt || undefined,
-      selectedMaskUrl
+      selectedMaskUrl,
+      fallbackStructured || undefined
     );
 
     editTracker.clearEdits();

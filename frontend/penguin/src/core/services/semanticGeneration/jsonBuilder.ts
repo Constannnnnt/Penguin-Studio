@@ -52,6 +52,9 @@ export function buildObjects(
         transform: {
           position: { x: 0, y: 0 },
           scale: { width: 1, height: 1 },
+          rotation: 0,
+          flipHorizontal: false,
+          flipVertical: false,
           imageEdits: {
             brightness: 0,
             contrast: 0,
@@ -64,6 +67,8 @@ export function buildObjects(
         },
         isDragging: false,
         isResizing: false,
+        isRotating: false,
+        isRotationMode: false,
         resizeHandle: null,
         isHidden: false,
       },

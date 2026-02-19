@@ -48,6 +48,18 @@ import {
 
 const DEFAULT_TIMEOUT = 120000; // 120 seconds
 
+export interface EditWorkflowOptions {
+  steps_num?: number;
+  guidance_scale?: number;
+  negative_prompt?: string;
+  model_version?: "FIBO-edit";
+  sync?: boolean;
+  ip_signal?: boolean;
+  prompt_content_moderation?: boolean;
+  visual_input_content_moderation?: boolean;
+  visual_output_content_moderation?: boolean;
+}
+
 // ============================================================================
 // API Client Class
 // ============================================================================
@@ -248,6 +260,42 @@ class PenguinApiClient {
     };
   }
 
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private mergeStructuredPromptForRefine(
+    baseStructuredPrompt: Record<string, unknown> | undefined,
+    configStructuredPrompt: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (!this.isRecord(baseStructuredPrompt)) {
+      return configStructuredPrompt;
+    }
+
+    const merged: Record<string, unknown> = {
+      ...baseStructuredPrompt,
+      ...configStructuredPrompt,
+    };
+
+    const nestedKeys = ['lighting', 'aesthetics', 'photographic_characteristics'] as const;
+    nestedKeys.forEach((key) => {
+      const baseValue = baseStructuredPrompt[key];
+      const configValue = configStructuredPrompt[key];
+      if (this.isRecord(baseValue) || this.isRecord(configValue)) {
+        merged[key] = {
+          ...(this.isRecord(baseValue) ? baseValue : {}),
+          ...(this.isRecord(configValue) ? configValue : {}),
+        };
+      }
+    });
+
+    if (Array.isArray(configStructuredPrompt.objects)) {
+      merged.objects = configStructuredPrompt.objects;
+    }
+
+    return merged;
+  }
+
   /**
    * Generate image from text prompt only (simple text-to-image)
    */
@@ -262,8 +310,7 @@ class PenguinApiClient {
     const generateRequest = {
       prompt: sanitizedPrompt,
       aspect_ratio: aspectRatio,
-      resolution: 1024,
-      num_inference_steps: 50,
+      steps_num: 30,
       skip_cache: false,
     };
 
@@ -309,13 +356,16 @@ class PenguinApiClient {
    * @param sourceImage - Source image URL/base64 for edit endpoint
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight")
    * @param mask - Optional mask URL/base64 for localized edits
+   * @param structuredPromptBase - Optional baseline structured prompt to preserve rich fields
    */
   async refineImage(
     config: PenguinConfig,
     seed: number,
     sourceImage: string,
     modificationPrompt?: string,
-    mask?: string
+    mask?: string,
+    options?: EditWorkflowOptions,
+    structuredPromptBase?: Record<string, unknown>
   ): Promise<GenerationResponse> {
     const validation = validateConfig(config);
     if (!validation.valid) {
@@ -338,7 +388,10 @@ class PenguinApiClient {
     }
 
     const sanitizedConfig = this.sanitizeConfig(config);
-    const structuredPrompt = this.transformToStructuredPrompt(sanitizedConfig);
+    const structuredPrompt = this.mergeStructuredPromptForRefine(
+      this.isRecord(structuredPromptBase) ? structuredPromptBase : undefined,
+      this.transformToStructuredPrompt(sanitizedConfig)
+    );
 
     // Build refine request
     // Refine requests are routed to backend edit pipeline (/image/edit).
@@ -346,7 +399,7 @@ class PenguinApiClient {
       structured_prompt: structuredPrompt,
       seed,
       source_image: normalizedSourceImage,
-      num_inference_steps: 50,
+      steps_num: options?.steps_num ?? 30,
     };
 
     // Add modification prompt if provided
@@ -372,9 +425,35 @@ class PenguinApiClient {
       }
     }
 
+    const negativePrompt = this.normalizePromptText(options?.negative_prompt).trim();
+    if (negativePrompt) {
+      refineRequest.negative_prompt = negativePrompt;
+    }
+    if (typeof options?.guidance_scale === 'number') {
+      refineRequest.guidance_scale = options.guidance_scale;
+    }
+    if (options?.model_version) {
+      refineRequest.model_version = options.model_version;
+    }
+    if (typeof options?.sync === 'boolean') {
+      refineRequest.sync = options.sync;
+    }
+    if (typeof options?.ip_signal === 'boolean') {
+      refineRequest.ip_signal = options.ip_signal;
+    }
+    if (typeof options?.prompt_content_moderation === 'boolean') {
+      refineRequest.prompt_content_moderation = options.prompt_content_moderation;
+    }
+    if (typeof options?.visual_input_content_moderation === 'boolean') {
+      refineRequest.visual_input_content_moderation = options.visual_input_content_moderation;
+    }
+    if (typeof options?.visual_output_content_moderation === 'boolean') {
+      refineRequest.visual_output_content_moderation = options.visual_output_content_moderation;
+    }
+
     try {
       const response = await this.fetchWithTimeout(
-        `${this.baseUrl}/api/refine`,
+        `${this.baseUrl}/api/edit`,
         {
           method: "POST",
           headers: {

@@ -307,6 +307,7 @@ export interface PlanStep {
   tool_name: string;
   tool_input: Record<string, unknown>;
   step_description: string;
+  ui_options?: Record<string, string[]>;
 }
 
 export interface GenerationDraft {
@@ -447,4 +448,5 @@ export interface ConfigState {
   updateConfigFromStructuredPrompt: (
     structuredPrompt: Record<string, unknown>
   ) => void;
+  clearSeed: () => void;
 }
