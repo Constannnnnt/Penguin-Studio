@@ -46,6 +46,10 @@ class Settings(BaseSettings):
 
     uploads_dir: Path = Field(default=Path("uploads"), description="Uploads directory")
     outputs_dir: Path = Field(default=Path("outputs"), description="Outputs directory")
+    agent_memory_dir: Path = Field(
+        default=Path("outputs/agent_memory"),
+        description="Directory for persisted agent memory",
+    )
     # examples_dir: Path = Field(default=Path("examples"), description="Examples directory")
     max_file_size_mb: int = Field(
         default=10, description="Maximum file size in megabytes"

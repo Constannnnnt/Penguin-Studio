@@ -14,10 +14,12 @@ from app.api.dependencies import (
     get_segmentation_service,
     get_ws_manager,
     get_orchestrator,
+    get_agent_memory_service,
 )
 from app.models.schemas import FileValidation
 from app.services.segmentation_service import SegmentationService
 from app.services.websocket_manager import WebSocketManager
+from app.services.agent_memory_service import AgentMemoryService
 from app.agentic.orchestrator import PenguinOrchestrator
 
 
@@ -30,6 +32,7 @@ async def websocket_segment(
     ws_manager: WebSocketManager = Depends(get_ws_manager),
     segmentation_service: SegmentationService = Depends(get_segmentation_service),
     orchestrator: PenguinOrchestrator = Depends(get_orchestrator),
+    agent_memory_service: AgentMemoryService = Depends(get_agent_memory_service),
 ) -> None:
     """
     WebSocket endpoint for real-time segmentation.
@@ -90,6 +93,7 @@ async def websocket_segment(
                             message=message,
                             ws_manager=ws_manager,
                             orchestrator=orchestrator,
+                            agent_memory_service=agent_memory_service,
                         )
                     )
                     ws_manager.register_task(client_id, task)
@@ -262,6 +266,7 @@ async def _process_websocket_agentic(
     message: Dict[str, Any],
     ws_manager: WebSocketManager,
     orchestrator: PenguinOrchestrator,
+    agent_memory_service: AgentMemoryService,
 ) -> None:
     """
     Process agentic commands (analyze, execute) via WebSocket.
@@ -285,17 +290,56 @@ async def _process_websocket_agentic(
 
     try:
         if sub_action == "analyze":
-            query = message.get("query")
-            image_context = message.get("image_context")
+            raw_query = message.get("query")
+            query = str(raw_query).strip() if raw_query is not None else ""
+            raw_image_context = message.get("image_context")
+            image_context: Optional[Dict[str, Any]] = (
+                dict(raw_image_context)
+                if isinstance(raw_image_context, dict)
+                else None
+            )
             if not query:
                 await ws_manager.send_error(
                     client_id, "Missing query for agentic analysis"
                 )
                 return
 
+            # Only inject memory context when there is an active visual context
+            # to prevent stale session history from influencing classification
+            has_visual = (
+                isinstance(image_context, dict)
+                and (
+                    image_context.get("generation_id")
+                    or image_context.get("source_image")
+                )
+            )
+            if has_visual:
+                memory_context = agent_memory_service.build_memory_context(
+                    query=str(query),
+                    session_id=str(session_id) if isinstance(session_id, str) else None,
+                    image_context=image_context,
+                )
+                if memory_context:
+                    image_context = dict(image_context or {})
+                    image_context["memory_context"] = memory_context
+
             await ws_manager.send_progress(client_id, 20, "Analyzing your request...")
             session = await orchestrator.analyze_request(
                 query, session_id, image_context
+            )
+
+            agent_memory_service.append_event(
+                event_type="analysis",
+                session_id=session.session_id,
+                client_id=client_id,
+                query=str(query),
+                image_context=session.image_context,
+                payload={
+                    "intent": session.analysis.intent,
+                    "tools": [
+                        step.tool_name for step in (session.analysis.plan or [])
+                    ],
+                },
             )
 
             await ws_manager.send_result(
@@ -345,6 +389,23 @@ async def _process_websocket_agentic(
                 )
                 return
 
+            agent_memory_service.append_event(
+                event_type="execution_complete",
+                session_id=session.session_id,
+                client_id=client_id,
+                query=session.user_query,
+                image_context=session.image_context,
+                payload={
+                    "status": session.status,
+                    "results_count": len(session.execution_results),
+                    "tools": [
+                        item.get("tool")
+                        for item in session.execution_results
+                        if isinstance(item, dict)
+                    ],
+                },
+            )
+
             await ws_manager.send_result(
                 client_id,
                 {
@@ -385,6 +446,18 @@ async def _process_websocket_agentic(
                     else None,
                 )
 
+                agent_memory_service.append_event(
+                    event_type="generation_polish",
+                    session_id=str(session_id) if isinstance(session_id, str) else None,
+                    client_id=client_id,
+                    query=query,
+                    image_context=image_context if isinstance(image_context, dict) else None,
+                    payload={
+                        "status": "success",
+                        "polished_prompt": polished.get("polished_prompt"),
+                    },
+                )
+
                 await ws_manager.send_result(
                     client_id,
                     {
@@ -398,6 +471,14 @@ async def _process_websocket_agentic(
             except Exception as exc:
                 logger.exception(
                     f"Generation polishing failed for client_id={client_id}: {exc}"
+                )
+                agent_memory_service.append_event(
+                    event_type="generation_polish",
+                    session_id=str(session_id) if isinstance(session_id, str) else None,
+                    client_id=client_id,
+                    query=query,
+                    image_context=image_context if isinstance(image_context, dict) else None,
+                    payload={"status": "failed", "error": str(exc)},
                 )
                 await ws_manager.send_result(
                     client_id,

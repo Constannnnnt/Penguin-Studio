@@ -13,21 +13,24 @@ import json
 import re
 import time
 import uuid
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
 from loguru import logger
 from PIL import Image
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.config import settings
 
 
 class StructuredPromptObject(BaseModel):
     """Object description in structured prompt."""
+    model_config = ConfigDict(extra="allow")
+
     description: str = ""
     location: str = ""
     relationship: str = ""
@@ -44,6 +47,8 @@ class StructuredPromptObject(BaseModel):
 
 class StructuredPromptLighting(BaseModel):
     """Lighting description in structured prompt."""
+    model_config = ConfigDict(extra="allow")
+
     conditions: str = ""
     direction: str = ""
     shadows: str = ""
@@ -51,6 +56,8 @@ class StructuredPromptLighting(BaseModel):
 
 class StructuredPromptAesthetics(BaseModel):
     """Aesthetics description in structured prompt."""
+    model_config = ConfigDict(extra="allow")
+
     composition: str = ""
     color_scheme: str = ""
     mood_atmosphere: str = ""
@@ -60,6 +67,8 @@ class StructuredPromptAesthetics(BaseModel):
 
 class StructuredPromptPhotographic(BaseModel):
     """Photographic characteristics in structured prompt."""
+    model_config = ConfigDict(extra="allow")
+
     depth_of_field: str = ""
     focus: str = ""
     camera_angle: str = ""
@@ -68,6 +77,8 @@ class StructuredPromptPhotographic(BaseModel):
 
 class StructuredPromptTextRender(BaseModel):
     """Text render element in structured prompt."""
+    model_config = ConfigDict(extra="allow")
+
     text: str = ""
     location: str = ""
     size: str = ""
@@ -78,6 +89,8 @@ class StructuredPromptTextRender(BaseModel):
 
 class StructuredPrompt(BaseModel):
     """Full structured prompt for Bria FIBO model."""
+    model_config = ConfigDict(extra="allow")
+
     short_description: str = ""
     objects: List[StructuredPromptObject] = Field(default_factory=list)
     background_setting: str = ""
@@ -94,11 +107,37 @@ class StructuredPrompt(BaseModel):
 
 
 class GenerationParameters(BaseModel):
-    """Parameters for image generation."""
-    aspect_ratio: str = "16:9"
-    resolution: int = 1024
+    """Parameters for image generation via Bria /v2/image/generate."""
+
+    aspect_ratio: str = "1:1"
     seed: Optional[int] = None
-    num_inference_steps: int = 50
+    steps_num: Optional[int] = Field(default=30, ge=20, le=50)
+    guidance_scale: Optional[int] = Field(default=None, ge=3, le=5)
+    negative_prompt: Optional[str] = None
+    model_version: Optional[str] = None
+    sync: Optional[bool] = None
+    ip_signal: Optional[bool] = None
+    prompt_content_moderation: Optional[bool] = None
+    visual_input_content_moderation: Optional[bool] = None
+    visual_output_content_moderation: Optional[bool] = None
+    # Deprecated legacy fields kept for compatibility with old clients.
+    resolution: Optional[int] = None
+    num_inference_steps: Optional[int] = None
+
+
+class EditParameters(BaseModel):
+    """Parameters for image editing via Bria /v2/image/edit."""
+
+    seed: Optional[int] = None
+    steps_num: Optional[int] = Field(default=None, ge=20, le=50)
+    guidance_scale: Optional[int] = Field(default=None, ge=3, le=5)
+    negative_prompt: Optional[str] = None
+    model_version: Optional[str] = None
+    sync: Optional[bool] = None
+    ip_signal: Optional[bool] = None
+    prompt_content_moderation: Optional[bool] = None
+    visual_input_content_moderation: Optional[bool] = None
+    visual_output_content_moderation: Optional[bool] = None
 
 
 class GenerationResult(BaseModel):
@@ -187,17 +226,21 @@ class BriaService:
     RETRY_BACKOFF = 2.0
     CACHE_MAX_AGE = 24 * 60 * 60  # 24 hours
     MIN_REQUEST_INTERVAL = 1.0  # 1 second between requests
+    VISUAL_CACHE_MAX_ENTRIES = 128
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.bria_api_key
         if not self.api_key:
             logger.warning("Bria API key not configured")
-        
+
         self._cache: Dict[str, CacheEntry] = {}
-        self._queue: List[asyncio.Future] = []
-        self._processing = False
+        self._visual_cache: "OrderedDict[str, Tuple[float, str]]" = OrderedDict()
         self._last_request_time = 0.0
         self._lock = asyncio.Lock()
+        self._http_client = httpx.AsyncClient(
+            timeout=self.DEFAULT_TIMEOUT,
+            limits=httpx.Limits(max_connections=40, max_keepalive_connections=20),
+        )
 
     def _get_cache_key(self, prompt: str, parameters: GenerationParameters) -> str:
         """Generate cache key from prompt and parameters."""
@@ -246,6 +289,35 @@ class BriaService:
 
         return None
 
+    def _get_cached_local_visual(self, local_path: Path, field_name: str) -> Optional[str]:
+        """Return cached base64 payload for local image/mask if file unchanged."""
+        try:
+            stat = local_path.stat()
+        except OSError:
+            return None
+
+        cache_key = f"{field_name}:{local_path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        cached = self._visual_cache.get(cache_key)
+        if cached:
+            # Mark as recently used
+            self._visual_cache.move_to_end(cache_key)
+            return cached[1]
+        return None
+
+    def _set_cached_local_visual(self, local_path: Path, field_name: str, payload: str) -> None:
+        """Store local visual payload in small LRU cache."""
+        try:
+            stat = local_path.stat()
+        except OSError:
+            return
+
+        cache_key = f"{field_name}:{local_path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+        self._visual_cache[cache_key] = (time.time(), payload)
+        self._visual_cache.move_to_end(cache_key)
+
+        while len(self._visual_cache) > self.VISUAL_CACHE_MAX_ENTRIES:
+            self._visual_cache.popitem(last=False)
+
     def _normalize_visual_input(self, value: str, field_name: str) -> str:
         """
         Normalize image/mask payload for Bria API.
@@ -291,10 +363,15 @@ class BriaService:
 
         local_path = self._resolve_local_visual_path(trimmed)
         if local_path:
+            cached = self._get_cached_local_visual(local_path, field_name)
+            if cached:
+                return cached
+
             raw_bytes = local_path.read_bytes()
             if field_name == "mask":
                 raw_bytes = self._normalize_mask_image_bytes(raw_bytes)
             encoded = base64.b64encode(raw_bytes).decode("ascii")
+            self._set_cached_local_visual(local_path, field_name, encoded)
             logger.debug(f"Converted local {field_name} to base64: {local_path}")
             return encoded
 
@@ -327,6 +404,49 @@ class BriaService:
                 combined,
             )
         )
+
+    @staticmethod
+    def _validation_error_mentions_mask(error: ValidationError) -> bool:
+        details = error.details or {}
+        haystack_parts: List[str] = [str(error)]
+        if isinstance(details, dict):
+            for key in ("details", "raw", "message"):
+                value = details.get(key)
+                if value is not None:
+                    if isinstance(value, (dict, list)):
+                        haystack_parts.append(json.dumps(value, ensure_ascii=True))
+                    else:
+                        haystack_parts.append(str(value))
+        else:
+            haystack_parts.append(str(details))
+
+        haystack = " ".join(haystack_parts).lower()
+        mask_signals = [
+            "mask",
+            "same size",
+            "black and white",
+            "binary",
+            "input image and the input mask",
+            "visual_input_content_moderation",
+        ]
+        return any(signal in haystack for signal in mask_signals)
+
+    @classmethod
+    def _should_retry_edit_without_mask(
+        cls,
+        error: ValidationError,
+        modification_prompt: Optional[str],
+        structured_instruction_payload: Dict[str, Any],
+    ) -> bool:
+        if error.status_code != 422:
+            return False
+
+        if cls._should_skip_mask_for_instruction(
+            modification_prompt, structured_instruction_payload
+        ):
+            return True
+
+        return cls._validation_error_mentions_mask(error)
 
     @staticmethod
     def _normalize_mask_image_bytes(mask_bytes: bytes) -> bytes:
@@ -417,23 +537,26 @@ class BriaService:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.get(status_url, headers=headers)
-                    response.raise_for_status()
-                    data = response.json()
+                response = await self._http_client.get(
+                    status_url,
+                    headers=headers,
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                data = response.json()
 
-                    status = data.get("status", "").lower()
-                    
-                    if status == "completed" or "result" in data:
-                        logger.info(f"Generation completed after {attempt} poll(s)")
-                        return data
-                    
-                    if status == "failed":
-                        error_msg = data.get("error", "Generation failed")
-                        raise ServiceUnavailableError(error_msg)
-                    
-                    logger.debug(f"Poll attempt {attempt}: status={status}")
-                    await asyncio.sleep(poll_interval)
+                status = data.get("status", "").lower()
+
+                if status == "completed" or "result" in data:
+                    logger.info(f"Generation completed after {attempt} poll(s)")
+                    return data
+
+                if status == "failed":
+                    error_msg = data.get("error", "Generation failed")
+                    raise ServiceUnavailableError(error_msg)
+
+                logger.debug(f"Poll attempt {attempt}: status={status}")
+                await asyncio.sleep(poll_interval)
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code >= 500:
@@ -469,47 +592,51 @@ class BriaService:
         
         for attempt in range(1, self.RETRY_ATTEMPTS + 1):
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    logger.debug(f"Bria API request attempt {attempt}: {url}")
-                    response = await client.post(url, json=payload, headers=headers)
-                    
-                    if response.status_code == 401:
-                        raise AuthenticationError()
-                    
-                    if response.status_code == 429:
-                        retry_after = response.headers.get("Retry-After")
-                        raise RateLimitError(
-                            retry_after=int(retry_after) if retry_after else None
-                        )
-                    
-                    if response.status_code >= 500:
-                        raise ServiceUnavailableError()
-                    
-                    if response.status_code == 400:
-                        error_data = response.json()
-                        raise ValidationError(
-                            error_data.get("error", {}).get("message", "Invalid request"),
-                            error_data.get("error", {}).get("details"),
-                            status_code=response.status_code,
-                        )
+                logger.debug(f"Bria API request attempt {attempt}: {url}")
+                response = await self._http_client.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=timeout,
+                )
 
-                    if 400 < response.status_code < 500:
-                        try:
-                            error_data = response.json()
-                        except Exception:
-                            error_data = {}
-                        raise ValidationError(
-                            error_data.get("error", {}).get("message", "Invalid request"),
-                            {
-                                "details": error_data.get("error", {}).get("details"),
-                                "raw": error_data,
-                                "endpoint": endpoint,
-                            },
-                            status_code=response.status_code,
-                        )
-                    
-                    response.raise_for_status()
-                    return response.json()
+                if response.status_code == 401:
+                    raise AuthenticationError()
+
+                if response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    raise RateLimitError(
+                        retry_after=int(retry_after) if retry_after else None
+                    )
+
+                if response.status_code >= 500:
+                    raise ServiceUnavailableError()
+
+                if response.status_code == 400:
+                    error_data = response.json()
+                    raise ValidationError(
+                        error_data.get("error", {}).get("message", "Invalid request"),
+                        error_data.get("error", {}).get("details"),
+                        status_code=response.status_code,
+                    )
+
+                if 400 < response.status_code < 500:
+                    try:
+                        error_data = response.json()
+                    except Exception:
+                        error_data = {}
+                    raise ValidationError(
+                        error_data.get("error", {}).get("message", "Invalid request"),
+                        {
+                            "details": error_data.get("error", {}).get("details"),
+                            "raw": error_data,
+                            "endpoint": endpoint,
+                        },
+                        status_code=response.status_code,
+                    )
+
+                response.raise_for_status()
+                return response.json()
 
             except (AuthenticationError, ValidationError):
                 raise
@@ -568,7 +695,7 @@ class BriaService:
             prompt: Text prompt for generation
             images: Optional list of reference image URLs or base64 data
             structured_prompt: Optional structured prompt for precise control
-            parameters: Generation parameters (aspect ratio, resolution, etc.)
+            parameters: Generation parameters (aspect ratio, steps, moderation flags, etc.)
             skip_cache: Skip cache lookup
             
         Returns:
@@ -595,12 +722,32 @@ class BriaService:
             payload["images"] = images
         if structured_prompt:
             payload["structured_prompt"] = structured_prompt.model_dump(exclude_none=True)
-        
+
         payload["aspect_ratio"] = params.aspect_ratio
-        payload["resolution"] = params.resolution
         if params.seed is not None:
             payload["seed"] = params.seed
-        payload["num_inference_steps"] = params.num_inference_steps
+        if params.steps_num is not None:
+            payload["steps_num"] = params.steps_num
+        elif params.num_inference_steps is not None:
+            # Legacy alias
+            payload["steps_num"] = params.num_inference_steps
+
+        if params.guidance_scale is not None:
+            payload["guidance_scale"] = params.guidance_scale
+        if params.negative_prompt:
+            payload["negative_prompt"] = params.negative_prompt
+        if params.model_version:
+            payload["model_version"] = params.model_version
+        if params.sync is not None:
+            payload["sync"] = params.sync
+        if params.ip_signal is not None:
+            payload["ip_signal"] = params.ip_signal
+        if params.prompt_content_moderation is not None:
+            payload["prompt_content_moderation"] = params.prompt_content_moderation
+        if params.visual_input_content_moderation is not None:
+            payload["visual_input_content_moderation"] = params.visual_input_content_moderation
+        if params.visual_output_content_moderation is not None:
+            payload["visual_output_content_moderation"] = params.visual_output_content_moderation
 
         logger.info(f"Generating image with prompt: {prompt[:50] if prompt else 'structured'}...")
         start_time = time.time()
@@ -715,14 +862,68 @@ class BriaService:
 
         return StructuredPrompt(**sp_data)
 
-    async def refine_image(
+    @staticmethod
+    def _ensure_edit_context(
+        structured_instruction_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Ensure structured_instruction has required context for Bria edit validation."""
+        payload = dict(structured_instruction_payload)
+        context_value = payload.get("context")
+        if isinstance(context_value, str) and context_value.strip():
+            return payload
+
+        short_desc = payload.get("short_description")
+        background = payload.get("background_setting")
+        fallback_parts: List[str] = []
+        if isinstance(short_desc, str) and short_desc.strip():
+            fallback_parts.append(short_desc.strip())
+        if isinstance(background, str) and background.strip():
+            fallback_parts.append(f"Background: {background.strip()}")
+
+        payload["context"] = (
+            " ".join(fallback_parts).strip() or "Photo scene edit context."
+        )
+        return payload
+
+    @staticmethod
+    def _apply_edit_options(payload: Dict[str, Any], options: Optional[EditParameters]) -> None:
+        """Map supported edit options to Bria /image/edit payload."""
+        if not options:
+            return
+
+        if options.negative_prompt:
+            payload["negative_prompt"] = options.negative_prompt
+        if options.guidance_scale is not None:
+            payload["guidance_scale"] = options.guidance_scale
+        if options.model_version:
+            payload["model_version"] = options.model_version
+        if options.steps_num is not None:
+            payload["steps_num"] = options.steps_num
+        if options.seed is not None:
+            payload["seed"] = options.seed
+        if options.sync is not None:
+            payload["sync"] = options.sync
+        if options.ip_signal is not None:
+            payload["ip_signal"] = options.ip_signal
+        if options.prompt_content_moderation is not None:
+            payload["prompt_content_moderation"] = options.prompt_content_moderation
+        if options.visual_input_content_moderation is not None:
+            payload["visual_input_content_moderation"] = (
+                options.visual_input_content_moderation
+            )
+        if options.visual_output_content_moderation is not None:
+            payload["visual_output_content_moderation"] = (
+                options.visual_output_content_moderation
+            )
+
+    async def edit_image(
         self,
         source_image: str,
         structured_prompt: StructuredPrompt,
         seed: int,
         modification_prompt: Optional[str] = None,
         mask: Optional[str] = None,
-        parameters: Optional[GenerationParameters] = None,
+        parameters: Optional[EditParameters] = None,
     ) -> GenerationResult:
         """
         Edit an image using updated structured prompt and original seed.
@@ -738,36 +939,28 @@ class BriaService:
         Returns:
             GenerationResult with edited image
         """
-        params = parameters or GenerationParameters()
-        params.seed = seed
+        params = parameters or EditParameters()
+        if params.seed is None:
+            params.seed = seed
 
         # Bria edit endpoint expects structured_instruction as a JSON string.
-        structured_instruction_payload = structured_prompt.model_dump(exclude_none=True)
+        structured_instruction_payload = self._ensure_edit_context(
+            structured_prompt.model_dump(exclude_none=True)
+        )
 
-        # Bria /image/edit currently requires `context` inside structured_instruction.
-        context_value = structured_instruction_payload.get("context")
-        if not isinstance(context_value, str) or not context_value.strip():
-            short_desc = structured_instruction_payload.get("short_description")
-            background = structured_instruction_payload.get("background_setting")
-            fallback_parts = []
-            if isinstance(short_desc, str) and short_desc.strip():
-                fallback_parts.append(short_desc.strip())
-            if isinstance(background, str) and background.strip():
-                fallback_parts.append(f"Background: {background.strip()}")
-            fallback_context = " ".join(fallback_parts).strip() or "Photo scene edit context."
-            structured_instruction_payload["context"] = fallback_context
-
-        if modification_prompt and not structured_instruction_payload.get("edit_instruction"):
-            structured_instruction_payload["edit_instruction"] = modification_prompt
+        # Always prefer the latest user intent for this edit request.
+        # Re-using an older edit_instruction causes stale refinements.
+        if modification_prompt and modification_prompt.strip():
+            structured_instruction_payload["edit_instruction"] = modification_prompt.strip()
         structured_instruction_json = json.dumps(structured_instruction_payload)
 
         normalized_image = self._normalize_visual_input(source_image, "source_image")
         payload: Dict[str, Any] = {
             "images": [normalized_image],
             "structured_instruction": structured_instruction_json,
-            "seed": seed,
-            "steps_num": params.num_inference_steps,
+            "seed": params.seed,
         }
+        self._apply_edit_options(payload, params)
 
         if mask:
             if self._should_skip_mask_for_instruction(
@@ -780,14 +973,43 @@ class BriaService:
             else:
                 payload["mask"] = self._normalize_visual_input(mask, "mask")
 
+        if "steps_num" not in payload:
+            payload["steps_num"] = 30
+
         logger.info(
             "Editing image with Bria /image/edit endpoint, "
-            f"seed={seed}, has_mask={bool(mask)}, "
+            f"seed={params.seed}, has_mask={'mask' in payload}, "
             f"modification={modification_prompt or 'none'}"
+        )
+        logger.debug(
+            "Bria edit payload summary: images={}, has_mask={}, steps_num={}, guidance_scale={}",
+            len(payload.get("images", [])),
+            "mask" in payload,
+            payload.get("steps_num"),
+            payload.get("guidance_scale"),
         )
         start_time = time.time()
 
-        response = await self._make_request(payload, endpoint=self.IMAGE_EDIT_ENDPOINT)
+        try:
+            response = await self._make_request(payload, endpoint=self.IMAGE_EDIT_ENDPOINT)
+        except ValidationError as error:
+            if (
+                "mask" in payload
+                and self._should_retry_edit_without_mask(
+                    error, modification_prompt, structured_instruction_payload
+                )
+            ):
+                retry_payload = dict(payload)
+                retry_payload.pop("mask", None)
+                logger.warning(
+                    "Bria edit returned 422 and mask looked incompatible; "
+                    "retrying once without mask for this request."
+                )
+                response = await self._make_request(
+                    retry_payload, endpoint=self.IMAGE_EDIT_ENDPOINT
+                )
+            else:
+                raise
         
         # Handle async response - poll for result if status_url is returned
         if "status_url" in response:
@@ -808,7 +1030,7 @@ class BriaService:
         result = GenerationResult(
             image_url=result_data["image_url"],
             structured_prompt=StructuredPrompt(**sp_data),
-            seed=result_data.get("seed", seed),
+            seed=result_data.get("seed", params.seed or seed),
             generation_time_ms=generation_time,
             ip_warning=response.get("warning"),
             from_cache=False,
@@ -819,6 +1041,27 @@ class BriaService:
 
         logger.info(f"Image edited in {generation_time:.0f}ms")
         return result
+
+    async def refine_image(
+        self,
+        source_image: str,
+        structured_prompt: StructuredPrompt,
+        seed: int,
+        modification_prompt: Optional[str] = None,
+        mask: Optional[str] = None,
+        parameters: Optional[EditParameters] = None,
+    ) -> GenerationResult:
+        """
+        Backward-compatible alias for edit workflow.
+        """
+        return await self.edit_image(
+            source_image=source_image,
+            structured_prompt=structured_prompt,
+            seed=seed,
+            modification_prompt=modification_prompt,
+            mask=mask,
+            parameters=parameters,
+        )
 
     async def save_generation(
         self,
@@ -842,11 +1085,13 @@ class BriaService:
         generation_dir.mkdir(parents=True, exist_ok=True)
 
         # Download and save image
-        async with httpx.AsyncClient() as client:
-            image_response = await client.get(result.image_url)
-            image_response.raise_for_status()
-            image_path = generation_dir / "generated.png"
-            image_path.write_bytes(image_response.content)
+        image_response = await self._http_client.get(
+            result.image_url,
+            timeout=30.0,
+        )
+        image_response.raise_for_status()
+        image_path = generation_dir / "generated.png"
+        image_path.write_bytes(image_response.content)
 
         # Save structured prompt
         prompt_path = generation_dir / "structured_prompt.json"
@@ -889,6 +1134,10 @@ class BriaService:
             logger.info(f"Removed {len(stale_keys)} stale cache entries")
         return len(stale_keys)
 
+    async def close(self) -> None:
+        """Close shared HTTP client."""
+        await self._http_client.aclose()
+
 
 # Singleton instance
 _bria_service: Optional[BriaService] = None
@@ -900,3 +1149,11 @@ def get_bria_service() -> BriaService:
     if _bria_service is None:
         _bria_service = BriaService()
     return _bria_service
+
+
+async def cleanup_bria_service() -> None:
+    """Cleanup Bria service shared resources."""
+    global _bria_service
+    if _bria_service is not None:
+        await _bria_service.close()
+        _bria_service = None
