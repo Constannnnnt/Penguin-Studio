@@ -190,22 +190,31 @@ const canonicalizeToolName = (toolName: string): string => {
 const asCompositionType = (
     value: unknown,
     fallback: CompositionType
-): CompositionType => {
+): CompositionType | string => {
     if (typeof value !== 'string') return fallback;
-    const normalized = value.trim().toLowerCase() as CompositionType;
-    return COMPOSITION_OPTIONS.includes(normalized) ? normalized : fallback;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    return COMPOSITION_OPTIONS.includes(normalized as CompositionType)
+        ? (normalized as CompositionType)
+        : normalized;
 };
 
-const asColorScheme = (value: unknown, fallback: ColorScheme): ColorScheme => {
+const asColorScheme = (value: unknown, fallback: ColorScheme): ColorScheme | string => {
     if (typeof value !== 'string') return fallback;
-    const normalized = value.trim().toLowerCase() as ColorScheme;
-    return COLOR_SCHEME_OPTIONS.includes(normalized) ? normalized : fallback;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    return COLOR_SCHEME_OPTIONS.includes(normalized as ColorScheme)
+        ? (normalized as ColorScheme)
+        : value.trim();
 };
 
-const asMoodType = (value: unknown, fallback: MoodType): MoodType => {
+const asMoodType = (value: unknown, fallback: MoodType): MoodType | string => {
     if (typeof value !== 'string') return fallback;
-    const normalized = value.trim().toLowerCase() as MoodType;
-    return MOOD_OPTIONS.includes(normalized) ? normalized : fallback;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    return MOOD_OPTIONS.includes(normalized as MoodType)
+        ? (normalized as MoodType)
+        : value.trim();
 };
 
 type SegmentationMaskLike = {
@@ -258,28 +267,101 @@ const matchMaskByText = (
     masks: SegmentationMaskLike[]
 ): number => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return -1;
+    if (!normalizedQuery || !Array.isArray(masks) || masks.length === 0) return -1;
 
-    return masks.findIndex((mask) => {
-        const candidates = [
-            mask.promptObject,
-            mask.promptText,
-            mask.label,
-            mask.objectMetadata?.description,
-        ]
-            .filter(Boolean)
-            .map((value) => String(value).toLowerCase());
+    const STOP_WORDS = new Set([
+        'the',
+        'a',
+        'an',
+        'of',
+        'to',
+        'in',
+        'on',
+        'at',
+        'and',
+        'or',
+        'with',
+        'for',
+    ]);
 
-        return candidates.some((candidate) =>
-            candidate.includes(normalizedQuery) || normalizedQuery.includes(candidate)
-        );
-    });
+    const tokenize = (text: string): string[] =>
+        text
+            .toLowerCase()
+            .split(/[^a-z0-9#]+/)
+            .map((part) => part.trim())
+            .filter((part) => part.length >= 2 && !STOP_WORDS.has(part));
+
+    const hintTokens = tokenize(normalizedQuery);
+    if (hintTokens.length === 0) return -1;
+
+    const scoreCandidate = (mask: SegmentationMaskLike): number => {
+        const weightedCandidates: Array<{ text: string; weight: number }> = [
+            { text: String(mask.promptObject || '').trim().toLowerCase(), weight: 1.0 },
+            { text: String(mask.label || '').trim().toLowerCase(), weight: 0.9 },
+            { text: String(mask.objectMetadata?.description || '').trim().toLowerCase(), weight: 0.75 },
+            { text: String(mask.promptText || '').trim().toLowerCase(), weight: 0.65 },
+        ].filter((item) => item.text.length > 0);
+
+        let best = 0;
+        weightedCandidates.forEach(({ text, weight }) => {
+            if (text === normalizedQuery) {
+                best = Math.max(best, 1.2 * weight);
+                return;
+            }
+            if (text.includes(normalizedQuery) || normalizedQuery.includes(text)) {
+                best = Math.max(best, 0.95 * weight);
+            }
+
+            const candidateTokens = new Set(tokenize(text));
+            if (candidateTokens.size === 0) return;
+            const overlap = hintTokens.filter((token) => candidateTokens.has(token)).length;
+            if (overlap <= 0) return;
+            const tokenScore = overlap / Math.max(hintTokens.length, candidateTokens.size);
+            best = Math.max(best, tokenScore * weight);
+        });
+
+        return best;
+    };
+
+    const scored = masks
+        .map((mask, index) => ({ index, score: scoreCandidate(mask) }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) return -1;
+
+    const best = scored[0];
+    const second = scored[1];
+    const ambiguous =
+        second && best.score < 0.72 && Math.abs(best.score - second.score) < 0.08;
+
+    if (ambiguous) return -1;
+    if (best.score < 0.34) return -1;
+    return best.index;
+};
+
+const resolveMaskDisplayLabel = (mask?: SegmentationMaskLike): string => {
+    if (!mask) return '';
+    const candidates = [
+        mask.label,
+        mask.promptObject,
+        mask.objectMetadata?.description,
+        mask.promptText,
+    ];
+    for (const candidate of candidates) {
+        if (typeof candidate === 'string') {
+            const cleaned = candidate.trim();
+            if (cleaned) return cleaned;
+        }
+    }
+    return '';
 };
 
 const resolveMaskIndex = (
     input: Record<string, unknown>,
     masks: SegmentationMaskLike[],
-    selectedMaskId?: string | null
+    selectedMaskId?: string | null,
+    preferSelectedMask = false
 ): number => {
     if (!Array.isArray(masks) || masks.length === 0) return -1;
 
@@ -298,7 +380,7 @@ const resolveMaskIndex = (
         if (fromMaskId >= 0) return fromMaskId;
     }
 
-    if (selectedMaskId) {
+    if (preferSelectedMask && selectedMaskId) {
         const fromSelected = masks.findIndex((mask) => mask.mask_id === selectedMaskId);
         if (fromSelected >= 0) return fromSelected;
     }
@@ -316,7 +398,149 @@ const resolveMaskIndex = (
         if (matchIndex >= 0) return matchIndex;
     }
 
+    if (selectedMaskId) {
+        const fromSelected = masks.findIndex((mask) => mask.mask_id === selectedMaskId);
+        if (fromSelected >= 0) return fromSelected;
+    }
+
     return masks.length === 1 ? 0 : -1;
+};
+
+const toPromptValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+};
+
+const buildPlanModificationPrompt = (steps: PlanStep[]): string => {
+    const phrases: string[] = [];
+
+    steps.forEach((step) => {
+        const input = step.tool_input || {};
+        const tool = canonicalizeToolName(step.tool_name);
+
+        if (tool === 'update_aesthetics') {
+            if (input.color_scheme !== undefined) {
+                phrases.push(`change color palette to ${toPromptValue(input.color_scheme)}`);
+            }
+            if (input.composition !== undefined) {
+                phrases.push(`use ${toPromptValue(input.composition)} composition`);
+            }
+            const mood = input.mood_atmosphere ?? input.mood;
+            if (mood !== undefined) {
+                phrases.push(`set mood to ${toPromptValue(mood)}`);
+            }
+            if (input.style_medium !== undefined) {
+                phrases.push(`change style medium to ${toPromptValue(input.style_medium)}`);
+            }
+            const style = input.aesthetic_style ?? input.artistic_style;
+            if (style !== undefined) {
+                phrases.push(`make style ${toPromptValue(style)}`);
+            }
+            return;
+        }
+
+        if (tool === 'adjust_object_property') {
+            const property = toPromptValue(input.property);
+            const value = toPromptValue(input.value);
+            if (property && value) {
+                const segmentationState = useSegmentationStore.getState();
+                const masks = (segmentationState.results?.masks || []) as SegmentationMaskLike[];
+                const selectedMask = segmentationState.selectedMaskId
+                    ? masks.find((mask) => mask.mask_id === segmentationState.selectedMaskId)
+                    : undefined;
+                const targetMask = toPromptValue(input.mask_id)
+                    ? masks.find((mask) => mask.mask_id === toPromptValue(input.mask_id))
+                    : selectedMask;
+                const objectName =
+                    toPromptValue(input.object_name) ||
+                    toPromptValue(input.prompt) ||
+                    toPromptValue(input.target_object) ||
+                    resolveMaskDisplayLabel(targetMask) ||
+                    'the selected object';
+                phrases.push(`change ${objectName} ${property.replace(/_/g, ' ')} to ${value}`);
+            }
+            return;
+        }
+
+        if (tool === 'update_background') {
+            const background = toPromptValue(input.background_setting ?? input.setting);
+            if (background) {
+                phrases.push(`change background to ${background}`);
+            }
+            return;
+        }
+
+        if (tool === 'update_lighting') {
+            if (input.conditions !== undefined) {
+                phrases.push(`change lighting to ${toPromptValue(input.conditions)}`);
+            }
+            if (input.shadows !== undefined) {
+                phrases.push(`set shadows to ${toPromptValue(input.shadows)}`);
+            }
+            return;
+        }
+
+        if (tool === 'update_photographic') {
+            if (input.camera_angle !== undefined) {
+                phrases.push(`change camera angle to ${toPromptValue(input.camera_angle)}`);
+            }
+            if (input.lens_focal_length !== undefined) {
+                phrases.push(`use ${toPromptValue(input.lens_focal_length)} lens`);
+            }
+            if (input.depth_of_field !== undefined) {
+                phrases.push(`set depth of field to ${toPromptValue(input.depth_of_field)}`);
+            }
+            if (input.focus !== undefined) {
+                phrases.push(`set focus to ${toPromptValue(input.focus)}`);
+            }
+            return;
+        }
+
+        if (step.step_description && step.step_description.trim()) {
+            phrases.push(step.step_description.trim());
+        }
+    });
+
+    const unique = Array.from(new Set(phrases.map((phrase) => phrase.trim()).filter(Boolean)));
+    return unique.join(', ');
+};
+
+const toUiOptions = (input: unknown): Record<string, string[]> | undefined => {
+    if (!isRecord(input)) return undefined;
+
+    const options: Record<string, string[]> = {};
+    for (const [rawKey, rawValue] of Object.entries(input)) {
+        const key = String(rawKey || '').trim();
+        if (!key) continue;
+
+        const candidates: string[] = [];
+        if (Array.isArray(rawValue)) {
+            rawValue.forEach((item) => {
+                if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+                    const text = String(item).trim();
+                    if (text) candidates.push(text);
+                }
+            });
+        } else if (typeof rawValue === 'string') {
+            rawValue
+                .split(/[\n,;]+/)
+                .map((part) => part.trim())
+                .filter(Boolean)
+                .forEach((part) => candidates.push(part));
+        }
+
+        if (candidates.length > 0) {
+            const deduped = Array.from(
+                new Set(candidates.map((value) => value.toLowerCase()))
+            ).map((value) => {
+                const original = candidates.find((item) => item.toLowerCase() === value);
+                return original || value;
+            });
+            options[key] = deduped.slice(0, 12);
+        }
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined;
 };
 
 const toPlanSteps = (input: unknown): PlanStep[] => {
@@ -329,6 +553,7 @@ const toPlanSteps = (input: unknown): PlanStep[] => {
         if (!toolName) continue;
 
         const toolInput = isRecord(rawStep.tool_input) ? rawStep.tool_input : {};
+        const uiOptions = toUiOptions(rawStep.ui_options);
         const stepDescription =
             typeof rawStep.step_description === 'string' && rawStep.step_description.trim()
                 ? rawStep.step_description
@@ -338,6 +563,7 @@ const toPlanSteps = (input: unknown): PlanStep[] => {
             tool_name: canonicalizeToolName(toolName),
             tool_input: toolInput,
             step_description: stepDescription,
+            ui_options: uiOptions,
         });
     }
 
@@ -430,24 +656,31 @@ const derivePlanConfig = (
                     sceneConfig.aesthetics.composition = asCompositionType(
                         input.composition,
                         sceneConfig.aesthetics.composition
-                    );
+                    ) as SceneConfiguration['aesthetics']['composition'];
                 }
                 if (input.color_scheme !== undefined) {
                     sceneConfig.aesthetics.color_scheme = asColorScheme(
                         input.color_scheme,
                         sceneConfig.aesthetics.color_scheme
-                    );
+                    ) as SceneConfiguration['aesthetics']['color_scheme'];
                 }
                 if (input.mood_atmosphere !== undefined) {
                     sceneConfig.aesthetics.mood_atmosphere = asMoodType(
                         input.mood_atmosphere,
                         sceneConfig.aesthetics.mood_atmosphere
-                    );
+                    ) as SceneConfiguration['aesthetics']['mood_atmosphere'];
                 } else if (input.mood !== undefined) {
                     sceneConfig.aesthetics.mood_atmosphere = asMoodType(
                         input.mood,
                         sceneConfig.aesthetics.mood_atmosphere
-                    );
+                    ) as SceneConfiguration['aesthetics']['mood_atmosphere'];
+                }
+                if (input.style_medium !== undefined) {
+                    sceneConfig.aesthetics.style_medium = String(input.style_medium);
+                }
+                const nextAestheticStyle = input.aesthetic_style ?? input.artistic_style;
+                if (nextAestheticStyle !== undefined) {
+                    sceneConfig.aesthetics.aesthetic_style = String(nextAestheticStyle);
                 }
                 break;
             }
@@ -465,7 +698,8 @@ const derivePlanConfig = (
                 const index = resolveMaskIndex(
                     input,
                     (segmentationResults?.masks || []) as SegmentationMaskLike[],
-                    selectedMaskId
+                    selectedMaskId,
+                    true
                 );
 
                 if (index < 0) break;
@@ -587,6 +821,13 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                 } else if (input.mood !== undefined) {
                     updateSceneConfig('aesthetics.mood_atmosphere', input.mood);
                 }
+                if (input.style_medium !== undefined) {
+                    updateSceneConfig('aesthetics.style_medium', input.style_medium);
+                }
+                const nextAestheticStyle = input.aesthetic_style ?? input.artistic_style;
+                if (nextAestheticStyle !== undefined) {
+                    updateSceneConfig('aesthetics.aesthetic_style', nextAestheticStyle);
+                }
                 break;
             }
             case 'update_background': {
@@ -616,7 +857,8 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                 const index = resolveMaskIndex(
                     input,
                     results.masks as SegmentationMaskLike[],
-                    selectedMaskId
+                    selectedMaskId,
+                    true
                 );
                 if (index >= 0) {
                     const targetMask = results.masks[index];
@@ -639,16 +881,18 @@ const applyPlanSteps = (steps: PlanStep[]): void => {
                         segmentationStore.updateMaskMetadata(targetMask.mask_id, {
                             [property]: String(value),
                         });
-                    } else {
-                        const objectLabel = results.masks[index]?.promptObject?.trim() || `object ${index + 1}`;
-                        editTracker.trackEdit(
-                            `objects[${index}].${property}`,
-                            target[property as keyof typeof target],
-                            value,
-                            index,
-                            objectLabel
-                        );
                     }
+
+                    const objectLabel =
+                        resolveMaskDisplayLabel(results.masks[index] as SegmentationMaskLike) ||
+                        `object ${index + 1}`;
+                    editTracker.trackEdit(
+                        `objects[${index}].${property}`,
+                        target[property as keyof typeof target],
+                        value,
+                        index,
+                        objectLabel
+                    );
                 }
                 break;
             }
@@ -735,11 +979,160 @@ const triggerGenerationFromPrompt = (prompt: string): void => {
     workspaceHandlers?.handleGenerate?.(prompt);
 };
 
+const toSafeText = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+};
+
+const buildLiveStructuredPrompt = (
+    configStoreState: ReturnType<typeof useConfigStore.getState>,
+    segmentationState: ReturnType<typeof useSegmentationStore.getState>
+): Record<string, unknown> | null => {
+    const { config, sceneConfig } = configStoreState;
+    const shortDescription = toSafeText(config.short_description);
+    const backgroundSetting = toSafeText(
+        sceneConfig.background_setting ?? config.background_setting
+    );
+
+    const objectsFromConfig = Array.isArray(config.objects) ? config.objects : [];
+    const objects =
+        objectsFromConfig.length > 0
+            ? objectsFromConfig.map((obj) => ({
+                description: toSafeText(obj.description),
+                location: toSafeText(obj.location || 'center'),
+                relationship: toSafeText(obj.relationship),
+                relative_size: toSafeText(obj.relative_size || 'medium'),
+                shape_and_color: toSafeText(obj.shape_and_color),
+                texture: toSafeText(obj.texture),
+                appearance_details: toSafeText(obj.appearance_details),
+                orientation: toSafeText(obj.orientation || 'front-facing'),
+                pose: obj.pose ? toSafeText(obj.pose) : undefined,
+                expression: obj.expression ? toSafeText(obj.expression) : undefined,
+                action: obj.action ? toSafeText(obj.action) : undefined,
+                number_of_objects: 1,
+            }))
+            : (segmentationState.results?.masks || []).map((mask, index) => ({
+                description: toSafeText(
+                    mask.objectMetadata?.description || mask.promptObject || mask.label || `object ${index + 1}`
+                ),
+                location: toSafeText(mask.objectMetadata?.location || 'center'),
+                relationship: toSafeText(mask.objectMetadata?.relationship),
+                relative_size: toSafeText(mask.objectMetadata?.relative_size || 'medium'),
+                shape_and_color: toSafeText(mask.objectMetadata?.shape_and_color),
+                texture: toSafeText(mask.objectMetadata?.texture),
+                appearance_details: toSafeText(mask.objectMetadata?.appearance_details),
+                orientation: toSafeText(mask.objectMetadata?.orientation || 'front-facing'),
+                number_of_objects: 1,
+            }));
+
+    const hasContext =
+        shortDescription.length > 0 ||
+        backgroundSetting.length > 0 ||
+        objects.length > 0;
+    if (!hasContext) {
+        return null;
+    }
+
+    const lightingSource = config.lighting || sceneConfig.lighting;
+    const direction = lightingSource?.direction || sceneConfig.lighting.direction;
+    const shadows =
+        sceneConfig.lighting.shadows ??
+        lightingSource?.shadows ??
+        2;
+
+    const styleMedium = toSafeText(config.style_medium ?? sceneConfig.aesthetics.style_medium);
+    const artisticStyle = toSafeText(config.artistic_style ?? sceneConfig.aesthetics.aesthetic_style);
+    const context = toSafeText(config.context);
+
+    const structuredPrompt: Record<string, unknown> = {
+        short_description: shortDescription,
+        objects,
+        background_setting: backgroundSetting,
+        lighting: {
+            conditions: toSafeText(sceneConfig.lighting.conditions ?? lightingSource?.conditions),
+            direction: `x:${Number(direction?.x ?? 50)}, y:${Number(direction?.y ?? 50)}, rotation:${Number(direction?.rotation ?? 0)}, tilt:${Number(direction?.tilt ?? 0)}`,
+            shadows: String(shadows),
+        },
+        aesthetics: {
+            composition: toSafeText(sceneConfig.aesthetics.composition ?? config.aesthetics.composition),
+            color_scheme: toSafeText(sceneConfig.aesthetics.color_scheme ?? config.aesthetics.color_scheme),
+            mood_atmosphere: toSafeText(sceneConfig.aesthetics.mood_atmosphere ?? config.aesthetics.mood_atmosphere),
+            preference_score: '',
+            aesthetic_score: '',
+        },
+        photographic_characteristics: {
+            camera_angle: toSafeText(
+                sceneConfig.photographic_characteristics.camera_angle ??
+                config.photographic_characteristics.camera_angle
+            ),
+            lens_focal_length: toSafeText(
+                sceneConfig.photographic_characteristics.lens_focal_length ??
+                config.photographic_characteristics.lens_focal_length
+            ),
+            depth_of_field: String(
+                sceneConfig.photographic_characteristics.depth_of_field ??
+                config.photographic_characteristics.depth_of_field ??
+                50
+            ),
+            focus: String(
+                sceneConfig.photographic_characteristics.focus ??
+                config.photographic_characteristics.focus ??
+                75
+            ),
+        },
+        style_medium: styleMedium,
+        artistic_style: artisticStyle,
+    };
+
+    if (context) {
+        structuredPrompt.context = context;
+    }
+
+    return structuredPrompt;
+};
+
+const mergeStructuredPrompt = (
+    basePrompt: Record<string, unknown> | null,
+    overridePrompt: Record<string, unknown> | null
+): Record<string, unknown> | null => {
+    if (!basePrompt && !overridePrompt) return null;
+    if (!basePrompt) return overridePrompt;
+    if (!overridePrompt) return basePrompt;
+
+    const merged: Record<string, unknown> = {
+        ...basePrompt,
+        ...overridePrompt,
+    };
+
+    const nestedKeys = ['lighting', 'aesthetics', 'photographic_characteristics'] as const;
+    nestedKeys.forEach((key) => {
+        const baseValue = basePrompt[key];
+        const overrideValue = overridePrompt[key];
+        if (isRecord(baseValue) || isRecord(overrideValue)) {
+            merged[key] = {
+                ...(isRecord(baseValue) ? baseValue : {}),
+                ...(isRecord(overrideValue) ? overrideValue : {}),
+            };
+        }
+    });
+
+    if (Array.isArray(overridePrompt.objects)) {
+        merged.objects = overridePrompt.objects;
+    } else if (Array.isArray(basePrompt.objects)) {
+        merged.objects = basePrompt.objects;
+    }
+
+    return merged;
+};
+
 const buildAgentImageContext = (): {
     seed: number;
     structured_prompt: Record<string, unknown> | null;
     source_image: string | null;
     mask: string | null;
+    generation_id: string | null;
+    selected_mask_id: string | null;
+    masks_catalog: Array<{ mask_id: string; label: string; prompt_text?: string; description?: string }> | null;
 } => {
     const configStore = useConfigStore.getState();
     const fileSystemStore = useFileSystemStore.getState();
@@ -751,32 +1144,16 @@ const buildAgentImageContext = (): {
         segmentationState.results?.original_image_url
     );
 
-    const fallbackStructuredPrompt = (() => {
-        const shortDescription = String(configStore.config.short_description || '').trim();
-        const backgroundSetting = String(
-            configStore.sceneConfig.background_setting || configStore.config.background_setting || ''
-        ).trim();
-        const objects = Array.isArray(configStore.config.objects) ? configStore.config.objects : [];
-        const hasContext =
-            shortDescription.length > 0 ||
-            backgroundSetting.length > 0 ||
-            objects.length > 0;
-
-        if (!hasContext) {
-            return null;
-        }
-
-        return {
-            short_description: shortDescription,
-            objects,
-            background_setting: backgroundSetting,
-            lighting: configStore.sceneConfig.lighting,
-            aesthetics: configStore.sceneConfig.aesthetics,
-            photographic_characteristics: configStore.sceneConfig.photographic_characteristics,
-            style_medium: configStore.config.style_medium,
-            artistic_style: configStore.config.artistic_style,
-        };
-    })();
+    const liveStructuredPrompt = buildLiveStructuredPrompt(configStore, segmentationState);
+    const baseStructuredPrompt = isRecord(configStore.rawStructuredPrompt)
+        ? configStore.rawStructuredPrompt
+        : (isRecord(fileSystemStore.originalStructuredPrompt)
+            ? fileSystemStore.originalStructuredPrompt
+            : null);
+    const mergedStructuredPrompt = mergeStructuredPrompt(
+        baseStructuredPrompt,
+        liveStructuredPrompt
+    );
 
     const sourceImage = (
         segmentationState.results?.original_image_url ||
@@ -791,19 +1168,32 @@ const buildAgentImageContext = (): {
         ? segmentationState.results.masks.find((mask) => mask.mask_id === selectedMaskId)
         : undefined;
     const selectedMaskUrl = selectedMask?.mask_url || null;
+    const coerceSeed = (value: unknown): number | null => {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+    };
+    const fileSeed = coerceSeed(fileSystemStore.currentSeed);
+    const sceneSeed = coerceSeed(configStore.sceneConfig.seed);
 
     return {
-        seed: hasVisualContext ? (configStore.sceneConfig.seed || fileSystemStore.currentSeed || 0) : 0,
-        structured_prompt:
-            hasVisualContext
-                ? (
-                    configStore.rawStructuredPrompt ||
-                    fileSystemStore.originalStructuredPrompt ||
-                    fallbackStructuredPrompt
-                )
-                : null,
+        seed: hasVisualContext ? (fileSeed ?? sceneSeed ?? 0) : 0,
+        structured_prompt: hasVisualContext ? mergedStructuredPrompt : null,
         source_image: hasVisualContext ? sourceImage : null,
         mask: hasVisualContext ? selectedMaskUrl : null,
+        generation_id: hasVisualContext ? fileSystemStore.currentGenerationId : null,
+        selected_mask_id: hasVisualContext ? selectedMaskId || null : null,
+        masks_catalog: hasVisualContext && segmentationState.results?.masks?.length
+            ? segmentationState.results.masks.map((m) => ({
+                  mask_id: m.mask_id,
+                  label: m.label,
+                  prompt_text: m.promptText,
+                  description: m.objectMetadata?.description ?? m.promptObject,
+              }))
+            : null,
     };
 };
 
@@ -1166,7 +1556,9 @@ export const useChatStore = create<ChatState>()(
                 // Build modification prompt strictly from this execution's edits.
                 editTracker.clearEdits();
                 applyPlanSteps(steps);
-                const modificationPrompt = editTracker.getModificationPrompt();
+                const trackedModificationPrompt = editTracker.getModificationPrompt();
+                const planDerivedPrompt = buildPlanModificationPrompt(steps);
+                const modificationPrompt = trackedModificationPrompt || planDerivedPrompt;
                 const hasConfigDelta = !areInputsEqual(baseConfig, planConfig);
                 const serverRefineTools = new Set([
                     'update_background',
@@ -1210,6 +1602,25 @@ export const useChatStore = create<ChatState>()(
                         ? msg.source_query.trim()
                         : (get().pendingQuery || '').trim();
                 const imageContext = buildAgentImageContext();
+
+                // Sync generation draft fields into the structured prompt
+                // so the backend sees a consistent view of user adjustments
+                if (imageContext.structured_prompt || draft) {
+                    const sp = (imageContext.structured_prompt ?? {}) as Record<string, unknown>;
+                    sp.short_description = draft.main_subject ?? sp.short_description;
+                    sp.background_setting = draft.background_setting ?? sp.background_setting;
+                    sp.style_medium = draft.style_or_medium ?? sp.style_medium;
+                    if (draft.lighting && typeof sp.lighting === 'object' && sp.lighting) {
+                        (sp.lighting as Record<string, unknown>).conditions = draft.lighting;
+                    } else if (draft.lighting) {
+                        sp.lighting = { conditions: draft.lighting };
+                    }
+                    if (draft.extra_details) {
+                        sp.context = draft.extra_details;
+                    }
+                    imageContext.structured_prompt = sp;
+                }
+
                 const safeQuery = query || polishedPrompt;
 
                 set({

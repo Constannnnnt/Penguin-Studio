@@ -193,13 +193,36 @@ const normalizePlanToolInput = (toolName: string, toolInput: ToolInput): ToolInp
       next.composition = next.composition.trim().toLowerCase().replace(/\s+/g, '-');
     }
     if (typeof next.color_scheme === 'string') {
-      next.color_scheme = next.color_scheme.trim().toLowerCase();
+      const trimmed = next.color_scheme.trim();
+      const looksLikePalette =
+        trimmed.includes('#') ||
+        /(?:rgb|hsl)a?\(/i.test(trimmed) ||
+        (trimmed.includes(',') && /[0-9a-f]/i.test(trimmed));
+      next.color_scheme = looksLikePalette ? trimmed : trimmed.toLowerCase();
     }
     if (typeof next.mood_atmosphere === 'string') {
-      next.mood_atmosphere = next.mood_atmosphere.trim().toLowerCase();
+      next.mood_atmosphere = next.mood_atmosphere.trim();
     }
     if (typeof next.mood === 'string' && !next.mood_atmosphere) {
-      next.mood_atmosphere = next.mood.trim().toLowerCase();
+      next.mood_atmosphere = next.mood.trim();
+    }
+    if (typeof next.style_medium === 'string') {
+      next.style_medium = next.style_medium.trim();
+    }
+    if (typeof next.aesthetic_style === 'string') {
+      next.aesthetic_style = next.aesthetic_style.trim();
+    }
+    if (typeof next.artistic_style === 'string') {
+      next.artistic_style = next.artistic_style.trim();
+    }
+  }
+
+  if (canonicalToolName === 'adjust_object_property') {
+    if (typeof next.property === 'string') {
+      next.property = next.property.trim().toLowerCase().replace(/\s+/g, '_');
+    }
+    if (typeof next.value === 'string') {
+      next.value = next.value.trim();
     }
   }
 
@@ -235,15 +258,44 @@ const SliderAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange, schema }
   );
 };
 
-const InputAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => (
-  <div className="space-y-2 mb-4">
-    <PerformantInput
-      value={toStringValue(value)}
-      onValueCommit={(nextValue) => onChange(nextValue)}
-      className="h-8 bg-background/40 text-[11px]"
-    />
-  </div>
-);
+const TextInputWithSuggestionsAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange, schema }) => {
+  const currentValue = toStringValue(value).trim();
+  const suggestions =
+    schema && schema.type === 'string' && Array.isArray(schema.enum)
+      ? schema.enum.filter((option): option is string => typeof option === 'string' && option.trim().length > 0)
+      : [];
+
+  return (
+    <div className="space-y-2 mb-4">
+      <PerformantInput
+        value={toStringValue(value)}
+        onValueCommit={(nextValue) => onChange(nextValue)}
+        className="h-8 bg-background/40 text-[11px]"
+      />
+      {suggestions.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {suggestions.map((option) => {
+            const active = option.trim().toLowerCase() === currentValue.toLowerCase();
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange(option)}
+                className={`rounded-md border px-2 py-1 text-[10px] transition-colors ${
+                  active
+                    ? 'border-primary/60 bg-primary/15 text-primary'
+                    : 'border-border/60 bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                }`}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 const TextareaAdapter: React.FC<WidgetAdapterProps> = ({ value, onChange }) => (
   <div className="space-y-2 mb-4">
@@ -319,7 +371,7 @@ const asWidget = (component: React.FC<WidgetAdapterProps>) =>
 
 const customWidgets: WidgetRegistry = {
   'slider': asWidget(SliderAdapter),
-  'text': asWidget(InputAdapter),
+  'text': asWidget(TextInputWithSuggestionsAdapter),
   'textarea': asWidget(TextareaAdapter),
   'select': asWidget(SelectAdapter),
   'lighting-direction': asWidget(LightingDirectionAdapter),
@@ -444,6 +496,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
                                   key={`editor-${idx}`}
                                   toolName={step.tool_name}
                                   toolInput={step.tool_input || {}}
+                                  toolSuggestions={step.ui_options || {}}
                                   onUpdate={(updatedInput) => onUpdateStep(idx, updatedInput)}
                                   disabled={isLocked}
                                 />
@@ -477,6 +530,7 @@ export const InteractiveParameterEditor: React.FC<InteractiveParameterEditorProp
 interface ToolParameterEditorProps {
   toolName: string;
   toolInput: ToolInput;
+  toolSuggestions?: Record<string, string[]>;
   onUpdate: (toolInput: ToolInput) => void;
   disabled?: boolean;
 }
@@ -484,13 +538,14 @@ interface ToolParameterEditorProps {
 const ToolParameterEditor: React.FC<ToolParameterEditorProps> = ({
   toolName,
   toolInput,
+  toolSuggestions = {},
   onUpdate,
   disabled = false,
 }) => {
   const canonicalToolName = canonicalizeToolName(toolName);
   const toolTitle = getToolTitle(toolName);
   const toolDescription = getToolDescription(toolName);
-  const schema = getToolSchema(toolName, toolInput);
+  const schema = getToolSchema(toolName, toolInput, toolSuggestions);
   const safeInput = React.useMemo(
     () => normalizePlanToolInput(toolName, toolInput || {}),
     [toolInput, toolName]
@@ -565,9 +620,17 @@ const ToolParameterEditor: React.FC<ToolParameterEditorProps> = ({
               path={key}
               schema={fieldSchema}
               value={hydratedInput[key as keyof typeof hydratedInput]}
-              onChange={(value) =>
-                onUpdate(normalizePlanToolInput(toolName, { ...hydratedInput, [key]: value }))
-              }
+              onChange={(value) => {
+                const nextInput: ToolInput = { ...hydratedInput, [key]: value };
+                if (canonicalToolName === 'adjust_object_property' && key === 'property') {
+                  const previous = toStringValue(hydratedInput.property).trim().toLowerCase().replace(/\s+/g, '_');
+                  const nextProperty = toStringValue(value).trim().toLowerCase().replace(/\s+/g, '_');
+                  if (nextProperty && previous !== nextProperty) {
+                    delete nextInput.value;
+                  }
+                }
+                onUpdate(normalizePlanToolInput(toolName, nextInput));
+              }}
               registry={registry}
               disabled={disabled}
             />
