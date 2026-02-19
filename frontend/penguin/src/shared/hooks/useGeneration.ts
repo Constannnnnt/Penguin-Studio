@@ -167,16 +167,25 @@ export const useGeneration = () => {
    * Refine existing image using structured prompt (full config) and seed
    * 
    * @param config - Current config with user modifications
+   * @param sourceImage - Source image URL/base64 for edit endpoint
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight", "make it warmer")
+   * @param mask - Optional mask URL/base64 for localized edits
    */
   const refineImage = async (
     config: PenguinConfig,
-    modificationPrompt?: string
+    sourceImage: string,
+    modificationPrompt?: string,
+    mask?: string
   ): Promise<void> => {
     if (lastSeedRef.current === null) {
       console.warn('[Generation] No seed available for refinement');
       setError('Generate an image first');
       showError('Refine Failed', 'No seed available. Generate an image first or load a generation with a seed.');
+      return;
+    }
+    if (!sourceImage || !sourceImage.trim()) {
+      setError('No source image available for refinement');
+      showError('Refine Failed', 'Load or generate an image before refining.');
       return;
     }
 
@@ -191,7 +200,9 @@ export const useGeneration = () => {
       const response: GenerationResponse = await apiClient.refineImage(
         config,
         lastSeedRef.current,
-        modificationPrompt
+        sourceImage,
+        modificationPrompt,
+        mask
       );
 
       if (response.status === 'pending' || response.status === 'processing') {

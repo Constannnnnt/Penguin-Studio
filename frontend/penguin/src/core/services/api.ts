@@ -306,12 +306,16 @@ class PenguinApiClient {
    * 
    * @param config - Current PenguinConfig with user modifications
    * @param seed - Original seed for consistency
+   * @param sourceImage - Source image URL/base64 for edit endpoint
    * @param modificationPrompt - Optional text describing the changes (e.g., "add sunlight")
+   * @param mask - Optional mask URL/base64 for localized edits
    */
   async refineImage(
     config: PenguinConfig,
     seed: number,
-    modificationPrompt?: string
+    sourceImage: string,
+    modificationPrompt?: string,
+    mask?: string
   ): Promise<GenerationResponse> {
     const validation = validateConfig(config);
     if (!validation.valid) {
@@ -326,19 +330,23 @@ class PenguinApiClient {
       });
       throw new ValidationError("Invalid configuration", validation.errors);
     }
+    const normalizedSourceImage = this.normalizePromptText(sourceImage).trim();
+    if (!normalizedSourceImage) {
+      throw new ValidationError("Source image is required for refinement", [
+        "Load or generate an image before refining."
+      ]);
+    }
 
     const sanitizedConfig = this.sanitizeConfig(config);
     const structuredPrompt = this.transformToStructuredPrompt(sanitizedConfig);
 
     // Build refine request
-    // If modificationPrompt is provided, use the Bria modification pattern:
-    // - prompt = modification description (e.g., "add sunlight")
-    // - structured_prompt = current structured prompt from latest config
+    // Refine requests are routed to backend edit pipeline (/image/edit).
     const refineRequest: Record<string, unknown> = {
       structured_prompt: structuredPrompt,
       seed,
-      aspect_ratio: config.aspect_ratio || "1:1",
-      resolution: 1024,
+      source_image: normalizedSourceImage,
+      num_inference_steps: 50,
     };
 
     // Add modification prompt if provided
@@ -350,6 +358,17 @@ class PenguinApiClient {
         sanitizedModification === '{}';
       if (!invalidPrompt) {
         refineRequest.modification_prompt = sanitizedModification;
+      }
+    }
+
+    if (mask) {
+      const sanitizedMask = this.normalizePromptText(mask).trim();
+      const invalidMask =
+        !sanitizedMask ||
+        sanitizedMask === '[object Object]' ||
+        sanitizedMask === '{}';
+      if (!invalidMask) {
+        refineRequest.mask = sanitizedMask;
       }
     }
 

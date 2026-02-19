@@ -470,6 +470,72 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     };
   };
 
+  const resolveRefineSourceImage = (): string | null => {
+    const candidates = [
+      generatedImageRef.current,
+      libraryImageRef.current,
+      segmentationResultsRef.current?.original_image_url,
+      selectedFileUrlRef.current,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
+  };
+
+  const resolveRefineMask = (): string | undefined => {
+    const currentResults = segmentationResultsRef.current;
+    if (!currentResults || !selectedMaskId) {
+      return undefined;
+    }
+
+    const selectedMask = currentResults.masks.find((mask) => mask.mask_id === selectedMaskId);
+    const maskUrl = selectedMask?.mask_url;
+    if (typeof maskUrl === 'string' && maskUrl.trim().length > 0) {
+      return maskUrl.trim();
+    }
+
+    return undefined;
+  };
+
+  const shouldUseMaskForRefine = (modificationPrompt?: string): boolean => {
+    const edits = editTracker.getEdits();
+    const hasSpatialObjectEdit = edits.some((edit) => {
+      if (!edit.field.startsWith('objects[')) return false;
+      return (
+        edit.field.endsWith('.location') ||
+        edit.field.endsWith('.relative_size') ||
+        edit.field.endsWith('.relationship') ||
+        edit.field.endsWith('.orientation') ||
+        edit.field.endsWith('.rotation') ||
+        edit.field.endsWith('.flip')
+      );
+    });
+
+    if (hasSpatialObjectEdit) {
+      return false;
+    }
+
+    const prompt = (modificationPrompt || '').toLowerCase();
+    const relocationPattern = /\b(move|moved|relocate|reposition|shift|position|top|bottom|left|right|center|middle|front|back|foreground|background)\b/;
+    const scalePattern = /\b(size|resize|resized|smaller|larger|bigger|tiny|huge)\b/;
+    const relationshipPattern = /\b(relationship|isolated|separate|apart|distance)\b/;
+
+    if (
+      relocationPattern.test(prompt) ||
+      scalePattern.test(prompt) ||
+      relationshipPattern.test(prompt)
+    ) {
+      return false;
+    }
+
+    return true;
+  };
+
   const handleRefine = (promptOverride?: unknown): void => {
     const normalizedOverride = normalizePromptOverride(promptOverride);
     if (!hasVisualContext()) {
@@ -483,13 +549,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     const { config: storeConfig, sceneConfig, rawStructuredPrompt } = useConfigStore.getState();
     const fallbackStructured = originalStructuredPromptRef.current || rawStructuredPrompt || null;
     const mergedConfig = buildRefineConfig(storeConfig, sceneConfig, fallbackStructured);
+    const sourceImage = resolveRefineSourceImage();
+    if (!sourceImage) {
+      console.warn('[WorkspacePanel] Refine requested without source image context');
+      return;
+    }
+    const selectedMaskUrl = shouldUseMaskForRefine(modificationPrompt || undefined)
+      ? resolveRefineMask()
+      : undefined;
 
     // Refine uses:
     // - Current config (with user modifications)
     // - Modification prompt (natural language description of changes)
     refineImageRef.current?.(
       mergedConfig,
-      modificationPrompt || undefined
+      sourceImage,
+      modificationPrompt || undefined,
+      selectedMaskUrl
     );
 
     // Clear edits after refine (they've been applied)
@@ -514,10 +590,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelRef>((_props, ref) => {
     const fallbackStructured =
       structuredOverride || originalStructuredPromptRef.current || rawStructuredPrompt || null;
     const mergedConfig = buildRefineConfig(configOverride, sceneConfig, fallbackStructured);
+    const sourceImage = resolveRefineSourceImage();
+    if (!sourceImage) {
+      console.warn('[WorkspacePanel] Refine requested without source image context');
+      return;
+    }
+    const selectedMaskUrl = shouldUseMaskForRefine(modificationPrompt || undefined)
+      ? resolveRefineMask()
+      : undefined;
 
     refineImageRef.current?.(
       mergedConfig,
-      modificationPrompt || undefined
+      sourceImage,
+      modificationPrompt || undefined,
+      selectedMaskUrl
     );
 
     editTracker.clearEdits();

@@ -7,6 +7,7 @@ import { useLayoutStore } from '@/core/store/layoutStore';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { useImageEditStore } from '@/features/imageEdit/store/imageEditStore';
 import { editTracker } from '@/shared/lib/editTracker';
+import { env } from '@/shared/lib/env';
 import type {
     ColorScheme,
     CompositionType,
@@ -734,7 +735,12 @@ const triggerGenerationFromPrompt = (prompt: string): void => {
     workspaceHandlers?.handleGenerate?.(prompt);
 };
 
-const buildAgentImageContext = (): { seed: number; structured_prompt: Record<string, unknown> | null } => {
+const buildAgentImageContext = (): {
+    seed: number;
+    structured_prompt: Record<string, unknown> | null;
+    source_image: string | null;
+    mask: string | null;
+} => {
     const configStore = useConfigStore.getState();
     const fileSystemStore = useFileSystemStore.getState();
     const segmentationState = useSegmentationStore.getState();
@@ -772,6 +778,20 @@ const buildAgentImageContext = (): { seed: number; structured_prompt: Record<str
         };
     })();
 
+    const sourceImage = (
+        segmentationState.results?.original_image_url ||
+        fileSystemStore.selectedFileUrl ||
+        (fileSystemStore.currentGenerationId
+            ? `${env.apiBaseUrl}/outputs/${fileSystemStore.currentGenerationId}/generated.png`
+            : null)
+    );
+
+    const selectedMaskId = segmentationState.selectedMaskId;
+    const selectedMask = selectedMaskId && segmentationState.results
+        ? segmentationState.results.masks.find((mask) => mask.mask_id === selectedMaskId)
+        : undefined;
+    const selectedMaskUrl = selectedMask?.mask_url || null;
+
     return {
         seed: hasVisualContext ? (configStore.sceneConfig.seed || fileSystemStore.currentSeed || 0) : 0,
         structured_prompt:
@@ -782,6 +802,8 @@ const buildAgentImageContext = (): { seed: number; structured_prompt: Record<str
                     fallbackStructuredPrompt
                 )
                 : null,
+        source_image: hasVisualContext ? sourceImage : null,
+        mask: hasVisualContext ? selectedMaskUrl : null,
     };
 };
 

@@ -47,11 +47,21 @@ class GenerateRequest(BaseModel):
 
 class RefineRequest(BaseModel):
     """Request schema for image refinement."""
+    source_image: Optional[str] = Field(
+        None,
+        description="Source image URL/base64 for edit operations",
+    )
+    images: Optional[List[str]] = Field(
+        None,
+        description="Optional source image list. If provided, first item is used.",
+    )
     structured_prompt: Dict[str, Any] = Field(..., description="Updated structured prompt")
     seed: int = Field(..., description="Original seed for consistency")
     modification_prompt: Optional[str] = Field(None, description="Optional prompt describing modification (e.g., 'add sunlight')")
+    mask: Optional[str] = Field(None, description="Optional mask URL/base64")
     aspect_ratio: str = Field("1:1", description="Aspect ratio")
     resolution: int = Field(1024, description="Resolution")
+    num_inference_steps: int = Field(50, description="Number of diffusion steps")
 
 
 class GenerateResponse(BaseModel):
@@ -88,7 +98,10 @@ class StructuredPromptResponse(BaseModel):
 
 def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
     """Convert Bria API errors to HTTP exceptions."""
-    logger.error(f"Bria API error for request_id={request_id}: {e.code} - {e}")
+    logger.error(
+        f"Bria API error for request_id={request_id}: "
+        f"{e.code} - {e} - details={getattr(e, 'details', None)}"
+    )
 
     if isinstance(e, AuthenticationError):
         raise HTTPException(
@@ -108,7 +121,7 @@ def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
         )
     elif isinstance(e, ValidationError):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=e.status_code or status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
     else:
@@ -286,6 +299,23 @@ async def refine_image(
     )
 
     try:
+        source_image = request.source_image
+        if request.images is not None:
+            if len(request.images) != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Refinement requires exactly one source image in images",
+                )
+            if not source_image:
+                first_image = request.images[0]
+                source_image = first_image if isinstance(first_image, str) else None
+
+        if not source_image or not source_image.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refinement requires source_image (or images with exactly one source image)",
+            )
+
         # Parse structured prompt
         structured_prompt = StructuredPrompt(**request.structured_prompt)
 
@@ -297,18 +327,29 @@ async def refine_image(
             else:
                 modification_prompt = cleaned_modification
 
+        mask = request.mask
+        if isinstance(mask, str):
+            cleaned_mask = mask.strip()
+            if cleaned_mask in {"", "[object Object]", "{}"}:
+                mask = None
+            else:
+                mask = cleaned_mask
+
         # Build parameters
         parameters = GenerationParameters(
             aspect_ratio=request.aspect_ratio,
             resolution=request.resolution,
             seed=request.seed,
+            num_inference_steps=request.num_inference_steps,
         )
 
         # Refine image
         result = await bria_service.refine_image(
+            source_image=source_image.strip(),
             structured_prompt=structured_prompt,
             seed=request.seed,
             modification_prompt=modification_prompt,
+            mask=mask,
             parameters=parameters,
         )
 

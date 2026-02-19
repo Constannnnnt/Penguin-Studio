@@ -225,6 +225,12 @@ class PenguinOrchestrator:
             raise ValueError(
                 "No image context found for refinement. Generate an image first."
             )
+        source_image = image_ctx.get("source_image") or image_ctx.get("image_url")
+        if not source_image:
+            raise ValueError(
+                "No source image found for refinement. Load or generate an image first."
+            )
+        mask = image_ctx.get("mask")
 
         # Reconstruct structured prompt
         sp = StructuredPrompt(**image_ctx["structured_prompt"])
@@ -280,7 +286,11 @@ class PenguinOrchestrator:
         # Call Bria refinement
         logger.info(f"Calling Bria refinement for {tool_name}")
         result = await self.bria_service.refine_image(
-            structured_prompt=sp, seed=seed, modification_prompt=session.user_query
+            source_image=str(source_image),
+            structured_prompt=sp,
+            seed=seed,
+            modification_prompt=session.user_query,
+            mask=str(mask) if isinstance(mask, str) and mask.strip() else None,
         )
 
         # Update session context with NEW structured prompt for subsequent steps
