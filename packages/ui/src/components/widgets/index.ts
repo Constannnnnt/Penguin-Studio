@@ -4,6 +4,7 @@ import { NumberField, NumberWidgetProps } from './NumberField';
 import { BooleanField, BooleanWidgetProps } from './BooleanField';
 import { ObjectField, ObjectWidgetProps } from './ObjectField';
 import { ArrayField, ArrayWidgetProps } from './ArrayField';
+import { ColorPaletteField, ColorPaletteWidgetProps } from './ColorPaletteField';
 import { FieldSchema } from '@fibo-ui/core';
 
 export type WidgetComponent = React.FC<any>;
@@ -18,9 +19,10 @@ export const defaultWidgets: WidgetRegistry = {
   boolean: BooleanField,
   object: ObjectField,
   array: ArrayField,
+  'color-palette': ColorPaletteField,
 };
 
-export type WidgetType = 'string' | 'number' | 'boolean' | 'object' | 'array';
+export type WidgetType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'color-palette';
 
 export function createWidgetRegistry(overrides?: Partial<WidgetRegistry>): WidgetRegistry {
   return {
@@ -29,5 +31,12 @@ export function createWidgetRegistry(overrides?: Partial<WidgetRegistry>): Widge
   } as WidgetRegistry;
 }
 
-export type { StringWidgetProps, NumberWidgetProps, BooleanWidgetProps, ObjectWidgetProps, ArrayWidgetProps };
+export type {
+  StringWidgetProps,
+  NumberWidgetProps,
+  BooleanWidgetProps,
+  ObjectWidgetProps,
+  ArrayWidgetProps,
+  ColorPaletteWidgetProps,
+};
 export * from './types';

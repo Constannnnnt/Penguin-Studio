@@ -5,6 +5,7 @@ import { NumberField } from './widgets/NumberField';
 import { BooleanField } from './widgets/BooleanField';
 import { ObjectField } from './widgets/ObjectField';
 import { ArrayField } from './widgets/ArrayField';
+import { ColorPaletteField } from './widgets/ColorPaletteField';
 import { WidgetRegistry } from './widgets';
 
 export interface FieldRendererProps {
@@ -113,6 +114,19 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
           value={value}
           onChange={onChange}
           schema={schema as ArrayFieldSchema}
+          disabled={disabled}
+          readOnly={readOnly}
+          className={className}
+        />
+      );
+
+    case 'color-palette':
+      return (
+        <ColorPaletteField
+          path={path}
+          value={value}
+          onChange={onChange}
+          schema={schema as StringFieldSchema}
           disabled={disabled}
           readOnly={readOnly}
           className={className}
