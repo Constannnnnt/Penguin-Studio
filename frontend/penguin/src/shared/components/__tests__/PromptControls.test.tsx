@@ -48,4 +48,18 @@ describe('PromptControls', () => {
     const textarea = screen.getByPlaceholderText(/describe your modifications/i);
     expect(textarea).toHaveAttribute('aria-label', expect.stringMatching(/describe your modifications/i));
   });
+
+  it('shows character counter when typing', () => {
+    render(<PromptControls {...defaultProps} prompt="hello" />);
+    const counter = screen.getByText('5 / 10');
+    expect(counter).toBeInTheDocument();
+    expect(counter).toHaveClass('text-red-500/80'); // Should be red because < 10
+  });
+
+  it('shows green/normal character counter when enough length', () => {
+    render(<PromptControls {...defaultProps} prompt="hello world" />);
+    const counter = screen.getByText('11 / 10');
+    expect(counter).toBeInTheDocument();
+    expect(counter).toHaveClass('text-muted-foreground/40'); // Should be normal color
+  });
 });

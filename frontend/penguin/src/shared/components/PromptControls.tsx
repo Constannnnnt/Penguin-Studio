@@ -104,6 +104,16 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
             />
             {/* Subtle focus line anim */}
             <div className="absolute bottom-0 left-0 h-[1.5px] bg-primary scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300 origin-left w-full shadow-sm shadow-primary/30" />
+
+            {/* Character Count */}
+            <div
+              className={`absolute bottom-1.5 right-2 text-[10px] font-medium transition-colors duration-200 pointer-events-none select-none
+                ${prompt.length > 0 ? 'opacity-100' : 'opacity-0'}
+                ${prompt.length < 10 ? 'text-red-500/80' : 'text-muted-foreground/40'}
+            `}
+            >
+              {prompt.length} / 10
+            </div>
           </div>
         </div>
 
@@ -164,19 +174,40 @@ export const PromptControls: React.FC<PromptControlsProps> = ({
           {showGenerateAction && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  onClick={() => onGenerate()}
-                  disabled={isDisabled}
-                  size="icon"
-                  className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${!isDisabled ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90' : 'bg-muted/50 cursor-not-allowed opacity-50'
-                    }`}
-                  aria-label={`${buttonLabel} image`}
+                {/* Wrapper div to enable tooltip on disabled button */}
+                <div
+                  tabIndex={isDisabled ? 0 : -1}
+                  className="outline-none inline-flex rounded-lg"
+                  aria-describedby={isDisabled && prompt.length < 10 ? 'disabled-reason' : undefined}
                 >
-                  {isLoading ? <LoadingSpinner size="sm" /> : buttonIcon}
-                </Button>
+                  <Button
+                    onClick={() => onGenerate()}
+                    disabled={isDisabled}
+                    size="icon"
+                    className={`rounded-lg h-9 w-9 transition-all duration-300 shadow-sm ${
+                      !isDisabled
+                        ? 'bg-primary hover:bg-primary/90 studio-glow active:scale-90'
+                        : 'bg-muted/50 cursor-not-allowed opacity-50 pointer-events-none'
+                    }`}
+                    aria-label={`${buttonLabel} image`}
+                  >
+                    {isLoading ? <LoadingSpinner size="sm" /> : buttonIcon}
+                  </Button>
+                </div>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs font-semibold">{buttonLabel} <span className="text-[10px] opacity-70 font-normal ml-1">({generateShortcut})</span></p>
+                {isLoading ? (
+                  <p className="text-xs font-medium">Generating...</p>
+                ) : isDisabled && prompt.length < 10 ? (
+                  <p id="disabled-reason" className="text-xs text-red-400 font-medium">
+                    Min 10 chars required
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold">
+                    {buttonLabel}{' '}
+                    <span className="text-[10px] opacity-70 font-normal ml-1">({generateShortcut})</span>
+                  </p>
+                )}
               </TooltipContent>
             </Tooltip>
           )}
