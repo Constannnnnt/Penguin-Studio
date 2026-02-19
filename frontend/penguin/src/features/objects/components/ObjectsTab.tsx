@@ -3,9 +3,6 @@ import { useSegmentationStore } from '@/features/segmentation/store/segmentation
 import { ObjectListItem } from './ObjectListItem';
 import { UploadForSegmentationButton } from '@/features/segmentation/components/UploadForSegmentationButton';
 
-// Threshold for enabling virtualization (number of objects)
-const VIRTUALIZATION_THRESHOLD = 20;
-
 export const ObjectsTab: React.FC = () => {
   const { results, selectedMaskId, hoveredMaskId, hoverMask, selectMask } = useSegmentationStore();
   const listRef = useRef<HTMLDivElement>(null);
@@ -41,17 +38,6 @@ export const ObjectsTab: React.FC = () => {
       </div>
     );
   }
-
-  // Use virtualization for large lists
-  const useVirtualization = sortedMasks.length > VIRTUALIZATION_THRESHOLD;
-
-  // TODO
-
-  // if (useVirtualization) {
-  //   // For large lists, we could implement virtualization here
-  //   // For now, we'll use the standard approach with optimized rendering
-  //   console.log(`[ObjectsTab] Large list detected (${sortedMasks.length} items), consider implementing virtualization`);
-  // }
 
   return (
     <div

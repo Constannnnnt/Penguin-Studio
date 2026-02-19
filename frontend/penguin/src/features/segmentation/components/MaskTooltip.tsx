@@ -6,7 +6,7 @@ interface MaskTooltipProps {
   mask: MaskMetadata;
   visible: boolean;
   position: { x: number; y: number };
-  imageContainerRef?: React.RefObject<HTMLElement>;
+  imageContainerRef?: React.RefObject<HTMLElement | null>;
   /**
    * Optional pre-calculated bounding box in the same coordinate space as the container ref.
    * When provided, tooltip positioning respects this box instead of the raw mask metadata.
