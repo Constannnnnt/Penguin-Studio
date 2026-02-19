@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "pnpm -C ../../packages/ui build",
     "dev": "vite",
+    "prebuild": "pnpm -C ../../packages/ui build",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
