@@ -9,14 +9,20 @@ import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, Query
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_segmentation_service
 from app.config import settings
-from app.utils.filesystem import glob_async, read_json_async, write_json_async
+from app.utils.filesystem import (
+    glob_async,
+    read_json_async,
+    write_json_async,
+    safe_join,
+)
 from app.services.bria_service import (
     BriaService,
     GenerationParameters,
@@ -35,10 +41,19 @@ router = APIRouter(prefix="/api", tags=["generation"])
 
 class GenerateRequest(BaseModel):
     """Request schema for image generation."""
-    prompt: Optional[str] = Field(None, description="Text prompt for generation")
-    images: Optional[List[str]] = Field(None, description="Reference image URLs or base64")
-    structured_prompt: Optional[Dict[str, Any]] = Field(None, description="Structured prompt")
-    aspect_ratio: str = Field("1:1", description="Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4)")
+
+    prompt: Optional[str] = Field(
+        None, description="Text prompt for generation", max_length=5000
+    )
+    images: Optional[List[str]] = Field(
+        None, description="Reference image URLs or base64"
+    )
+    structured_prompt: Optional[Dict[str, Any]] = Field(
+        None, description="Structured prompt"
+    )
+    aspect_ratio: str = Field(
+        "1:1", description="Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4)"
+    )
     resolution: int = Field(1024, description="Resolution (512, 768, 1024)")
     seed: Optional[int] = Field(None, description="Seed for reproducibility")
     num_inference_steps: int = Field(50, description="Number of inference steps")
@@ -47,6 +62,7 @@ class GenerateRequest(BaseModel):
 
 class RefineRequest(BaseModel):
     """Request schema for image refinement."""
+
     source_image: Optional[str] = Field(
         None,
         description="Source image URL/base64 for edit operations",
@@ -55,10 +71,16 @@ class RefineRequest(BaseModel):
         None,
         description="Optional source image list. If provided, first item is used.",
     )
-    structured_prompt: Dict[str, Any] = Field(..., description="Updated structured prompt")
+    structured_prompt: Dict[str, Any] = Field(
+        ..., description="Updated structured prompt"
+    )
     seed: int = Field(..., description="Original seed for consistency")
-    modification_prompt: Optional[str] = Field(None, description="Optional prompt describing modification (e.g., 'add sunlight')")
     mask: Optional[str] = Field(None, description="Optional mask URL/base64")
+    modification_prompt: Optional[str] = Field(
+        None,
+        description="Optional prompt describing modification (e.g., 'add sunlight')",
+        max_length=1000,
+    )
     aspect_ratio: str = Field("1:1", description="Aspect ratio")
     resolution: int = Field(1024, description="Resolution")
     num_inference_steps: int = Field(50, description="Number of diffusion steps")
@@ -66,12 +88,17 @@ class RefineRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     """Response schema for image generation."""
+
     id: str = Field(..., description="Generation ID")
     status: str = Field(..., description="Generation status")
     image_url: Optional[str] = Field(None, description="Generated image URL")
-    structured_prompt: Optional[Dict[str, Any]] = Field(None, description="Structured prompt")
+    structured_prompt: Optional[Dict[str, Any]] = Field(
+        None, description="Structured prompt"
+    )
     seed: Optional[int] = Field(None, description="Seed used")
-    generation_time_ms: Optional[float] = Field(None, description="Generation time in ms")
+    generation_time_ms: Optional[float] = Field(
+        None, description="Generation time in ms"
+    )
     ip_warning: Optional[str] = Field(None, description="IP-related warning message")
     from_cache: bool = Field(False, description="Whether result was from cache")
     error: Optional[str] = Field(None, description="Error message if failed")
@@ -79,21 +106,30 @@ class GenerateResponse(BaseModel):
 
 class CacheStatusResponse(BaseModel):
     """Response for cache status check."""
+
     available: bool = Field(..., description="Whether cached result exists")
     age_seconds: Optional[float] = Field(None, description="Age of cached result")
 
 
 class StructuredPromptRequest(BaseModel):
     """Request schema for structured prompt generation."""
-    prompt: Optional[str] = Field(None, description="Text prompt")
+
+    prompt: Optional[str] = Field(None, description="Text prompt", max_length=5000)
     images: Optional[List[str]] = Field(None, description="Reference image URLs")
-    structured_prompt: Optional[Dict[str, Any]] = Field(None, description="Existing structured prompt to refine")
-    modification_prompt: Optional[str] = Field(None, description="Modification prompt (e.g., 'add sunlight')")
+    structured_prompt: Optional[Dict[str, Any]] = Field(
+        None, description="Existing structured prompt to refine"
+    )
+    modification_prompt: Optional[str] = Field(
+        None, description="Modification prompt (e.g., 'add sunlight')", max_length=1000
+    )
 
 
 class StructuredPromptResponse(BaseModel):
     """Response schema for structured prompt generation."""
-    structured_prompt: Dict[str, Any] = Field(..., description="Generated structured prompt")
+
+    structured_prompt: Dict[str, Any] = Field(
+        ..., description="Generated structured prompt"
+    )
 
 
 def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
@@ -129,6 +165,30 @@ def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Generation failed",
         )
+
+
+def _get_secure_generation_dir(generation_id: str) -> Path:
+    """
+    Resolve generation directory and ensure it is within safe outputs directory.
+    Raises HTTPException 404 if path traversal detected or directory does not exist.
+    """
+    try:
+        generation_dir = safe_join(settings.outputs_dir, generation_id)
+    except ValueError:
+        # Path traversal detected
+        logger.warning(f"Path traversal attempt blocked: {generation_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generation not found: {generation_id}",
+        )
+
+    if not generation_dir.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generation not found: {generation_id}",
+        )
+
+    return generation_dir
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -268,7 +328,9 @@ async def generate_structured_prompt(
     except BriaAPIError as e:
         _handle_bria_error(e, request_id)
     except Exception as e:
-        logger.exception(f"Structured prompt generation failed for request_id={request_id}: {e}")
+        logger.exception(
+            f"Structured prompt generation failed for request_id={request_id}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
@@ -294,9 +356,7 @@ async def refine_image(
     """
     request_id = str(uuid.uuid4())
 
-    logger.info(
-        f"Refinement request: request_id={request_id}, seed={request.seed}"
-    )
+    logger.info(f"Refinement request: request_id={request_id}, seed={request.seed}")
 
     try:
         source_image = request.source_image
@@ -403,16 +463,7 @@ async def get_generation(
     Returns:
         GenerateResponse with generation details
     """
-    from app.config import settings
-    import json
-
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     try:
         # Load metadata
@@ -430,7 +481,9 @@ async def get_generation(
 
         # Check for image
         image_path = generation_dir / "generated.png"
-        image_url = f"/outputs/{generation_id}/generated.png" if image_path.exists() else None
+        image_url = (
+            f"/outputs/{generation_id}/generated.png" if image_path.exists() else None
+        )
 
         return GenerateResponse(
             id=generation_id,
@@ -516,7 +569,7 @@ async def generation_health(
 @router.post("/segment-generation/{generation_id}")
 async def segment_generation(
     generation_id: str,
-    prompts: Optional[str] = None,
+    prompts: Optional[str] = Query(None, max_length=5000),
     segmentation_service: SegmentationService = Depends(get_segmentation_service),
 ) -> Dict[str, Any]:
     """
@@ -534,13 +587,7 @@ async def segment_generation(
     """
     from io import BytesIO
 
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     image_path = generation_dir / "generated.png"
     if not image_path.exists():
@@ -561,8 +608,6 @@ async def segment_generation(
         image_bytes = await loop.run_in_executor(None, image_path.read_bytes)
 
         # Create file-like objects for segmentation service
-        from fastapi import UploadFile
-
         image_file = UploadFile(
             filename="generated.png",
             file=BytesIO(image_bytes),
@@ -608,6 +653,7 @@ async def segment_generation(
 
 class LoadGenerationResponse(BaseModel):
     """Response for loading a generation."""
+
     generation_id: str
     image_url: str
     structured_prompt: Dict[str, Any]
@@ -619,11 +665,13 @@ class LoadGenerationResponse(BaseModel):
 
 class SavePromptRequest(BaseModel):
     """Request to save a new prompt version."""
+
     structured_prompt: Dict[str, Any]
 
 
 class SavePromptResponse(BaseModel):
     """Response after saving a prompt version."""
+
     filename: str
     timestamp: str
 
@@ -637,13 +685,7 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     If segmentation_meta.json exists, masks include full object metadata.
     No segmentation is performed - just reads existing files.
     """
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     # Check for image
     image_path = generation_dir / "generated.png"
@@ -685,11 +727,13 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
         mask_files = await glob_async(generation_dir, "mask_*.png")
         for i, mask_file in enumerate(sorted(mask_files)):
             mask_url = f"/outputs/{generation_id}/{mask_file.name}"
-            masks.append({
-                "mask_id": f"mask_{i}",
-                "mask_url": mask_url,
-                "label": f"Object {i + 1}",
-            })
+            masks.append(
+                {
+                    "mask_id": f"mask_{i}",
+                    "mask_url": mask_url,
+                    "label": f"Object {i + 1}",
+                }
+            )
 
     # Load metadata if exists
     metadata = None
@@ -705,7 +749,9 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
             if isinstance(params, dict):
                 seed = params.get("seed")
 
-    logger.info(f"Loaded generation {generation_id}: {len(masks)} masks, {len(prompt_versions)} prompt versions")
+    logger.info(
+        f"Loaded generation {generation_id}: {len(masks)} masks, {len(prompt_versions)} prompt versions"
+    )
 
     return LoadGenerationResponse(
         generation_id=generation_id,
@@ -718,7 +764,9 @@ async def load_generation(generation_id: str) -> LoadGenerationResponse:
     )
 
 
-@router.post("/generation/{generation_id}/save-prompt", response_model=SavePromptResponse)
+@router.post(
+    "/generation/{generation_id}/save-prompt", response_model=SavePromptResponse
+)
 async def save_prompt_version(
     generation_id: str,
     request: SavePromptRequest,
@@ -730,13 +778,7 @@ async def save_prompt_version(
     """
     from datetime import datetime
 
-    generation_dir = settings.outputs_dir / generation_id
-
-    if not generation_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Generation not found: {generation_id}",
-        )
+    generation_dir = _get_secure_generation_dir(generation_id)
 
     # Generate timestamped filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

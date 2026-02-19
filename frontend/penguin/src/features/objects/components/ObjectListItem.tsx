@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useMemo } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { CheckCircle, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useSegmentationStore, type MaskMetadata } from '@/features/segmentation/store/segmentationStore';
 import { Button } from '@/shared/components/ui/button';
@@ -83,23 +83,29 @@ const ObjectListItemComponent: React.FC<ObjectListItemProps> = ({
   onClick,
   index,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { maskManipulation, resetMaskTransform } = useSegmentationStore();
+  // Use selectors to avoid unnecessary re-renders when other store parts change
+  const manipState = useSegmentationStore(
+    (state) => state.maskManipulation.get(mask.mask_id)
+  );
+  const resetMaskTransform = useSegmentationStore((state) => state.resetMaskTransform);
 
-  const manipState = maskManipulation.get(mask.mask_id);
+  // Derived state pattern to avoid double render from useEffect
+  // Initialize state based on props (default closed unless selected/hovered)
+  const [isExpanded, setIsExpanded] = useState(isHovered || isSelected);
+  const [prevProps, setPrevProps] = useState({ isHovered, isSelected });
+
+  // If props change, update state during render
+  if (prevProps.isHovered !== isHovered || prevProps.isSelected !== isSelected) {
+    setPrevProps({ isHovered, isSelected });
+    // Force expansion state to match props (auto-expand/collapse)
+    setIsExpanded(isHovered || isSelected);
+  }
+
   const hasMoved = manipState && !areBoundingBoxesEqual(
     manipState.originalBoundingBox,
     manipState.currentBoundingBox
   );
   const hasEdits = manipState && hasActiveImageEdits(manipState.transform.imageEdits);
-
-  useEffect(() => {
-    if (isHovered || isSelected) {
-      setIsExpanded(true);
-    } else {
-      setIsExpanded(false);
-    }
-  }, [isHovered, isSelected]);
 
   // Memoize expensive calculations
   const borderColor = useMemo(() => getMaskColor(mask.mask_id), [mask.mask_id]);

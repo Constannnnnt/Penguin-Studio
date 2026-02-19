@@ -49,7 +49,7 @@ class DescriptorDeduper:
         tokens = [t for t in tokens if len(t) > 1 and t not in self.stopwords]
 
         return tokens
-    
+
     def _jaccard(self, a: List[str], b: List[str]) -> float:
         if not a or not b:
             return 0.0
@@ -85,8 +85,9 @@ class DescriptorDeduper:
             return []
 
         kept_phrases: List[str] = []
-        kept_tokens: List[List[str]] = []
+        kept_token_sets: List[set] = []
         kept_embeds: Optional[List[Any]] = None
+        embeds = None
 
         # Pre-compute embeddings if embedder is provided
         if self.embedder is not None:
@@ -96,22 +97,37 @@ class DescriptorDeduper:
             except Exception:
                 # If embedding fails, fall back to token-only dedup
                 self.embedder = None
+                embeds = None
 
         for idx, phrase in enumerate(phrases):
-            cand_tokens = self._canonical_tokens(phrase)
+            cand_tokens_list = self._canonical_tokens(phrase)
+            cand_tokens_set = set(cand_tokens_list)
 
             is_duplicate = False
 
             # Token-level comparison
-            for prev_tokens in kept_tokens:
-                j = self._jaccard(cand_tokens, prev_tokens)
+            for prev_tokens_set in kept_token_sets:
+                if not cand_tokens_set or not prev_tokens_set:
+                    j = 0.0
+                else:
+                    inter = len(cand_tokens_set & prev_tokens_set)
+                    union = len(cand_tokens_set | prev_tokens_set)
+                    if union == 0:
+                        j = 0.0
+                    else:
+                        j = inter / union
+
                 if j >= self.token_jaccard_thresh:
                     is_duplicate = True
                     break
 
             # Optional: semantic (embedding-based) comparison
             if not is_duplicate and self.embedder is not None and kept_embeds is not None:
-                cand_vec = self.embedder.encode([phrase])[0]  # or use precomputed embeds[idx]
+                if embeds is not None:
+                    cand_vec = embeds[idx]
+                else:
+                    cand_vec = self.embedder.encode([phrase])[0]  # Fallback if batch failed
+
                 for prev_vec in kept_embeds:
                     sim = self._cosine(cand_vec, prev_vec)
                     if sim >= self.semantic_thresh:
@@ -122,9 +138,7 @@ class DescriptorDeduper:
 
             if not is_duplicate:
                 kept_phrases.append(phrase)
-                kept_tokens.append(cand_tokens)
+                kept_token_sets.append(cand_tokens_set)
                 # kept_embeds is already updated above when embedder is used
 
         return kept_phrases
-
-

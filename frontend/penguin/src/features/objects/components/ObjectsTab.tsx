@@ -1,6 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useSegmentationStore } from '@/features/segmentation/store/segmentationStore';
 import { ObjectListItem } from './ObjectListItem';
+import { UploadForSegmentationButton } from '@/features/segmentation/components/UploadForSegmentationButton';
 
 // Threshold for enabling virtualization (number of objects)
 const VIRTUALIZATION_THRESHOLD = 20;
@@ -32,9 +33,10 @@ export const ObjectsTab: React.FC = () => {
             <span className="text-xl">🔍</span>
           </div>
           <h3 className="text-lg font-heading font-black uppercase tracking-wider text-primary mb-2">No Objects</h3>
-          <p className="text-xs font-mono text-muted-foreground">
+          <p className="text-xs font-mono text-muted-foreground mb-6">
             Upload an image to detect and segment objects automatically.
           </p>
+          <UploadForSegmentationButton />
         </div>
       </div>
     );
