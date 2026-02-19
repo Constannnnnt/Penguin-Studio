@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from typing import Any, Dict, List, Literal, Optional, Set
 
 from google.adk import Agent, Runner
@@ -23,6 +24,13 @@ class PlanStep(BaseModel):
     )
     step_description: str = Field(
         ..., description="Goal-oriented description for the user"
+    )
+    ui_options: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Optional UI candidate values keyed by tool_input field name. "
+            "Use this so users can quickly pick from model-reasoned options."
+        ),
     )
 
 
@@ -75,6 +83,55 @@ class PenguinAnalyzer:
         self.session_service = InMemorySessionService()
         self.max_llm_retries = 2
 
+    _LOCATION_OPTIONS = [
+        "center",
+        "top-left",
+        "top-right",
+        "bottom-left",
+        "bottom-right",
+        "center-left",
+        "center-right",
+    ]
+    _SIZE_OPTIONS = ["small", "medium", "large", "very large"]
+    _ORIENTATION_OPTIONS = ["front-facing", "left", "right", "back", "angled"]
+    _LIGHTING_OPTIONS = ["natural", "studio", "soft diffused", "dramatic", "golden hour"]
+    _CAMERA_OPTIONS = ["eye-level", "overhead", "low-angle", "high-angle"]
+    _LENS_OPTIONS = ["wide-angle", "standard", "portrait", "macro"]
+    _COMPOSITION_OPTIONS = [
+        "centered",
+        "rule-of-thirds",
+        "diagonal",
+        "symmetrical",
+        "asymmetrical",
+    ]
+    _COLOR_SCHEME_OPTIONS = ["vibrant", "muted", "monochrome", "warm", "cool", "pastel", "cinematic"]
+    _MOOD_OPTIONS = ["neutral", "cheerful", "dramatic", "serene", "mysterious"]
+    _STYLE_MEDIUM_OPTIONS = ["photograph", "painting", "digital art", "sketch", "3D render"]
+    _AESTHETIC_STYLE_OPTIONS = [
+        "realistic",
+        "artistic",
+        "vintage",
+        "modern",
+        "dramatic",
+        "surreal",
+        "minimalism",
+        "abstract",
+        "cinematic",
+    ]
+    _OBJECT_PROPERTY_OPTIONS = [
+        "location",
+        "relative_size",
+        "orientation",
+        "description",
+        "shape_and_color",
+        "texture",
+        "appearance_details",
+        "pose",
+        "expression",
+        "action",
+    ]
+    _HEX_COLOR_RE = re.compile(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})")
+
     def _get_system_instruction(self) -> str:
         """Build a single prompt that handles both generation and refinement."""
         schemas = ToolRegistry.get_all_schemas()
@@ -118,6 +175,14 @@ Refinement planning policy:
   - Prefer property=\"description\" for semantic replacement requests like \"change girl to man\".
   - Include at least one target hint: mask_id, object_index/index, or object_name.
   - If exact mask_id is unknown, use object_name (for example, \"girl\") and optionally object_index.
+- Include ui_options for every refinement step:
+  - ui_options is an object keyed by tool_input field (for example: \"conditions\", \"value\").
+  - Each key should have 3-7 concise candidate values the user can pick from.
+  - The first candidate should usually be the value currently in tool_input for that field.
+  - For adjust_object_property value options, include both:
+    - \"value\": generic options for the current property.
+    - \"value_for_<property>\": property-specific options, e.g. \"value_for_shape_and_color\".
+  - For color-related fields, include meaningful color suggestions (hex palette and/or named schemes) when relevant.
 
 UI-compatible tool_input conventions (important):
 - update_lighting:
@@ -153,7 +218,10 @@ Output requirements (strict):
     {{
       \"tool_name\": \"string\",
       \"tool_input\": {{ ... }},
-      \"step_description\": \"string\"
+      \"step_description\": \"string\",
+      \"ui_options\": {{
+        \"field_name\": [\"option 1\", \"option 2\", \"option 3\"]
+      }}
     }}
   ],
   \"generation_draft\": null | {{
@@ -204,7 +272,11 @@ Return EXACT schema:
             return None
 
         structured_prompt = image_context.get("structured_prompt")
-        context_payload: Dict[str, Any] = {"seed": image_context.get("seed")}
+        context_payload: Dict[str, Any] = {
+            "seed": image_context.get("seed"),
+            "generation_id": image_context.get("generation_id"),
+            "selected_mask_id": image_context.get("selected_mask_id"),
+        }
         if isinstance(structured_prompt, dict):
             context_payload.update(
                 {
@@ -220,6 +292,14 @@ Return EXACT schema:
                     "artistic_style": structured_prompt.get("artistic_style"),
                 }
             )
+
+        masks_catalog = image_context.get("masks_catalog")
+        if isinstance(masks_catalog, list) and masks_catalog:
+            context_payload["masks_catalog"] = masks_catalog
+
+        memory_context = image_context.get("memory_context")
+        if isinstance(memory_context, dict) and memory_context:
+            context_payload["memory"] = memory_context
 
         compact = {
             key: value
@@ -379,6 +459,158 @@ Return EXACT schema:
         }
         return aliases.get(normalized, normalized)
 
+    @staticmethod
+    def _unique_options(values: List[str], max_items: int = 10) -> List[str]:
+        seen: Set[str] = set()
+        result: List[str] = []
+        for raw in values:
+            text = str(raw).strip()
+            if not text:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(text)
+            if len(result) >= max_items:
+                break
+        return result
+
+    def _normalize_ui_options(self, raw_ui_options: Any) -> Dict[str, List[str]]:
+        if not isinstance(raw_ui_options, dict):
+            return {}
+
+        normalized: Dict[str, List[str]] = {}
+        for raw_key, raw_value in raw_ui_options.items():
+            if not isinstance(raw_key, str):
+                continue
+            key = raw_key.strip()
+            if not key:
+                continue
+
+            candidates: List[str] = []
+            if isinstance(raw_value, str):
+                candidates = [
+                    part.strip()
+                    for part in re.split(r"[\n,;]+", raw_value)
+                    if isinstance(part, str) and part.strip()
+                ]
+            elif isinstance(raw_value, list):
+                for item in raw_value:
+                    if isinstance(item, (str, int, float, bool)):
+                        text = str(item).strip()
+                        if text:
+                            candidates.append(text)
+
+            cleaned = self._unique_options(candidates)
+            if cleaned:
+                normalized[key] = cleaned
+
+        return normalized
+
+    def _extract_color_candidates(self, value: Any) -> List[str]:
+        if value is None:
+            return []
+        text = str(value)
+        colors = [token.upper() for token in self._HEX_COLOR_RE.findall(text)]
+        if colors:
+            return self._unique_options(colors, max_items=8)
+        return []
+
+    def _build_default_ui_options(
+        self, canonical_tool: str, tool_input: Dict[str, Any]
+    ) -> Dict[str, List[str]]:
+        defaults: Dict[str, List[str]] = {}
+
+        if canonical_tool == "update_lighting":
+            defaults["conditions"] = list(self._LIGHTING_OPTIONS)
+            defaults["shadows"] = ["0", "1", "2", "3", "4", "5"]
+
+        elif canonical_tool == "update_photographic":
+            defaults["camera_angle"] = list(self._CAMERA_OPTIONS)
+            defaults["lens_focal_length"] = list(self._LENS_OPTIONS)
+            defaults["depth_of_field"] = ["20", "35", "50", "65", "80"]
+            defaults["focus"] = ["30", "50", "70", "85", "95"]
+
+        elif canonical_tool == "update_aesthetics":
+            defaults["composition"] = list(self._COMPOSITION_OPTIONS)
+            defaults["color_scheme"] = list(self._COLOR_SCHEME_OPTIONS)
+            defaults["mood_atmosphere"] = list(self._MOOD_OPTIONS)
+            defaults["style_medium"] = list(self._STYLE_MEDIUM_OPTIONS)
+            defaults["aesthetic_style"] = list(self._AESTHETIC_STYLE_OPTIONS)
+
+            color_from_value = self._extract_color_candidates(tool_input.get("color_scheme"))
+            if color_from_value:
+                defaults["color_scheme"] = self._unique_options(
+                    color_from_value + defaults["color_scheme"]
+                )
+
+        elif canonical_tool == "adjust_object_property":
+            defaults["property"] = list(self._OBJECT_PROPERTY_OPTIONS)
+            raw_property = str(tool_input.get("property") or "").strip().lower()
+
+            if raw_property == "location":
+                defaults["value"] = list(self._LOCATION_OPTIONS)
+            elif raw_property == "relative_size":
+                defaults["value"] = list(self._SIZE_OPTIONS)
+            elif raw_property == "orientation":
+                defaults["value"] = list(self._ORIENTATION_OPTIONS)
+            elif raw_property == "shape_and_color":
+                colors = self._extract_color_candidates(tool_input.get("value"))
+                value_options = self._unique_options(
+                    colors
+                    + ["warm tones", "cool tones", "monochrome", "high contrast"]
+                    + ["#E63946", "#457B9D", "#F4A261", "#2A9D8F", "#264653"]
+                )
+                defaults["value"] = value_options
+                defaults["value_for_shape_and_color"] = value_options
+
+        elif canonical_tool == "update_background":
+            defaults["background_setting"] = [
+                "minimal clean studio",
+                "warm indoor editorial set",
+                "urban outdoor setting",
+                "soft natural environment",
+            ]
+
+        return defaults
+
+    def _merge_ui_options(
+        self,
+        canonical_tool: str,
+        tool_input: Dict[str, Any],
+        llm_ui_options: Dict[str, List[str]],
+    ) -> Dict[str, List[str]]:
+        merged = self._build_default_ui_options(canonical_tool, tool_input)
+
+        for key, values in llm_ui_options.items():
+            merged[key] = self._unique_options(values + merged.get(key, []))
+
+        for key, raw_value in tool_input.items():
+            if isinstance(raw_value, (str, int, float, bool)):
+                text = str(raw_value).strip()
+                if text:
+                    merged[key] = self._unique_options([text] + merged.get(key, []))
+
+        if canonical_tool == "adjust_object_property":
+            prop = str(tool_input.get("property") or "").strip().lower()
+            if prop:
+                value_key = f"value_for_{prop}"
+                shared_values = merged.get("value", [])
+                specific_values = merged.get(value_key, [])
+                combined = self._unique_options(specific_values + shared_values)
+                if combined:
+                    merged[value_key] = combined
+                    if "value" not in llm_ui_options:
+                        merged["value"] = combined
+
+        cleaned: Dict[str, List[str]] = {}
+        for key, values in merged.items():
+            unique_values = self._unique_options(values)
+            if unique_values:
+                cleaned[key] = unique_values
+        return cleaned
+
     def _normalize_plan_step(self, step: PlanStep) -> Optional[PlanStep]:
         canonical_tool = self._canonical_tool_name(step.tool_name)
         if canonical_tool not in ToolRegistry.TOOLS:
@@ -481,10 +713,18 @@ Return EXACT schema:
             else:
                 tool_input["object_name"] = tool_input["object_name"].strip()
 
+        llm_ui_options = self._normalize_ui_options(step.ui_options)
+        merged_ui_options = self._merge_ui_options(
+            canonical_tool=canonical_tool,
+            tool_input=tool_input,
+            llm_ui_options=llm_ui_options,
+        )
+
         return PlanStep(
             tool_name=canonical_tool,
             tool_input=tool_input,
             step_description=step.step_description,
+            ui_options=merged_ui_options,
         )
 
     @staticmethod

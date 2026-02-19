@@ -1,10 +1,13 @@
 import logging
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from pydantic import BaseModel, Field
 from .analyzer import PenguinAnalyzer, AnalysisResult, PlanStep
 from app.services.bria_service import BriaService, get_bria_service, StructuredPrompt
 from app.services.segmentation_service import SegmentationService
+
+if TYPE_CHECKING:
+    from app.services.agent_memory_service import AgentMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +39,12 @@ class PenguinOrchestrator:
         analyzer: Optional[PenguinAnalyzer] = None,
         bria_service: Optional[BriaService] = None,
         segmentation_service: Optional[SegmentationService] = None,
+        memory_service: Optional["AgentMemoryService"] = None,
     ):
         self.analyzer = analyzer or PenguinAnalyzer()
         self.bria_service = bria_service or get_bria_service()
         self.segmentation_service = segmentation_service  # Optional dependency
+        self.memory_service = memory_service
         self.active_sessions: Dict[str, WorkflowSession] = {}
 
     async def analyze_request(
@@ -56,8 +61,23 @@ class PenguinOrchestrator:
 
         logger.info(f"Analyzing request: '{query}' for session: {session_id}")
 
+        persisted_context: Dict[str, Any] = {}
+        if self.memory_service and session_id:
+            try:
+                stored = self.memory_service.get_session_context(session_id)
+                if isinstance(stored, dict):
+                    persisted_context = dict(stored)
+            except Exception as exc:
+                logger.warning(f"Failed reading memory context for session {session_id}: {exc}")
+
+        merged_context: Dict[str, Any] = {}
+        if persisted_context:
+            merged_context.update(persisted_context)
+        if isinstance(image_context, dict):
+            merged_context.update(image_context)
+
         # 1. Run Analysis
-        analysis = await self.analyzer.analyze(query, image_context)
+        analysis = await self.analyzer.analyze(query, merged_context or None)
 
         # 2. Create session state
         status = "awaiting_approval" if analysis.intent == "refinement" else "executing"
@@ -67,10 +87,21 @@ class PenguinOrchestrator:
             user_query=query,
             analysis=analysis,
             status=status,
-            image_context=image_context or {},
+            image_context=merged_context or {},
         )
 
         self.active_sessions[session_id] = session
+
+        if self.memory_service:
+            try:
+                self.memory_service.upsert_session_context(
+                    session_id=session_id,
+                    image_context=session.image_context,
+                    query=query,
+                )
+            except Exception as exc:
+                logger.warning(f"Failed persisting session context {session_id}: {exc}")
+
         return session
 
     async def polish_generation_draft(
@@ -151,6 +182,15 @@ class PenguinOrchestrator:
                 return session
 
         session.status = "completed"
+        if self.memory_service:
+            try:
+                self.memory_service.upsert_session_context(
+                    session_id=session.session_id,
+                    image_context=session.image_context,
+                    query=session.user_query,
+                )
+            except Exception as exc:
+                logger.warning(f"Failed updating memory for session {session.session_id}: {exc}")
         return session
 
     async def _dispatch_tool(
@@ -269,9 +309,19 @@ class PenguinOrchestrator:
             if "mood_atmosphere" not in normalized and "mood" in normalized:
                 normalized["mood_atmosphere"] = normalized["mood"]
 
+            style_medium_value = normalized.pop("style_medium", None)
+            aesthetic_style_value = normalized.pop("aesthetic_style", None)
+            if aesthetic_style_value is None:
+                aesthetic_style_value = normalized.pop("artistic_style", None)
+
             for k, v in normalized.items():
                 if hasattr(sp.aesthetics, k):
                     setattr(sp.aesthetics, k, str(v))
+
+            if style_medium_value is not None:
+                sp.style_medium = str(style_medium_value)
+            if aesthetic_style_value is not None:
+                sp.artistic_style = str(aesthetic_style_value)
         elif tool_name == "update_photographic":
             for k, v in tool_input.items():
                 if hasattr(sp.photographic_characteristics, k):
@@ -285,7 +335,7 @@ class PenguinOrchestrator:
 
         # Call Bria refinement
         logger.info(f"Calling Bria refinement for {tool_name}")
-        result = await self.bria_service.refine_image(
+        result = await self.bria_service.edit_image(
             source_image=str(source_image),
             structured_prompt=sp,
             seed=seed,
@@ -296,6 +346,9 @@ class PenguinOrchestrator:
         # Update session context with NEW structured prompt for subsequent steps
         new_sp_dict = result.structured_prompt.model_dump()
         session.image_context["structured_prompt"] = new_sp_dict
+        session.image_context["seed"] = result.seed
+        session.image_context["source_image"] = result.image_url
+        session.image_context["image_url"] = result.image_url
 
         return {
             "image_url": result.image_url,

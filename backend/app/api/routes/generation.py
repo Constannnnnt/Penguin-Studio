@@ -25,6 +25,7 @@ from app.utils.filesystem import (
 )
 from app.services.bria_service import (
     BriaService,
+    EditParameters,
     GenerationParameters,
     StructuredPrompt,
     get_bria_service,
@@ -54,14 +55,38 @@ class GenerateRequest(BaseModel):
     aspect_ratio: str = Field(
         "1:1", description="Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4)"
     )
-    resolution: int = Field(1024, description="Resolution (512, 768, 1024)")
+    steps_num: Optional[int] = Field(
+        None, ge=20, le=50, description="Number of diffusion steps (20..50)"
+    )
+    guidance_scale: Optional[int] = Field(
+        None, ge=3, le=5, description="Guidance scale (3..5)"
+    )
+    negative_prompt: Optional[str] = Field(
+        None, max_length=2000, description="Optional negative prompt"
+    )
+    model_version: Optional[str] = Field(
+        None, description='Pinned model version. Provider-managed default if omitted.'
+    )
+    sync: Optional[bool] = Field(None, description="Use synchronous response mode")
+    ip_signal: Optional[bool] = Field(None, description="Enable IP warning signal")
+    prompt_content_moderation: Optional[bool] = Field(
+        None, description="Enable prompt moderation"
+    )
+    visual_input_content_moderation: Optional[bool] = Field(
+        None, description="Enable visual input moderation"
+    )
+    visual_output_content_moderation: Optional[bool] = Field(
+        None, description="Enable visual output moderation"
+    )
+    # Deprecated legacy fields retained for client compatibility.
+    resolution: Optional[int] = Field(None, description="Deprecated")
     seed: Optional[int] = Field(None, description="Seed for reproducibility")
-    num_inference_steps: int = Field(50, description="Number of inference steps")
+    num_inference_steps: Optional[int] = Field(None, description="Deprecated alias for steps_num")
     skip_cache: bool = Field(False, description="Skip cache lookup")
 
 
-class RefineRequest(BaseModel):
-    """Request schema for image refinement."""
+class EditRequest(BaseModel):
+    """Request schema for image editing/refinement."""
 
     source_image: Optional[str] = Field(
         None,
@@ -81,9 +106,39 @@ class RefineRequest(BaseModel):
         description="Optional prompt describing modification (e.g., 'add sunlight')",
         max_length=1000,
     )
-    aspect_ratio: str = Field("1:1", description="Aspect ratio")
-    resolution: int = Field(1024, description="Resolution")
-    num_inference_steps: int = Field(50, description="Number of diffusion steps")
+    # Deprecated edit-irrelevant fields kept for backward compatibility.
+    aspect_ratio: Optional[str] = Field(None, description="Deprecated for edit workflow")
+    resolution: Optional[int] = Field(None, description="Deprecated for edit workflow")
+    num_inference_steps: Optional[int] = Field(
+        None, description="Alias for steps_num"
+    )
+    steps_num: Optional[int] = Field(
+        None, ge=20, le=50, description="Number of diffusion steps (20..50)"
+    )
+    guidance_scale: Optional[int] = Field(
+        None, ge=3, le=5, description="Guidance scale (3..5)"
+    )
+    negative_prompt: Optional[str] = Field(
+        None, max_length=2000, description="Optional negative prompt"
+    )
+    model_version: Optional[str] = Field(
+        None, description='Pinned model version. Currently only "FIBO-edit".'
+    )
+    sync: Optional[bool] = Field(
+        None, description="If true, wait for completion in single response"
+    )
+    ip_signal: Optional[bool] = Field(
+        None, description="Enable IP warning signal"
+    )
+    prompt_content_moderation: Optional[bool] = Field(
+        None, description="Enable prompt moderation"
+    )
+    visual_input_content_moderation: Optional[bool] = Field(
+        None, description="Enable visual input moderation"
+    )
+    visual_output_content_moderation: Optional[bool] = Field(
+        None, description="Enable visual output moderation"
+    )
 
 
 class GenerateResponse(BaseModel):
@@ -156,9 +211,12 @@ def _handle_bria_error(e: BriaAPIError, request_id: str) -> None:
             detail="Service temporarily unavailable",
         )
     elif isinstance(e, ValidationError):
+        detail = str(e)
+        if getattr(e, "details", None):
+            detail = f"{detail} | details={e.details}"
         raise HTTPException(
             status_code=e.status_code or status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=detail,
         )
     else:
         raise HTTPException(
@@ -191,6 +249,114 @@ def _get_secure_generation_dir(generation_id: str) -> Path:
     return generation_dir
 
 
+def _resolve_single_source_image(request: EditRequest) -> str:
+    """
+    Resolve source image from source_image/images while enforcing exactly one image.
+    """
+    source_image = request.source_image
+
+    if request.images is not None:
+        if len(request.images) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Edit workflow requires exactly one source image in images",
+            )
+        if not source_image:
+            source_image = request.images[0]
+
+    if not isinstance(source_image, str) or not source_image.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Edit workflow requires source_image (or images with exactly one source image)",
+        )
+
+    return source_image.strip()
+
+
+def _normalize_optional_string(raw: Optional[str]) -> Optional[str]:
+    if not isinstance(raw, str):
+        return None
+    cleaned = raw.strip()
+    if cleaned in {"", "[object Object]", "{}"}:
+        return None
+    return cleaned
+
+
+def _build_edit_parameters(request: EditRequest) -> EditParameters:
+    steps_num = request.steps_num
+    if steps_num is None:
+        steps_num = request.num_inference_steps
+
+    model_version = _normalize_optional_string(request.model_version)
+    if model_version is not None and model_version != "FIBO-edit":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='model_version must be "FIBO-edit" when provided',
+        )
+
+    return EditParameters(
+        seed=request.seed,
+        steps_num=steps_num,
+        guidance_scale=request.guidance_scale,
+        negative_prompt=_normalize_optional_string(request.negative_prompt),
+        model_version=model_version,
+        sync=request.sync,
+        ip_signal=request.ip_signal,
+        prompt_content_moderation=request.prompt_content_moderation,
+        visual_input_content_moderation=request.visual_input_content_moderation,
+        visual_output_content_moderation=request.visual_output_content_moderation,
+    )
+
+
+async def _execute_edit_workflow(
+    request: EditRequest,
+    bria_service: BriaService,
+    request_id: str,
+) -> GenerateResponse:
+    source_image = _resolve_single_source_image(request)
+    structured_prompt = StructuredPrompt(**request.structured_prompt)
+    modification_prompt = _normalize_optional_string(request.modification_prompt)
+    mask = _normalize_optional_string(request.mask)
+    edit_parameters = _build_edit_parameters(request)
+
+    result = await bria_service.edit_image(
+        source_image=source_image,
+        structured_prompt=structured_prompt,
+        seed=request.seed,
+        modification_prompt=modification_prompt,
+        mask=mask,
+        parameters=edit_parameters,
+    )
+
+    generation_id = await bria_service.save_generation(
+        result=result,
+        prompt=structured_prompt.short_description,
+        parameters=GenerationParameters(
+            # Backward-compatible metadata fields for existing loaders.
+            aspect_ratio="1:1",
+            seed=result.seed,
+            steps_num=edit_parameters.steps_num or 30,
+            resolution=1024,
+            num_inference_steps=edit_parameters.steps_num or 30,
+        ),
+    )
+
+    logger.info(
+        f"Edit workflow completed: request_id={request_id}, generation_id={generation_id}"
+    )
+
+    return GenerateResponse(
+        id=generation_id,
+        status="completed",
+        image_url=result.image_url,
+        structured_prompt=result.structured_prompt.model_dump(exclude_none=True),
+        seed=result.seed,
+        generation_time_ms=result.generation_time_ms,
+        ip_warning=result.ip_warning,
+        from_cache=False,
+    )
+
+
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_image(
     request: GenerateRequest,
@@ -220,10 +386,23 @@ async def generate_image(
 
     try:
         # Build parameters
+        steps_num = request.steps_num
+        if steps_num is None:
+            steps_num = request.num_inference_steps
+
         parameters = GenerationParameters(
             aspect_ratio=request.aspect_ratio,
-            resolution=request.resolution,
             seed=request.seed,
+            steps_num=steps_num,
+            guidance_scale=request.guidance_scale,
+            negative_prompt=_normalize_optional_string(request.negative_prompt),
+            model_version=_normalize_optional_string(request.model_version),
+            sync=request.sync,
+            ip_signal=request.ip_signal,
+            prompt_content_moderation=request.prompt_content_moderation,
+            visual_input_content_moderation=request.visual_input_content_moderation,
+            visual_output_content_moderation=request.visual_output_content_moderation,
+            resolution=request.resolution,
             num_inference_steps=request.num_inference_steps,
         )
 
@@ -337,114 +516,51 @@ async def generate_structured_prompt(
         )
 
 
-@router.post("/refine", response_model=GenerateResponse)
-async def refine_image(
-    request: RefineRequest,
+@router.post("/edit", response_model=GenerateResponse)
+async def edit_image(
+    request: EditRequest,
     bria_service: BriaService = Depends(get_bria_service),
 ) -> GenerateResponse:
     """
-    Refine an image using an updated structured prompt and original seed.
+    Edit an image using Bria FIBO Edit workflow.
 
-    This allows precise adjustments to a generated image by modifying
-    the structured prompt while maintaining consistency via the seed.
+    This route is the canonical endpoint for edit/refinement tasks and maps
+    to Bria /v2/image/edit.
 
     Args:
-        request: Refinement request with structured prompt and seed
+        request: Edit request with source image and structured prompt
 
     Returns:
-        GenerateResponse with refined image URL and updated structured prompt
+        GenerateResponse with edited image URL and updated structured prompt
     """
     request_id = str(uuid.uuid4())
 
-    logger.info(f"Refinement request: request_id={request_id}, seed={request.seed}")
+    logger.info(f"Edit request: request_id={request_id}, seed={request.seed}")
 
     try:
-        source_image = request.source_image
-        if request.images is not None:
-            if len(request.images) != 1:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Refinement requires exactly one source image in images",
-                )
-            if not source_image:
-                first_image = request.images[0]
-                source_image = first_image if isinstance(first_image, str) else None
-
-        if not source_image or not source_image.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Refinement requires source_image (or images with exactly one source image)",
-            )
-
-        # Parse structured prompt
-        structured_prompt = StructuredPrompt(**request.structured_prompt)
-
-        modification_prompt = request.modification_prompt
-        if isinstance(modification_prompt, str):
-            cleaned_modification = modification_prompt.strip()
-            if cleaned_modification in {"", "[object Object]", "{}"}:
-                modification_prompt = None
-            else:
-                modification_prompt = cleaned_modification
-
-        mask = request.mask
-        if isinstance(mask, str):
-            cleaned_mask = mask.strip()
-            if cleaned_mask in {"", "[object Object]", "{}"}:
-                mask = None
-            else:
-                mask = cleaned_mask
-
-        # Build parameters
-        parameters = GenerationParameters(
-            aspect_ratio=request.aspect_ratio,
-            resolution=request.resolution,
-            seed=request.seed,
-            num_inference_steps=request.num_inference_steps,
-        )
-
-        # Refine image
-        result = await bria_service.refine_image(
-            source_image=source_image.strip(),
-            structured_prompt=structured_prompt,
-            seed=request.seed,
-            modification_prompt=modification_prompt,
-            mask=mask,
-            parameters=parameters,
-        )
-
-        # Save refined generation
-        generation_id = await bria_service.save_generation(
-            result=result,
-            prompt=structured_prompt.short_description,
-            parameters=parameters,
-        )
-
-        logger.info(
-            f"Refinement completed: request_id={request_id}, "
-            f"generation_id={generation_id}"
-        )
-
-        return GenerateResponse(
-            id=generation_id,
-            status="completed",
-            image_url=result.image_url,
-            structured_prompt=result.structured_prompt.model_dump(exclude_none=True),
-            seed=result.seed,
-            generation_time_ms=result.generation_time_ms,
-            ip_warning=result.ip_warning,
-            from_cache=False,
-        )
+        return await _execute_edit_workflow(request, bria_service, request_id)
 
     except BriaAPIError as e:
         _handle_bria_error(e, request_id)
     except Exception as e:
-        logger.exception(f"Refinement failed for request_id={request_id}: {e}")
+        logger.exception(f"Edit workflow failed for request_id={request_id}: {e}")
         return GenerateResponse(
             id=request_id,
             status="failed",
             error=str(e),
         )
+
+
+@router.post("/refine", response_model=GenerateResponse, deprecated=True)
+async def refine_image(
+    request: EditRequest,
+    bria_service: BriaService = Depends(get_bria_service),
+) -> GenerateResponse:
+    """
+    Backward-compatible alias for /api/edit.
+    """
+    logger.warning("Deprecated /api/refine called; forwarding to edit workflow.")
+    return await edit_image(request, bria_service)
 
 
 @router.get("/generate/{generation_id}", response_model=GenerateResponse)
@@ -522,8 +638,17 @@ async def check_cache(
 
     parameters = GenerationParameters(
         aspect_ratio=request.aspect_ratio,
-        resolution=request.resolution,
         seed=request.seed,
+        steps_num=request.steps_num if request.steps_num is not None else request.num_inference_steps,
+        guidance_scale=request.guidance_scale,
+        negative_prompt=_normalize_optional_string(request.negative_prompt),
+        model_version=_normalize_optional_string(request.model_version),
+        sync=request.sync,
+        ip_signal=request.ip_signal,
+        prompt_content_moderation=request.prompt_content_moderation,
+        visual_input_content_moderation=request.visual_input_content_moderation,
+        visual_output_content_moderation=request.visual_output_content_moderation,
+        resolution=request.resolution,
         num_inference_steps=request.num_inference_steps,
     )
 

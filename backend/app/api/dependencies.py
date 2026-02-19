@@ -1,5 +1,3 @@
-from typing import Any, Dict, List, Optional
-
 from loguru import logger
 
 from app.config import settings
@@ -7,13 +5,16 @@ from app.models.sam3_model import SAM3Model
 from app.services.file_service import FileService
 from app.services.segmentation_service import SegmentationService
 from app.services.websocket_manager import WebSocketManager
+from app.services.agent_memory_service import AgentMemoryService
 from app.agentic.orchestrator import PenguinOrchestrator
+from app.services.bria_service import cleanup_bria_service
 
 _sam3_model: SAM3Model | None = None
 _file_service: FileService | None = None
 _segmentation_service: SegmentationService | None = None
 _ws_manager: WebSocketManager | None = None
 _orchestrator: PenguinOrchestrator | None = None
+_agent_memory_service: AgentMemoryService | None = None
 
 
 def get_sam3_model() -> SAM3Model:
@@ -60,19 +61,28 @@ def get_ws_manager() -> WebSocketManager:
     return _ws_manager
 
 
+def get_agent_memory_service() -> AgentMemoryService:
+    """Dependency to get agent memory service singleton instance."""
+    global _agent_memory_service
+    if _agent_memory_service is None:
+        _agent_memory_service = AgentMemoryService()
+    return _agent_memory_service
+
+
 def get_orchestrator() -> PenguinOrchestrator:
     """Dependency to get agentic orchestrator instance."""
     global _orchestrator
     if _orchestrator is None:
         _orchestrator = PenguinOrchestrator(
-            segmentation_service=get_segmentation_service()
+            segmentation_service=get_segmentation_service(),
+            memory_service=get_agent_memory_service(),
         )
     return _orchestrator
 
 
 async def cleanup_dependencies() -> None:
     """Cleanup all singleton dependencies on shutdown."""
-    global _sam3_model, _file_service, _segmentation_service, _ws_manager, _orchestrator
+    global _sam3_model, _file_service, _segmentation_service, _ws_manager, _orchestrator, _agent_memory_service
 
     logger.info("Cleaning up dependencies...")
 
@@ -86,5 +96,7 @@ async def cleanup_dependencies() -> None:
     _segmentation_service = None
     _ws_manager = None
     _orchestrator = None
+    _agent_memory_service = None
+    await cleanup_bria_service()
 
     logger.info("Dependencies cleanup completed")

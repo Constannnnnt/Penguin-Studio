@@ -113,7 +113,7 @@ async def test_orchestrator_execution_flow():
     with patch(
         "app.agentic.analyzer.PenguinAnalyzer.analyze", new_callable=AsyncMock
     ) as mock_analyze, patch(
-        "app.services.bria_service.BriaService.refine_image", new_callable=AsyncMock
+        "app.services.bria_service.BriaService.edit_image", new_callable=AsyncMock
     ) as mock_refine:
         mock_analyze.return_value = mock_result
         mock_refine.return_value = mock_bria_result
